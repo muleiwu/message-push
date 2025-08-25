@@ -10,6 +10,7 @@ import (
 type RedisInterface interface {
 	// 基础连接方法
 	GetClient() *redis.Client
+	SetClient(client *redis.Client)
 	Ping(ctx context.Context) error
 	Close() error
 

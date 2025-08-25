@@ -6,7 +6,8 @@ import (
 
 type DatabaseInterface interface {
 	// 基础连接方法
-	GetDB() *gorm.DB
+	GetClient() *gorm.DB
+	SetClient(db *gorm.DB)
 	Close() error
 
 	// 数据库操作

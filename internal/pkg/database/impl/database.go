@@ -1,11 +1,12 @@
 package impl
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 
 	"cnb.cool/mliev/examples/go-web/internal/interfaces"
-	"cnb.cool/mliev/examples/go-web/internal/pkg/database/config"
+	"github.com/glebarez/sqlite"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -16,26 +17,51 @@ type Database struct {
 	initialized bool
 	initOnce    sync.Once
 	initError   error
-	config      *config.DatabaseConfig
 	helper      interfaces.HelperInterface
 }
 
-func NewDatabase(helper interfaces.HelperInterface) *Database {
-	databaseConfig := config.NewConfig(helper.GetConfig())
+func getMySQLDSN(host string, port int, username string, password string, dbName string) string {
+	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+		username,
+		password,
+		host,
+		port,
+		dbName)
+}
+
+func getPostgreSQLDSN(host string, port int, username string, password string, dbName string) string {
+	return fmt.Sprintf("user=%s password=%s host=%s port=%d dbname=%s sslmode=disable TimeZone=Asia/Shanghai",
+		username,
+		password,
+		host,
+		port,
+		dbName)
+}
+func getSqliteSQLDSN(host string, port int, username string, password string, dbName string) string {
+	return host
+}
+
+func NewDatabase(helper interfaces.HelperInterface, driver string, host string, port int, dbName string, username string, password string) *Database {
 	d := &Database{
-		config: databaseConfig,
 		helper: helper,
 	}
 	d.initOnce.Do(func() {
 
 		var dialector gorm.Dialector
-		if helper.GetConfig().GetString("database.driver", "mysql") == "postgresql" {
+		if driver == "postgresql" {
 			dialector = postgres.New(postgres.Config{
-				DSN:                  databaseConfig.GetPostgreSQLDSN(),
+				DSN:                  getPostgreSQLDSN(host, port, username, password, dbName),
 				PreferSimpleProtocol: true,
 			})
+		} else if driver == "mysql" {
+			dialector = mysql.Open(getMySQLDSN(host, port, username, password, dbName))
+		} else if driver == "sqlite" {
+			dialector = sqlite.Open(getSqliteSQLDSN(host, port, username, password, dbName))
+		} else if driver == "memory" {
+			dialector = sqlite.Open(":memory:")
 		} else {
-			dialector = mysql.Open(databaseConfig.GetMySQLDSN())
+			d.initError = errors.New("unsupported database driver")
+			return
 		}
 
 		var err error
@@ -52,8 +78,12 @@ func NewDatabase(helper interfaces.HelperInterface) *Database {
 }
 
 // 基础连接方法
-func (d *Database) GetDB() *gorm.DB {
+func (d *Database) GetClient() *gorm.DB {
 	return d.db
+}
+
+func (d *Database) SetClient(db *gorm.DB) {
+	d.db = db
 }
 
 func (d *Database) Close() error {

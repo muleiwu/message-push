@@ -2,33 +2,35 @@ package impl
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
-	"cnb.cool/mliev/examples/go-web/internal/pkg/config/interfaces"
-	"cnb.cool/mliev/examples/go-web/internal/pkg/redis/config"
+	"cnb.cool/mliev/examples/go-web/internal/interfaces"
 	"github.com/redis/go-redis/v9"
 )
 
 type Redis struct {
-	client          *redis.Client
-	initialized     bool
-	initOnce        sync.Once
-	initError       error
-	configInterface interfaces.ConfigInterface
-	redisConfig     *config.RedisConfig
+	client      *redis.Client
+	initialized bool
+	initOnce    sync.Once
+	initError   error
 }
 
-func NewRedis(configInterface interfaces.ConfigInterface) *Redis {
-
-	redisConfig := config.NewRedis(configInterface)
-	r := &Redis{
-		configInterface: configInterface,
-		redisConfig:     redisConfig,
+func getOptions(host string, port int, db int, password string) *redis.Options {
+	return &redis.Options{
+		Addr:     fmt.Sprintf("%s:%d", host, port),
+		Password: password,
+		DB:       db,
 	}
+}
+
+func NewRedis(Helper interfaces.HelperInterface, host string, port int, db int, password string) *Redis {
+
+	r := &Redis{}
 	r.initOnce.Do(func() {
 		// 创建Redis客户端
-		r.client = redis.NewClient(redisConfig.GetOptions())
+		r.client = redis.NewClient(getOptions(host, port, db, password))
 
 		// 测试连接
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -48,6 +50,10 @@ func NewRedis(configInterface interfaces.ConfigInterface) *Redis {
 // 基础连接方法
 func (r *Redis) GetClient() *redis.Client {
 	return r.client
+}
+
+func (r *Redis) SetClient(client *redis.Client) {
+	r.client = client
 }
 
 func (r *Redis) Ping(ctx context.Context) error {

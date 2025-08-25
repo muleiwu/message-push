@@ -21,5 +21,5 @@ type ConfigInterface interface {
 }
 
 type InitConfig interface {
-	InitConfig(envInterface EnvInterface) map[string]any
+	InitConfig(helper GetHelperInterface) map[string]any
 }

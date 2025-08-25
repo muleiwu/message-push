@@ -10,7 +10,7 @@ import (
 type Router struct {
 }
 
-func (receiver Router) InitConfig(env envInterface.EnvInterface) map[string]any {
+func (receiver Router) InitConfig(env envInterface.GetHelperInterface) map[string]any {
 	return map[string]any{
 		"http.router": func(router *gin.Engine, deps *impl.HttpDeps) {
 

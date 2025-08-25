@@ -61,7 +61,7 @@ func (receiver HealthController) checkDatabase(helper interfaces.GetHelperInterf
 		}
 	}
 
-	gormDB := databaseHelper.GetDB()
+	gormDB := databaseHelper.GetClient()
 	if gormDB == nil {
 		return dto.ServiceStatus{
 			Status:  "DOWN",

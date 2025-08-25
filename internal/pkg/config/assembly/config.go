@@ -20,7 +20,7 @@ func (receiver *Config) Assembly() {
 	configOnce.Do(func() {
 		configHelper := configImpl.NewConfig()
 		for _, defaultConfig := range receiver.DefaultConfigs {
-			initConfigs := defaultConfig.InitConfig(receiver.Helper.GetEnv())
+			initConfigs := defaultConfig.InitConfig(receiver.Helper)
 			for key, val := range initConfigs {
 				configHelper.Set(key, val)
 			}

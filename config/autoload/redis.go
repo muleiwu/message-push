@@ -8,11 +8,11 @@ type Redis struct {
 	env envInterface.EnvInterface
 }
 
-func (receiver Redis) InitConfig(env envInterface.EnvInterface) map[string]any {
+func (receiver Redis) InitConfig(helper envInterface.GetHelperInterface) map[string]any {
 	return map[string]any{
-		"redis.host":     env.GetString("redis.host", "localhost"),
-		"redis.port":     env.GetInt("redis.port", 6379),
-		"redis.password": env.GetString("redis.password", ""),
-		"redis.db":       env.GetInt("redis.db", 0),
+		"redis.host":     helper.GetEnv().GetString("redis.host", "localhost"),
+		"redis.port":     helper.GetEnv().GetInt("redis.port", 6379),
+		"redis.password": helper.GetEnv().GetString("redis.password", ""),
+		"redis.db":       helper.GetEnv().GetInt("redis.db", 0),
 	}
 }
