@@ -46,23 +46,3 @@ func (receiver *HttpLogger) Fatal(format string, args ...interfaces.LoggerFieldI
 	args = append(args, NewLoggerField("traceId", receiver.traceId))
 	receiver.logger.Fatal(format, args...)
 }
-
-type LoggerFieldInterface struct {
-	Key   string
-	Value string
-}
-
-func NewLoggerField(key string, value string) interfaces.LoggerFieldInterface {
-	return &LoggerFieldInterface{
-		Key:   key,
-		Value: value,
-	}
-}
-
-func (receiver *LoggerFieldInterface) GetKey() string {
-	return receiver.Key
-}
-
-func (receiver *LoggerFieldInterface) GetValue() any {
-	return receiver.Value
-}
