@@ -6,10 +6,10 @@ import (
 	envInterface "cnb.cool/mliev/examples/go-web/internal/interfaces"
 )
 
-type Static struct {
+type StaticFs struct {
 }
 
-func (receiver Static) InitConfig(helper envInterface.GetHelperInterface) map[string]any {
+func (receiver StaticFs) InitConfig(helper envInterface.GetHelperInterface) map[string]any {
 	return map[string]any{
 		"file.static": func() map[string]embed.FS {
 			return map[string]embed.FS{
