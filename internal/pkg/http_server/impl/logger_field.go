@@ -1,13 +1,15 @@
 package impl
 
-import "cnb.cool/mliev/examples/go-web/internal/interfaces"
+import (
+	"github.com/muleiwu/gsr/logger_interface"
+)
 
 type LoggerField struct {
 	Key   string
 	Value any
 }
 
-func NewLoggerField(key string, value any) interfaces.LoggerFieldInterface {
+func NewLoggerField(key string, value any) logger_interface.LoggerFieldInterface {
 	return &LoggerField{
 		Key:   key,
 		Value: value,
