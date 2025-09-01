@@ -1,7 +1,6 @@
 package impl
 
 import (
-	"strings"
 	"time"
 )
 
@@ -18,9 +17,6 @@ func (c *Config) Set(key string, value any) {
 }
 
 func (c *Config) Get(key string, defaultValue any) any {
-	if !strings.Contains(key, ".") {
-		return c.data
-	}
 
 	data, ok := c.data[key]
 

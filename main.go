@@ -1,9 +1,12 @@
 package main
 
 import (
+	"embed"
+
 	"cnb.cool/mliev/examples/go-web/cmd"
 )
 
 func main() {
-	cmd.Start()
+	staticFs := map[string]embed.FS{}
+	cmd.Start(staticFs)
 }
