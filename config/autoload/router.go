@@ -14,19 +14,22 @@ func (receiver Router) InitConfig(helper envInterface.GetHelperInterface) map[st
 	return map[string]any{
 		"http.router": func(router *gin.Engine, deps *impl.HttpDeps) {
 
-			// 健康检查接口
-			router.GET("/health", deps.WrapHandler(controller.HealthController{}.GetHealth))
-			router.GET("/health/simple", deps.WrapHandler(controller.HealthController{}.GetHealthSimple))
+			health := router.Group("/health")
+			{
+				// 健康检查接口
+				health.GET("", deps.WrapHandler(controller.HealthController{}.GetHealth))
+				health.GET("/simple", deps.WrapHandler(controller.HealthController{}.GetHealthSimple))
+			}
 
 			// 首页
-			router.GET("/", deps.WrapHandler(controller.IndexController{}.GetIndex))
+			// router.GET("/", deps.WrapHandler(controller.IndexController{}.GetIndex))
 
 			// API路由组
-			v1 := router.Group("/api/v1")
-			{
-				// 这里添加v1版本的API路由
-				_ = v1 // 暂时避免未使用变量的警告
-			}
+			//v1 := router.Group("/api/v1")
+			//{
+			//	// 这里添加v1版本的API路由
+			//	_ = v1 // 暂时避免未使用变量的警告
+			//}
 
 		},
 	}
