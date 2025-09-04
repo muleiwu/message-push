@@ -16,10 +16,11 @@ var (
 	redisOnce sync.Once
 )
 
-func (receiver *Redis) Assembly() {
+func (receiver *Redis) Assembly() error {
 	redisConfig := config.NewRedis(receiver.Helper.GetConfig())
 
-	redisOnce.Do(func() {
-		receiver.Helper.SetRedis(impl.NewRedis(receiver.Helper, redisConfig.Host, redisConfig.Port, redisConfig.DB, redisConfig.Password))
-	})
+	redis, err := impl.NewRedis(receiver.Helper, redisConfig.Host, redisConfig.Port, redisConfig.DB, redisConfig.Password)
+	receiver.Helper.SetRedis(redis)
+
+	return err
 }

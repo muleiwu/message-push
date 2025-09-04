@@ -22,7 +22,7 @@ func Start(staticFs map[string]embed.FS) {
 // initializeServices 初始化所有服务
 func initializeServices(staticFs map[string]embed.FS) {
 
-	helper := helper2.NewHelper()
+	helper := &helper2.Helper{}
 
 	assembly := config.Assembly{
 		Helper: helper,

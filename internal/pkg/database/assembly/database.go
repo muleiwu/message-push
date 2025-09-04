@@ -16,11 +16,12 @@ var (
 	databaseOnce sync.Once
 )
 
-func (receiver *Database) Assembly() {
-	databaseOnce.Do(func() {
+func (receiver *Database) Assembly() error {
+	databaseConfig := config.NewConfig(receiver.Helper.GetConfig())
 
-		databaseConfig := config.NewConfig(receiver.Helper.GetConfig())
+	database, err := impl.NewDatabase(receiver.Helper, databaseConfig.Driver, databaseConfig.Host, databaseConfig.Port, databaseConfig.DBName, databaseConfig.Username, databaseConfig.Password)
 
-		receiver.Helper.SetDatabase(impl.NewDatabase(receiver.Helper, databaseConfig.Driver, databaseConfig.Host, databaseConfig.Port, databaseConfig.DBName, databaseConfig.Username, databaseConfig.Password))
-	})
+	receiver.Helper.SetDatabase(database)
+
+	return err
 }
