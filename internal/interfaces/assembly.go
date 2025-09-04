@@ -1,5 +1,5 @@
 package interfaces
 
 type AssemblyInterface interface {
-	Assembly()
+	Assembly() error
 }

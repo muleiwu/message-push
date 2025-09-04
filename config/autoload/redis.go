@@ -2,10 +2,11 @@ package autoload
 
 import (
 	envInterface "cnb.cool/mliev/examples/go-web/internal/interfaces"
+	"github.com/muleiwu/gsr/env_interface"
 )
 
 type Redis struct {
-	env envInterface.EnvInterface
+	env env_interface.EnvInterface
 }
 
 func (receiver Redis) InitConfig(helper envInterface.GetHelperInterface) map[string]any {

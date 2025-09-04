@@ -15,8 +15,8 @@ var (
 	loggerOnce sync.Once
 )
 
-func (receiver *Logger) Assembly() {
-	loggerOnce.Do(func() {
-		receiver.Helper.SetLogger(impl.NewLogger())
-	})
+func (receiver *Logger) Assembly() error {
+
+	receiver.Helper.SetLogger(impl.NewLogger())
+	return nil
 }

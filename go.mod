@@ -1,17 +1,18 @@
 module cnb.cool/mliev/examples/go-web
 
-go 1.23.2
+go 1.25.0
 
 require (
 	github.com/gin-gonic/gin v1.10.1
 	github.com/glebarez/sqlite v1.11.0
 	github.com/google/uuid v1.6.0
+	github.com/muleiwu/gsr v0.0.1
 	github.com/redis/go-redis/v9 v9.10.0
 	github.com/spf13/viper v1.19.0
 	go.uber.org/zap v1.27.0
 	gorm.io/driver/mysql v1.5.7
 	gorm.io/driver/postgres v1.5.9
-	gorm.io/gorm v1.30.0
+	gorm.io/gorm v1.30.2
 )
 
 require (

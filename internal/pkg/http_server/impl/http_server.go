@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"reflect"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -18,21 +20,6 @@ import (
 type HttpServer struct {
 	Helper     interfaces.HelperInterface
 	routerFunc func(router *gin.Engine)
-}
-
-type logWriter struct {
-	logger  interfaces.LoggerInterface
-	isError bool
-}
-
-// Write 实现io.Writer接口
-func (z *logWriter) Write(p []byte) (n int, err error) {
-	if z.isError {
-		z.logger.Error(string(p))
-	} else {
-		z.logger.Info(string(p))
-	}
-	return len(p), nil
 }
 
 func NewHttpServer(helper interfaces.HelperInterface) *HttpServer {
@@ -50,26 +37,27 @@ func (receiver *HttpServer) RunHttp() {
 
 	// 完全替换gin的默认Logger
 	gin.DisableConsoleColor()
-	gin.DefaultWriter = &logWriter{logger: receiver.Helper.GetLogger()}
-	gin.DefaultErrorWriter = &logWriter{logger: receiver.Helper.GetLogger(), isError: true}
+	//zapLogger := receiver.logger
+	//gin.DefaultWriter = &zapLogWriter{zapLogger: zapLogger}
+	//gin.DefaultErrorWriter = &zapLogWriter{zapLogger: zapLogger, isError: true}
 
 	// 配置Gin引擎
 	// 配置Gin引擎并替换默认logger
 	engine := gin.New()
-	engine.Use(gin.Recovery())
 	engine.Use(receiver.traceIdMiddleware())
-	engine.Use(receiver.GinZapLogger())
+	engine.Use(gin.Recovery())
 
 	// 注册中间件
 	//handlerFuncs := config.MiddlewareConfig{}.Get()
 	middlewareFuncList := receiver.Helper.GetConfig().Get("http.middleware", []gin.HandlerFunc{}).([]gin.HandlerFunc)
-	for i, handlerFunc := range middlewareFuncList {
+	for _, handlerFunc := range middlewareFuncList {
 		if handlerFunc == nil {
 			continue
 		}
 		engine.Use(handlerFunc)
-		receiver.Helper.GetLogger().Info(fmt.Sprintf("注册中间件: %d", i))
+		receiver.Helper.GetLogger().Info(fmt.Sprintf("注册中间件: %s", receiver.GetFunctionName(handlerFunc)))
 	}
+	receiver.Helper.GetLogger().Info(fmt.Sprintf("注册中间件: %d 个", len(middlewareFuncList)))
 
 	deps := NewHttpDeps(receiver.Helper, engine)
 	header := receiver.Helper.GetConfig().Get("http.router", func(router *gin.Engine, deps *HttpDeps) {
@@ -118,41 +106,9 @@ func (receiver *HttpServer) RunHttp() {
 	}()
 }
 
-// GinZapLogger 返回一个Gin中间件，使用zap记录HTTP请求
-func (receiver *HttpServer) GinZapLogger() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		start := time.Now()
-		path := c.Request.URL.Path
-		query := c.Request.URL.RawQuery
-
-		c.Next()
-
-		// 请求处理完成后记录日志
-		cost := time.Since(start)
-		statusCode := c.Writer.Status()
-
-		// 通用的日志字段
-		fields := []interfaces.LoggerFieldInterface{
-			NewLoggerField("method", c.Request.Method),
-			NewLoggerField("path", path),
-			NewLoggerField("query", query),
-			NewLoggerField("status", statusCode),
-			NewLoggerField("ip", c.ClientIP()),
-			NewLoggerField("latency", cost),
-			NewLoggerField("user-agent", c.Request.UserAgent()),
-		}
-
-		// 根据状态码决定日志级别
-		switch {
-		case statusCode >= 500:
-			fields = append(fields, NewLoggerField("errors", c.Errors.ByType(gin.ErrorTypePrivate).String()))
-			receiver.Helper.GetLogger().Error("请求处理", fields...)
-		case statusCode >= 400:
-			receiver.Helper.GetLogger().Warn("请求处理", fields...)
-		default:
-			receiver.Helper.GetLogger().Info("请求处理", fields...)
-		}
-	}
+// GetFunctionName 获取函数名
+func (receiver *HttpServer) GetFunctionName(i any) string {
+	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
 }
 
 func (receiver *HttpServer) traceIdMiddleware() gin.HandlerFunc {

@@ -53,19 +53,11 @@ func (receiver HealthController) GetHealthSimple(c *gin.Context, helper interfac
 
 // checkDatabase 检查数据库连接
 func (receiver HealthController) checkDatabase(helper interfaces.GetHelperInterface) dto.ServiceStatus {
-	databaseHelper := helper.GetDatabase()
-	if databaseHelper == nil {
-		return dto.ServiceStatus{
-			Status:  "DOWN",
-			Message: "数据库连接失败",
-		}
-	}
-
-	gormDB := databaseHelper.GetClient()
+	gormDB := helper.GetDatabase()
 	if gormDB == nil {
 		return dto.ServiceStatus{
 			Status:  "DOWN",
-			Message: "获取数据库连接失败",
+			Message: "数据库连接失败",
 		}
 	}
 
@@ -102,7 +94,7 @@ func (receiver HealthController) checkRedis(helper interfaces.GetHelperInterface
 	if err := redisHelper.Ping(ctx); err != nil {
 		return dto.ServiceStatus{
 			Status:  "DOWN",
-			Message: "Redis ping失败: " + err.Error(),
+			Message: "Redis ping失败: " + err.Err().Error(),
 		}
 	}
 
