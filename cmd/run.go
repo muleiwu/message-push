@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"embed"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -28,7 +29,10 @@ func initializeServices(staticFs map[string]embed.FS) {
 		Helper: helper,
 	}
 	for _, assemblyInterface := range assembly.Get() {
-		assemblyInterface.Assembly()
+		err := assemblyInterface.Assembly()
+		if err != nil {
+			fmt.Printf("Error assembling assembly: %v\n", err)
+		}
 	}
 
 	helper.GetConfig().Set("file.static", staticFs)
