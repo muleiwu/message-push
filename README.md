@@ -20,12 +20,10 @@
 
 ##  📞 加群获取帮助
 
-1. QQ群：
-    - 1021660914 [点击链接加入群聊【木雷坞开源家】](https://n3.ink/lmKc)
-
-2. 企业微信群
-    - ![wechat_qr_code.png](https://static.1ms.run/dwz/image/wechat_qr_code.png)
-
+| QQ                                                                          |                                 企业微信                                       |
+|:---:|:--------------------------------------------------------------------------:|
+| ![wechat_qr_code.png](https://static.1ms.run/dwz/image/httpsn3.inklmKc.png) | ![wechat_qr_code.png](https://static.1ms.run/dwz/image/wechat_qr_code.png) |
+| 1021660914 [点击链接加入群聊【木雷坞开源家】](https://n3.ink/lmKc)                          |                                扫描上方二维码加入微信群                                |
 
 
 ## 🚀 快速开始
