@@ -18,6 +18,16 @@
 - 🚀 **优雅启停**：支持优雅关闭
 - 🔄 **自动迁移**：数据库表结构自动迁移
 
+##  📞 加群获取帮助
+
+1. QQ群：
+    - 1021660914 [点击链接加入群聊【木雷坞开源家】](https://n3.ink/lmKc)
+
+2. 企业微信群
+    - ![wechat_qr_code.png](https://static.1ms.run/dwz/image/wechat_qr_code.png)
+
+
+
 ## 🚀 快速开始
 
 ### 1. 克隆项目
