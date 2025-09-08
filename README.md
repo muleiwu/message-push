@@ -1,8 +1,8 @@
 # Go Web 框架
 
-[![Go Version](https://img.shields.io/badge/Go-1.23.2-blue.svg)](https://golang.org)
-[![Gin Framework](https://img.shields.io/badge/Gin-1.10.1-green.svg)](https://github.com/gin-gonic/gin)
-[![GORM](https://img.shields.io/badge/Gorm-1.25.12-orange.svg)](https://gorm.io)
+[![Go Version](https://img.shields.io/badge/Go-1.25.0-blue.svg)](https://golang.org)
+[![Gin Framework](https://img.shields.io/badge/Gin-v1.10.1-green.svg)](https://github.com/gin-gonic/gin)
+[![GORM](https://img.shields.io/badge/Gorm-v1.30.3-orange.svg)](https://gorm.io)
 
 一个基于 Gin 框架的企业级 Go Web 应用模板，采用清晰的分层架构设计，内置依赖注入、健康检查、配置管理等企业级功能。
 
