@@ -9,7 +9,7 @@ type Redis struct {
 	env env_interface.EnvInterface
 }
 
-func (receiver Redis) InitConfig(helper envInterface.GetHelperInterface) map[string]any {
+func (receiver Redis) InitConfig(helper envInterface.HelperInterface) map[string]any {
 	return map[string]any{
 		"redis.host":     helper.GetEnv().GetString("redis.host", "localhost"),
 		"redis.port":     helper.GetEnv().GetInt("redis.port", 6379),
