@@ -1,5 +1,5 @@
 package interfaces
 
 type InitConfig interface {
-	InitConfig(helper GetHelperInterface) map[string]any
+	InitConfig(helper HelperInterface) map[string]any
 }
