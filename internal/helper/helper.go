@@ -1,6 +1,9 @@
 package helper
 
 import (
+	"sync"
+
+	"cnb.cool/mliev/examples/go-web/internal/interfaces"
 	"github.com/muleiwu/gsr/config_interface"
 	"github.com/muleiwu/gsr/env_interface"
 	"github.com/muleiwu/gsr/logger_interface"
@@ -14,6 +17,16 @@ type Helper struct {
 	logger   logger_interface.LoggerInterface
 	redis    *redis.Client
 	database *gorm.DB
+}
+
+var helperOnce sync.Once
+var helperData interfaces.HelperInterface
+
+func GetHelper() interfaces.HelperInterface {
+	helperOnce.Do(func() {
+		helperData = &Helper{}
+	})
+	return helperData
 }
 
 func (receiver *Helper) GetEnv() env_interface.EnvInterface {
