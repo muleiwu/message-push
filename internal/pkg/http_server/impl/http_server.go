@@ -2,8 +2,11 @@ package impl
 
 import (
 	"context"
+	"embed"
 	"errors"
 	"fmt"
+	"html/template"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/signal"
@@ -46,6 +49,15 @@ func (receiver *HttpServer) RunHttp() {
 	engine := gin.New()
 	engine.Use(receiver.traceIdMiddleware())
 	engine.Use(gin.Recovery())
+
+	// 加载HTML模板
+	if err := receiver.loadTemplates(engine); err != nil {
+		receiver.Helper.GetLogger().Error(fmt.Sprintf("加载模板失败: %v", err))
+		return
+	}
+
+	// 加载网站静态资源
+	receiver.loadWebStatic(engine)
 
 	// 注册中间件
 	//handlerFuncs := config.MiddlewareConfig{}.Get()
@@ -104,6 +116,36 @@ func (receiver *HttpServer) RunHttp() {
 
 		receiver.Helper.GetLogger().Info("服务器已优雅关闭")
 	}()
+}
+
+// loadTemplates 加载模板到Gin引擎
+func (receiver *HttpServer) loadTemplates(engine *gin.Engine) error {
+	staticFs := receiver.Helper.GetConfig().Get("static.fs", map[string]embed.FS{}).(map[string]embed.FS)
+
+	templates, ok := staticFs["templates"]
+
+	if !ok {
+		return errors.New("没有模板目录需要初始化")
+	}
+
+	// 从嵌入的文件系统创建子文件系统
+	subFS, err := fs.Sub(templates, "templates")
+	if err != nil {
+		return err
+	}
+
+	// 创建模板并解析所有模板文件
+	tmpl := template.Must(template.New("").ParseFS(subFS, "*.html"))
+
+	// 设置HTML模板
+	engine.SetHTMLTemplate(tmpl)
+
+	return nil
+}
+
+func (receiver *HttpServer) loadWebStatic(engine *gin.Engine) {
+	staticHandler := NewStaticHandler(receiver.Helper, engine)
+	staticHandler.setupStaticFileServers()
 }
 
 // GetFunctionName 获取函数名

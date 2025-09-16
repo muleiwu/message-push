@@ -11,6 +11,7 @@ type Config struct {
 func (receiver Config) Get() []interfaces.InitConfig {
 	return []interfaces.InitConfig{
 		autoload.Base{},
+		autoload.Http{},
 		autoload.StaticFs{},
 		autoload.Database{},
 		autoload.Redis{},
