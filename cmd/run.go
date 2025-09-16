@@ -35,7 +35,7 @@ func initializeServices(staticFs map[string]embed.FS) {
 		}
 	}
 
-	helper.GetConfig().Set("file.static", staticFs)
+	helper.GetConfig().Set("static.fs", staticFs)
 
 	server := config.Server{
 		Helper: helper,
