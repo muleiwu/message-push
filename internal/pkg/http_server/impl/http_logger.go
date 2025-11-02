@@ -1,15 +1,15 @@
 package impl
 
 import (
-	"github.com/muleiwu/gsr/logger_interface"
+	"github.com/muleiwu/gsr"
 )
 
 type HttpLogger struct {
-	logger  logger_interface.LoggerInterface
+	logger  gsr.Logger
 	traceId string
 }
 
-func NewHttpLogger(logger logger_interface.LoggerInterface, traceId string) logger_interface.LoggerInterface {
+func NewHttpLogger(logger gsr.Logger, traceId string) gsr.Logger {
 	l := &HttpLogger{
 		logger:  logger,
 		traceId: traceId,
@@ -17,32 +17,32 @@ func NewHttpLogger(logger logger_interface.LoggerInterface, traceId string) logg
 	return l
 }
 
-func (receiver *HttpLogger) Debug(format string, args ...logger_interface.LoggerFieldInterface) {
+func (receiver *HttpLogger) Debug(format string, args ...gsr.LoggerField) {
 	args = append(args, NewLoggerField("traceId", receiver.traceId))
 	receiver.logger.Debug(format, args...)
 }
 
-func (receiver *HttpLogger) Info(format string, args ...logger_interface.LoggerFieldInterface) {
+func (receiver *HttpLogger) Info(format string, args ...gsr.LoggerField) {
 	args = append(args, NewLoggerField("traceId", receiver.traceId))
 	receiver.logger.Info(format, args...)
 }
 
-func (receiver *HttpLogger) Notice(format string, args ...logger_interface.LoggerFieldInterface) {
+func (receiver *HttpLogger) Notice(format string, args ...gsr.LoggerField) {
 	args = append(args, NewLoggerField("traceId", receiver.traceId))
 	receiver.logger.Info(format, args...)
 }
 
-func (receiver *HttpLogger) Error(format string, args ...logger_interface.LoggerFieldInterface) {
+func (receiver *HttpLogger) Error(format string, args ...gsr.LoggerField) {
 	args = append(args, NewLoggerField("traceId", receiver.traceId))
 	receiver.logger.Error(format, args...)
 }
 
-func (receiver *HttpLogger) Warn(format string, args ...logger_interface.LoggerFieldInterface) {
+func (receiver *HttpLogger) Warn(format string, args ...gsr.LoggerField) {
 	args = append(args, NewLoggerField("traceId", receiver.traceId))
 	receiver.logger.Warn(format, args...)
 }
 
-func (receiver *HttpLogger) Fatal(format string, args ...logger_interface.LoggerFieldInterface) {
+func (receiver *HttpLogger) Fatal(format string, args ...gsr.LoggerField) {
 	args = append(args, NewLoggerField("traceId", receiver.traceId))
 	receiver.logger.Fatal(format, args...)
 }
