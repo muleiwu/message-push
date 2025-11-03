@@ -4,7 +4,7 @@ import (
 	helper2 "cnb.cool/mliev/examples/go-web/internal/helper"
 	"cnb.cool/mliev/examples/go-web/internal/interfaces"
 	"github.com/gin-gonic/gin"
-	"github.com/muleiwu/gsr/logger_interface"
+	"github.com/muleiwu/gsr"
 )
 
 type HttpDeps struct {
@@ -39,6 +39,6 @@ func (d *HttpDeps) getHttpDeps(traceId string) interfaces.HelperInterface {
 	return h
 }
 
-func (d *HttpDeps) getLogger(logger logger_interface.LoggerInterface, traceId string) logger_interface.LoggerInterface {
+func (d *HttpDeps) getLogger(logger gsr.Logger, traceId string) gsr.Logger {
 	return NewHttpLogger(logger, traceId)
 }

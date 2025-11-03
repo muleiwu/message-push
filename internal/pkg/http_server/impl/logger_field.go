@@ -1,7 +1,7 @@
 package impl
 
 import (
-	"github.com/muleiwu/gsr/logger_interface"
+	"github.com/muleiwu/gsr"
 )
 
 type LoggerField struct {
@@ -9,7 +9,7 @@ type LoggerField struct {
 	Value any
 }
 
-func NewLoggerField(key string, value any) logger_interface.LoggerFieldInterface {
+func NewLoggerField(key string, value any) gsr.LoggerField {
 	return &LoggerField{
 		Key:   key,
 		Value: value,

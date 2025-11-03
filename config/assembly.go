@@ -2,6 +2,7 @@ package config
 
 import (
 	"cnb.cool/mliev/examples/go-web/internal/interfaces"
+	cacheAssembly "cnb.cool/mliev/examples/go-web/internal/pkg/cache/assembly"
 	configAssembly "cnb.cool/mliev/examples/go-web/internal/pkg/config/assembly"
 	databaseAssembly "cnb.cool/mliev/examples/go-web/internal/pkg/database/assembly"
 	envAssembly "cnb.cool/mliev/examples/go-web/internal/pkg/env/assembly"
@@ -25,5 +26,6 @@ func (receiver *Assembly) Get() []interfaces.AssemblyInterface {
 		&loggerAssembly.Logger{Helper: receiver.Helper},     // 日志驱动
 		&databaseAssembly.Database{Helper: receiver.Helper}, // 数据库配置
 		&redisAssembly.Redis{Helper: receiver.Helper},       // redis 配置
+		&cacheAssembly.Cache{Helper: receiver.Helper},       // 缓存驱动
 	}
 }

@@ -4,17 +4,16 @@ import (
 	"sync"
 
 	"cnb.cool/mliev/examples/go-web/internal/interfaces"
-	"github.com/muleiwu/gsr/config_interface"
-	"github.com/muleiwu/gsr/env_interface"
-	"github.com/muleiwu/gsr/logger_interface"
+	"github.com/muleiwu/gsr"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
 
 type Helper struct {
-	env      env_interface.EnvInterface
-	config   config_interface.ConfigInterface
-	logger   logger_interface.LoggerInterface
+	env      gsr.Enver
+	cache    gsr.Cacher
+	config   gsr.Provider
+	logger   gsr.Logger
 	redis    *redis.Client
 	database *gorm.DB
 }
@@ -29,15 +28,19 @@ func GetHelper() interfaces.HelperInterface {
 	return helperData
 }
 
-func (receiver *Helper) GetEnv() env_interface.EnvInterface {
+func (receiver *Helper) GetEnv() gsr.Enver {
 	return receiver.env
 }
 
-func (receiver *Helper) GetConfig() config_interface.ConfigInterface {
+func (receiver *Helper) GetCache() gsr.Cacher {
+	return receiver.cache
+}
+
+func (receiver *Helper) GetConfig() gsr.Provider {
 	return receiver.config
 }
 
-func (receiver *Helper) GetLogger() logger_interface.LoggerInterface {
+func (receiver *Helper) GetLogger() gsr.Logger {
 	return receiver.logger
 }
 
@@ -49,15 +52,19 @@ func (receiver *Helper) GetDatabase() *gorm.DB {
 	return receiver.database
 }
 
-func (receiver *Helper) SetEnv(env env_interface.EnvInterface) {
+func (receiver *Helper) SetEnv(env gsr.Enver) {
 	receiver.env = env
 }
 
-func (receiver *Helper) SetConfig(config config_interface.ConfigInterface) {
+func (receiver *Helper) SetCache(cache gsr.Cacher) {
+	receiver.cache = cache
+}
+
+func (receiver *Helper) SetConfig(config gsr.Provider) {
 	receiver.config = config
 }
 
-func (receiver *Helper) SetLogger(logger logger_interface.LoggerInterface) {
+func (receiver *Helper) SetLogger(logger gsr.Logger) {
 	receiver.logger = logger
 }
 
