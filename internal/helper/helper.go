@@ -11,6 +11,7 @@ import (
 
 type Helper struct {
 	env      gsr.Enver
+	cache    gsr.Cacher
 	config   gsr.Provider
 	logger   gsr.Logger
 	redis    *redis.Client
@@ -31,6 +32,10 @@ func (receiver *Helper) GetEnv() gsr.Enver {
 	return receiver.env
 }
 
+func (receiver *Helper) GetCache() gsr.Cacher {
+	return receiver.cache
+}
+
 func (receiver *Helper) GetConfig() gsr.Provider {
 	return receiver.config
 }
@@ -49,6 +54,10 @@ func (receiver *Helper) GetDatabase() *gorm.DB {
 
 func (receiver *Helper) SetEnv(env gsr.Enver) {
 	receiver.env = env
+}
+
+func (receiver *Helper) SetCache(cache gsr.Cacher) {
+	receiver.cache = cache
 }
 
 func (receiver *Helper) SetConfig(config gsr.Provider) {

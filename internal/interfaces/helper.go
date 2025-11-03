@@ -8,6 +8,7 @@ import (
 
 type GetHelperInterface interface {
 	GetEnv() gsr.Enver
+	GetCache() gsr.Cacher
 	GetConfig() gsr.Provider
 	GetLogger() gsr.Logger
 	GetRedis() *redis.Client
@@ -16,6 +17,7 @@ type GetHelperInterface interface {
 
 type SetHelperInterface interface {
 	SetEnv(env gsr.Enver)
+	SetCache(cache gsr.Cacher)
 	SetConfig(config gsr.Provider)
 	SetLogger(logger gsr.Logger)
 	SetRedis(redis *redis.Client)
