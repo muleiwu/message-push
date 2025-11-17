@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	envInterface "cnb.cool/mliev/examples/go-web/internal/interfaces"
+	envInterface "cnb.cool/mliev/push/message-push/internal/interfaces"
 	"github.com/gin-gonic/gin"
 )
 

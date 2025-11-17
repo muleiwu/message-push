@@ -1,8 +1,8 @@
 package impl
 
 import (
-	helper2 "cnb.cool/mliev/examples/go-web/internal/helper"
-	"cnb.cool/mliev/examples/go-web/internal/interfaces"
+	helper2 "cnb.cool/mliev/push/message-push/internal/helper"
+	"cnb.cool/mliev/push/message-push/internal/interfaces"
 	"github.com/gin-gonic/gin"
 	"github.com/muleiwu/gsr"
 )

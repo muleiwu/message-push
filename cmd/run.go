@@ -8,10 +8,10 @@ import (
 	"syscall"
 	"time"
 
-	"cnb.cool/mliev/examples/go-web/config"
-	helper2 "cnb.cool/mliev/examples/go-web/internal/helper"
-	"cnb.cool/mliev/examples/go-web/internal/interfaces"
-	"cnb.cool/mliev/examples/go-web/internal/pkg/reload"
+	"cnb.cool/mliev/push/message-push/config"
+	helper2 "cnb.cool/mliev/push/message-push/internal/helper"
+	"cnb.cool/mliev/push/message-push/internal/interfaces"
+	"cnb.cool/mliev/push/message-push/internal/pkg/reload"
 )
 
 // Start 启动应用程序

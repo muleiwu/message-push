@@ -1,8 +1,8 @@
 package config
 
 import (
-	"cnb.cool/mliev/examples/go-web/config/autoload"
-	"cnb.cool/mliev/examples/go-web/internal/interfaces"
+	"cnb.cool/mliev/push/message-push/config/autoload"
+	"cnb.cool/mliev/push/message-push/internal/interfaces"
 )
 
 type Config struct {

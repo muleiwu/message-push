@@ -3,7 +3,7 @@ package helper
 import (
 	"sync"
 
-	"cnb.cool/mliev/examples/go-web/internal/interfaces"
+	"cnb.cool/mliev/push/message-push/internal/interfaces"
 	"github.com/muleiwu/gsr"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"

@@ -3,7 +3,7 @@ package main
 import (
 	"embed"
 
-	"cnb.cool/mliev/examples/go-web/cmd"
+	"cnb.cool/mliev/push/message-push/cmd"
 )
 
 //go:embed templates/**

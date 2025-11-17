@@ -3,8 +3,8 @@ package assembly
 import (
 	"sync"
 
-	"cnb.cool/mliev/examples/go-web/internal/interfaces"
-	"cnb.cool/mliev/examples/go-web/internal/pkg/logger/impl"
+	"cnb.cool/mliev/push/message-push/internal/interfaces"
+	"cnb.cool/mliev/push/message-push/internal/pkg/logger/impl"
 )
 
 type Logger struct {

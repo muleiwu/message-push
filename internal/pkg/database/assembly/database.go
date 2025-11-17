@@ -3,9 +3,9 @@ package assembly
 import (
 	"sync"
 
-	"cnb.cool/mliev/examples/go-web/internal/interfaces"
-	"cnb.cool/mliev/examples/go-web/internal/pkg/database/config"
-	"cnb.cool/mliev/examples/go-web/internal/pkg/database/impl"
+	"cnb.cool/mliev/push/message-push/internal/interfaces"
+	"cnb.cool/mliev/push/message-push/internal/pkg/database/config"
+	"cnb.cool/mliev/push/message-push/internal/pkg/database/impl"
 )
 
 type Database struct {

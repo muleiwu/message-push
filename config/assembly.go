@@ -1,13 +1,13 @@
 package config
 
 import (
-	"cnb.cool/mliev/examples/go-web/internal/interfaces"
-	cacheAssembly "cnb.cool/mliev/examples/go-web/internal/pkg/cache/assembly"
-	configAssembly "cnb.cool/mliev/examples/go-web/internal/pkg/config/assembly"
-	databaseAssembly "cnb.cool/mliev/examples/go-web/internal/pkg/database/assembly"
-	envAssembly "cnb.cool/mliev/examples/go-web/internal/pkg/env/assembly"
-	loggerAssembly "cnb.cool/mliev/examples/go-web/internal/pkg/logger/assembly"
-	redisAssembly "cnb.cool/mliev/examples/go-web/internal/pkg/redis/assembly"
+	"cnb.cool/mliev/push/message-push/internal/interfaces"
+	cacheAssembly "cnb.cool/mliev/push/message-push/internal/pkg/cache/assembly"
+	configAssembly "cnb.cool/mliev/push/message-push/internal/pkg/config/assembly"
+	databaseAssembly "cnb.cool/mliev/push/message-push/internal/pkg/database/assembly"
+	envAssembly "cnb.cool/mliev/push/message-push/internal/pkg/env/assembly"
+	loggerAssembly "cnb.cool/mliev/push/message-push/internal/pkg/logger/assembly"
+	redisAssembly "cnb.cool/mliev/push/message-push/internal/pkg/redis/assembly"
 )
 
 type Assembly struct {

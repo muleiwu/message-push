@@ -1,9 +1,9 @@
 package autoload
 
 import (
-	"cnb.cool/mliev/examples/go-web/app/controller"
-	envInterface "cnb.cool/mliev/examples/go-web/internal/interfaces"
-	"cnb.cool/mliev/examples/go-web/internal/pkg/http_server/impl"
+	"cnb.cool/mliev/push/message-push/app/controller"
+	envInterface "cnb.cool/mliev/push/message-push/internal/interfaces"
+	"cnb.cool/mliev/push/message-push/internal/pkg/http_server/impl"
 	"github.com/gin-gonic/gin"
 )
 

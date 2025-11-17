@@ -3,7 +3,7 @@ package controller
 import (
 	"net/http"
 
-	"cnb.cool/mliev/examples/go-web/internal/interfaces"
+	"cnb.cool/mliev/push/message-push/internal/interfaces"
 	"github.com/gin-gonic/gin"
 )
 

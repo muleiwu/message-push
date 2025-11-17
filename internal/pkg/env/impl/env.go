@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"cnb.cool/mliev/examples/go-web/internal/helper"
+	"cnb.cool/mliev/push/message-push/internal/helper"
 	"github.com/spf13/viper"
 )
 

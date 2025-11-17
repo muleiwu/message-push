@@ -3,9 +3,9 @@ package assembly
 import (
 	"sync"
 
-	"cnb.cool/mliev/examples/go-web/internal/interfaces"
-	"cnb.cool/mliev/examples/go-web/internal/pkg/redis/config"
-	"cnb.cool/mliev/examples/go-web/internal/pkg/redis/impl"
+	"cnb.cool/mliev/push/message-push/internal/interfaces"
+	"cnb.cool/mliev/push/message-push/internal/pkg/redis/config"
+	"cnb.cool/mliev/push/message-push/internal/pkg/redis/impl"
 )
 
 type Redis struct {

@@ -1,8 +1,8 @@
 package dao
 
 import (
-	"cnb.cool/mliev/examples/go-web/app/model"
-	"cnb.cool/mliev/examples/go-web/internal/interfaces"
+	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/internal/interfaces"
 )
 
 // TestDemoDao 注入
