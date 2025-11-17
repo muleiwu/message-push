@@ -8,11 +8,8 @@ import (
 	"html/template"
 	"io/fs"
 	"net/http"
-	"os"
-	"os/signal"
 	"reflect"
 	"runtime"
-	"syscall"
 	"time"
 
 	"cnb.cool/mliev/examples/go-web/internal/interfaces"
@@ -23,6 +20,7 @@ import (
 type HttpServer struct {
 	Helper     interfaces.HelperInterface
 	routerFunc func(router *gin.Engine)
+	server     *http.Server
 }
 
 func NewHttpServer(helper interfaces.HelperInterface) *HttpServer {
@@ -85,40 +83,40 @@ func (receiver *HttpServer) RunHttp() {
 
 	// 创建一个HTTP服务器，以便能够优雅关闭
 	addr := receiver.Helper.GetConfig().GetString("http.addr", ":8080")
-	srv := &http.Server{
+	receiver.server = &http.Server{
 		Addr:    addr,
 		Handler: engine,
 	}
 
-	// 创建一个通道来接收中断信号
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-
 	// 在单独的goroutine中启动服务器
 	go func() {
 		receiver.Helper.GetLogger().Info(fmt.Sprintf("服务器启动于 %s", addr))
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := receiver.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			receiver.Helper.GetLogger().Error(fmt.Sprintf("启动服务器失败: %v", err))
 		}
 	}()
+}
 
-	// 在单独的goroutine中等待中断信号以便优雅关闭
-	go func() {
-		// 等待中断信号
-		<-quit
-		receiver.Helper.GetLogger().Info("正在关闭服务器...")
+// Stop 优雅停止HTTP服务器
+func (receiver *HttpServer) Stop() error {
+	if receiver.server == nil {
+		return nil
+	}
 
-		// 创建一个5秒的上下文用于超时控制
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
+	receiver.Helper.GetLogger().Info("正在关闭HTTP服务器...")
 
-		// 优雅地关闭服务器
-		if err := srv.Shutdown(ctx); err != nil {
-			receiver.Helper.GetLogger().Error(fmt.Sprintf("服务器强制关闭: %v", err))
-		}
+	// 创建一个5秒的上下文用于超时控制
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-		receiver.Helper.GetLogger().Info("服务器已优雅关闭")
-	}()
+	// 优雅地关闭服务器
+	if err := receiver.server.Shutdown(ctx); err != nil {
+		receiver.Helper.GetLogger().Error(fmt.Sprintf("HTTP服务器关闭失败: %v", err))
+		return err
+	}
+
+	receiver.Helper.GetLogger().Info("HTTP服务器已优雅关闭")
+	return nil
 }
 
 // loadTemplates 加载模板到Gin引擎

@@ -23,3 +23,8 @@ func (receiver *Migration) Run() error {
 	}
 	return nil
 }
+
+// Stop Migration 服务不需要停止操作，空实现
+func (receiver *Migration) Stop() error {
+	return nil
+}

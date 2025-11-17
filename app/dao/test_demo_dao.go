@@ -7,12 +7,12 @@ import (
 
 // TestDemoDao 注入
 type TestDemoDao struct {
-	database interfaces.DatabaseInterface
+	helper interfaces.HelperInterface
 }
 
 func (receiver *TestDemoDao) GetUserByUsername(username string) (*model.TestDemo, error) {
 	var user model.TestDemo
-	if err := receiver.database.Where("username = ?", username).First(&user); err != nil {
+	if err := receiver.helper.GetDatabase().Where("username = ?", username).First(&user).Error; err != nil {
 		return nil, err
 	}
 	return &user, nil
