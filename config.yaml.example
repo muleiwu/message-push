@@ -3,6 +3,12 @@ server:
   mode: release  # debug, release, test
   addr: ":8080"
 
+# HTTP 服务配置
+http:
+  load_static: false
+  static_mode: embed  # disk 或 embed
+  static_dir: []
+
 # 数据库配置
 database:
   halt_on_migration_failure: true
