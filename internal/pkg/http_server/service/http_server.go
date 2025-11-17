@@ -6,13 +6,19 @@ import (
 )
 
 type HttpServer struct {
-	Helper interfaces.HelperInterface
+	Helper     interfaces.HelperInterface
+	httpServer *impl.HttpServer
 }
 
 func (receiver *HttpServer) Run() error {
-
-	newHttpServer := impl.NewHttpServer(receiver.Helper)
-
-	newHttpServer.RunHttp()
+	receiver.httpServer = impl.NewHttpServer(receiver.Helper)
+	receiver.httpServer.RunHttp()
 	return nil
+}
+
+func (receiver *HttpServer) Stop() error {
+	if receiver.httpServer == nil {
+		return nil
+	}
+	return receiver.httpServer.Stop()
 }
