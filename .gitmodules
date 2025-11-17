@@ -1,0 +1,3 @@
+[submodule "admin-webui"]
+	path = admin-webui
+	url = https://cnb.cool/mliev/push/message-webui
