@@ -15,7 +15,7 @@ type StatisticsController struct {
 
 // GetStatistics 获取统计数据
 func (c StatisticsController) GetStatistics(ctx *gin.Context, helper interfaces.HelperInterface) {
-	adminService := service.NewAdminService()
+	adminService := service.NewAdminStatisticsService()
 	var req dto.StatisticsRequest
 	if err := ctx.ShouldBindQuery(&req); err != nil {
 		controller.ErrorResponse(ctx, 400, "invalid request: "+err.Error())

@@ -17,7 +17,7 @@ type ApplicationController struct {
 
 // CreateApplication 创建应用
 func (c ApplicationController) CreateApplication(ctx *gin.Context, helper interfaces.HelperInterface) {
-	adminService := service.NewAdminService()
+	adminService := service.NewAdminApplicationService()
 	var req dto.CreateApplicationRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		controller.ErrorResponse(ctx, 400, "invalid request: "+err.Error())
@@ -35,7 +35,7 @@ func (c ApplicationController) CreateApplication(ctx *gin.Context, helper interf
 
 // GetApplicationList 获取应用列表
 func (c ApplicationController) GetApplicationList(ctx *gin.Context, helper interfaces.HelperInterface) {
-	adminService := service.NewAdminService()
+	adminService := service.NewAdminApplicationService()
 	var req dto.ApplicationListRequest
 	if err := ctx.ShouldBindQuery(&req); err != nil {
 		controller.ErrorResponse(ctx, 400, "invalid request: "+err.Error())
@@ -53,7 +53,7 @@ func (c ApplicationController) GetApplicationList(ctx *gin.Context, helper inter
 
 // GetApplication 获取应用详情
 func (c ApplicationController) GetApplication(ctx *gin.Context, helper interfaces.HelperInterface) {
-	adminService := service.NewAdminService()
+	adminService := service.NewAdminApplicationService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -72,7 +72,7 @@ func (c ApplicationController) GetApplication(ctx *gin.Context, helper interface
 
 // UpdateApplication 更新应用
 func (c ApplicationController) UpdateApplication(ctx *gin.Context, helper interfaces.HelperInterface) {
-	adminService := service.NewAdminService()
+	adminService := service.NewAdminApplicationService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -96,7 +96,7 @@ func (c ApplicationController) UpdateApplication(ctx *gin.Context, helper interf
 
 // DeleteApplication 删除应用
 func (c ApplicationController) DeleteApplication(ctx *gin.Context, helper interfaces.HelperInterface) {
-	adminService := service.NewAdminService()
+	adminService := service.NewAdminApplicationService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -114,7 +114,7 @@ func (c ApplicationController) DeleteApplication(ctx *gin.Context, helper interf
 
 // RegenerateSecret 重新生成密钥
 func (c ApplicationController) RegenerateSecret(ctx *gin.Context, helper interfaces.HelperInterface) {
-	adminService := service.NewAdminService()
+	adminService := service.NewAdminApplicationService()
 	var req dto.RegenerateSecretRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		controller.ErrorResponse(ctx, 400, "invalid request: "+err.Error())

@@ -17,7 +17,7 @@ type ProviderController struct {
 
 // CreateProvider 创建服务商
 func (c ProviderController) CreateProvider(ctx *gin.Context, helper interfaces.HelperInterface) {
-	adminService := service.NewAdminService()
+	adminService := service.NewAdminProviderService()
 	var req dto.CreateProviderRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		controller.ErrorResponse(ctx, 400, "invalid request: "+err.Error())
@@ -35,7 +35,7 @@ func (c ProviderController) CreateProvider(ctx *gin.Context, helper interfaces.H
 
 // GetProviderList 获取服务商列表
 func (c ProviderController) GetProviderList(ctx *gin.Context, helper interfaces.HelperInterface) {
-	adminService := service.NewAdminService()
+	adminService := service.NewAdminProviderService()
 	var req dto.ProviderListRequest
 	if err := ctx.ShouldBindQuery(&req); err != nil {
 		controller.ErrorResponse(ctx, 400, "invalid request: "+err.Error())
@@ -53,7 +53,7 @@ func (c ProviderController) GetProviderList(ctx *gin.Context, helper interfaces.
 
 // GetProvider 获取服务商详情
 func (c ProviderController) GetProvider(ctx *gin.Context, helper interfaces.HelperInterface) {
-	adminService := service.NewAdminService()
+	adminService := service.NewAdminProviderService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -72,7 +72,7 @@ func (c ProviderController) GetProvider(ctx *gin.Context, helper interfaces.Help
 
 // UpdateProvider 更新服务商
 func (c ProviderController) UpdateProvider(ctx *gin.Context, helper interfaces.HelperInterface) {
-	adminService := service.NewAdminService()
+	adminService := service.NewAdminProviderService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -96,7 +96,7 @@ func (c ProviderController) UpdateProvider(ctx *gin.Context, helper interfaces.H
 
 // DeleteProvider 删除服务商
 func (c ProviderController) DeleteProvider(ctx *gin.Context, helper interfaces.HelperInterface) {
-	adminService := service.NewAdminService()
+	adminService := service.NewAdminProviderService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {

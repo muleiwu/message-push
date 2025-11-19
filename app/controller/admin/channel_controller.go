@@ -17,7 +17,7 @@ type ChannelController struct {
 
 // CreateChannel 创建通道
 func (c ChannelController) CreateChannel(ctx *gin.Context, helper interfaces.HelperInterface) {
-	adminService := service.NewAdminService()
+	adminService := service.NewAdminChannelService()
 	var req dto.CreateChannelRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		controller.ErrorResponse(ctx, 400, "invalid request: "+err.Error())
@@ -35,7 +35,7 @@ func (c ChannelController) CreateChannel(ctx *gin.Context, helper interfaces.Hel
 
 // GetChannelList 获取通道列表
 func (c ChannelController) GetChannelList(ctx *gin.Context, helper interfaces.HelperInterface) {
-	adminService := service.NewAdminService()
+	adminService := service.NewAdminChannelService()
 	var req dto.ChannelListRequest
 	if err := ctx.ShouldBindQuery(&req); err != nil {
 		controller.ErrorResponse(ctx, 400, "invalid request: "+err.Error())
@@ -53,7 +53,7 @@ func (c ChannelController) GetChannelList(ctx *gin.Context, helper interfaces.He
 
 // GetChannel 获取通道详情
 func (c ChannelController) GetChannel(ctx *gin.Context, helper interfaces.HelperInterface) {
-	adminService := service.NewAdminService()
+	adminService := service.NewAdminChannelService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -72,7 +72,7 @@ func (c ChannelController) GetChannel(ctx *gin.Context, helper interfaces.Helper
 
 // UpdateChannel 更新通道
 func (c ChannelController) UpdateChannel(ctx *gin.Context, helper interfaces.HelperInterface) {
-	adminService := service.NewAdminService()
+	adminService := service.NewAdminChannelService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -96,7 +96,7 @@ func (c ChannelController) UpdateChannel(ctx *gin.Context, helper interfaces.Hel
 
 // DeleteChannel 删除通道
 func (c ChannelController) DeleteChannel(ctx *gin.Context, helper interfaces.HelperInterface) {
-	adminService := service.NewAdminService()
+	adminService := service.NewAdminChannelService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -114,7 +114,7 @@ func (c ChannelController) DeleteChannel(ctx *gin.Context, helper interfaces.Hel
 
 // BindProviderToChannel 绑定服务商到通道
 func (c ChannelController) BindProviderToChannel(ctx *gin.Context, helper interfaces.HelperInterface) {
-	adminService := service.NewAdminService()
+	adminService := service.NewAdminChannelService()
 	var req dto.BindProviderToChannelRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		controller.ErrorResponse(ctx, 400, "invalid request: "+err.Error())
