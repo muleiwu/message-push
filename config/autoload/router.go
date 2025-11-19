@@ -26,6 +26,15 @@ func (receiver Router) InitConfig(helper envInterface.HelperInterface) map[strin
 				health.GET("/simple", deps.WrapHandler(controller.HealthController{}.GetHealthSimple))
 			}
 
+			// Install API - 系统安装（不需要认证）
+			install := router.Group("/api/install")
+			{
+				install.GET("/check", deps.WrapHandler(controller.InstallController{}.CheckInstall))
+				install.POST("/test-connection", deps.WrapHandler(controller.InstallController{}.TestConnection))
+				install.POST("/test-redis", deps.WrapHandler(controller.InstallController{}.TestRedisConnection))
+				install.POST("/submit", deps.WrapHandler(controller.InstallController{}.SubmitInstall))
+			}
+
 			// API v1 - 需要认证、限流、配额检查
 			v1 := router.Group("/api/v1")
 			v1.Use(middleware.AuthMiddleware())

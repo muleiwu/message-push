@@ -46,3 +46,8 @@ func (d *AdminUserDAO) UsernameExists(username string) bool {
 	d.db.Model(&model.AdminUser{}).Where("username = ?", username).Count(&count)
 	return count > 0
 }
+
+// CountAll 统计所有管理员用户数量
+func (d *AdminUserDAO) CountAll(count *int64) error {
+	return d.db.Model(&model.AdminUser{}).Count(count).Error
+}
