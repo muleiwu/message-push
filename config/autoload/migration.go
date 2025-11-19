@@ -27,6 +27,9 @@ func (receiver Migration) Get() []any {
 		&model.ChannelHealthHistory{},
 		&model.AppQuotaStat{},
 		&model.ProviderQuotaStat{},
+
+		// 管理员模块
+		&model.AdminUser{},
 	}
 }
 

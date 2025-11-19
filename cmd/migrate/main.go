@@ -8,6 +8,7 @@ import (
 
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/config"
+	"cnb.cool/mliev/push/message-push/config/autoload"
 	"cnb.cool/mliev/push/message-push/internal/helper"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -55,21 +56,8 @@ func main() {
 func migrateUp(db *gorm.DB) {
 	log.Println("Running migrations...")
 
-	// 自动迁移所有模型
-	models := []interface{}{
-		&model.Application{},
-		&model.Provider{},
-		&model.ProviderChannel{},
-		&model.PushChannel{},
-		&model.ChannelProviderRelation{},
-		&model.PushTask{},
-		&model.PushBatchTask{},
-		&model.PushLog{},
-		&model.ChannelHealthHistory{},
-		&model.AppQuotaStat{},
-		&model.ProviderQuotaStat{},
-		&model.AdminUser{},
-	}
+	// 使用统一的模型列表
+	models := autoload.Migration{}.Get()
 
 	for _, m := range models {
 		if err := db.AutoMigrate(m); err != nil {
@@ -84,7 +72,7 @@ func migrateUp(db *gorm.DB) {
 func migrateDown(db *gorm.DB) {
 	log.Println("Rolling back migrations...")
 
-	// 删除所有表
+	// 删除所有表（按依赖关系倒序）
 	tables := []string{
 		"admin_users",
 		"provider_quota_stats",
@@ -96,6 +84,7 @@ func migrateDown(db *gorm.DB) {
 		"channel_provider_relations",
 		"push_channels",
 		"provider_channels",
+		"channels",
 		"providers",
 		"applications",
 	}
