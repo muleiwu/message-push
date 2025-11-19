@@ -1,11 +1,13 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/app/sender"
 	"cnb.cool/mliev/push/message-push/internal/helper"
 )
 
@@ -185,4 +187,101 @@ func (s *AdminProviderService) UpdateProvider(id uint, req *dto.UpdateProviderRe
 func (s *AdminProviderService) DeleteProvider(id uint) error {
 	db := helper.GetHelper().GetDatabase()
 	return db.Delete(&model.Provider{}, id).Error
+}
+
+// GetActiveProviders 获取活跃服务商列表
+func (s *AdminProviderService) GetActiveProviders(providerType string) ([]*dto.ActiveItem, error) {
+	var providers []*model.Provider
+	query := helper.GetHelper().GetDatabase().Where("status = ?", 1)
+
+	if providerType != "" {
+		query = query.Where("provider_type = ?", providerType)
+	}
+
+	if err := query.Find(&providers).Error; err != nil {
+		return nil, err
+	}
+
+	items := make([]*dto.ActiveItem, 0, len(providers))
+	for _, p := range providers {
+		items = append(items, &dto.ActiveItem{
+			ID:           p.ID,
+			ProviderCode: p.ProviderCode,
+			ProviderName: p.ProviderName,
+			ProviderType: p.ProviderType,
+		})
+	}
+	return items, nil
+}
+
+// TestProvider 测试服务商配置
+func (s *AdminProviderService) TestProvider(id uint, req *dto.TestProviderRequest) (*dto.TestProviderResponse, error) {
+	// 1. 获取服务商配置
+	var provider model.Provider
+	db := helper.GetHelper().GetDatabase()
+	if err := db.First(&provider, id).Error; err != nil {
+		return nil, fmt.Errorf("provider not found: %w", err)
+	}
+
+	// 2. 构造发送请求
+	task := &model.PushTask{
+		MessageType: provider.ProviderType, // 简单映射
+	}
+
+	// 根据类型填充接收者
+	if provider.ProviderType == "sms" {
+		if req.Phone == "" {
+			return nil, fmt.Errorf("phone number is required for sms")
+		}
+		task.Receiver = req.Phone
+		task.Content = req.Message // 简单透传，部分sender可能需要模板ID
+	} else if provider.ProviderType == "email" {
+		if req.Email == "" {
+			return nil, fmt.Errorf("email is required for email")
+		}
+		task.Receiver = req.Email
+		task.Content = req.Message
+		task.Title = "测试邮件"
+		// Email通常需要Title，这里简化
+	} else {
+		// 其他类型暂不支持测试或使用Message字段
+		task.Content = req.Message
+	}
+
+	sendReq := &sender.SendRequest{
+		Task:     task,
+		Provider: &provider,
+		ProviderChannel: &model.ProviderChannel{
+			// 构造一个临时的ProviderChannel
+			ProviderID: provider.ID,
+			Config:     provider.Config,
+		},
+	}
+
+	// 3. 获取发送器
+	factory := sender.NewFactory()
+	// factory.GetSenderByProvider 可能需要 providerCode，但这里我们可能需要根据 providerType 获取
+	// 这里尝试直接根据 Type 获取
+	msgSender, err := factory.GetSender(provider.ProviderType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get sender: %w", err)
+	}
+
+	// 4. 发送测试消息
+	// 设置超时
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	resp, err := msgSender.Send(ctx, sendReq)
+	if err != nil {
+		return &dto.TestProviderResponse{
+			Success: false,
+			Message: err.Error(),
+		}, nil
+	}
+
+	return &dto.TestProviderResponse{
+		Success: resp.Success,
+		Message: resp.ErrorMessage,
+	}, nil
 }

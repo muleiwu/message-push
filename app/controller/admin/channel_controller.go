@@ -128,3 +128,76 @@ func (c ChannelController) BindProviderToChannel(ctx *gin.Context, helper interf
 
 	controller.SuccessResponse(ctx, gin.H{"message": "bound successfully"})
 }
+
+// GetChannelProviders 获取通道绑定的服务商列表
+func (c ChannelController) GetChannelProviders(ctx *gin.Context, helper interfaces.HelperInterface) {
+	adminService := service.NewAdminChannelService()
+	idStr := ctx.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		controller.ErrorResponse(ctx, 400, "invalid id")
+		return
+	}
+
+	resp, err := adminService.GetChannelProviders(uint(id))
+	if err != nil {
+		controller.ErrorResponse(ctx, 500, "failed to get channel providers: "+err.Error())
+		return
+	}
+
+	controller.SuccessResponse(ctx, resp)
+}
+
+// UpdateChannelProviderRelation 更新通道与服务商的绑定关系
+func (c ChannelController) UpdateChannelProviderRelation(ctx *gin.Context, helper interfaces.HelperInterface) {
+	adminService := service.NewAdminChannelService()
+	idStr := ctx.Param("relationId")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		controller.ErrorResponse(ctx, 400, "invalid relation id")
+		return
+	}
+
+	var req dto.UpdateRelationRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		controller.ErrorResponse(ctx, 400, "invalid request: "+err.Error())
+		return
+	}
+
+	if err := adminService.UpdateChannelProviderRelation(uint(id), &req); err != nil {
+		controller.ErrorResponse(ctx, 500, "failed to update relation: "+err.Error())
+		return
+	}
+
+	controller.SuccessResponse(ctx, gin.H{"message": "updated successfully"})
+}
+
+// UnbindChannelProvider 解绑服务商
+func (c ChannelController) UnbindChannelProvider(ctx *gin.Context, helper interfaces.HelperInterface) {
+	adminService := service.NewAdminChannelService()
+	idStr := ctx.Param("relationId")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		controller.ErrorResponse(ctx, 400, "invalid relation id")
+		return
+	}
+
+	if err := adminService.UnbindChannelProvider(uint(id)); err != nil {
+		controller.ErrorResponse(ctx, 500, "failed to unbind provider: "+err.Error())
+		return
+	}
+
+	controller.SuccessResponse(ctx, gin.H{"message": "unbound successfully"})
+}
+
+// GetActiveChannels 获取活跃通道列表
+func (c ChannelController) GetActiveChannels(ctx *gin.Context, helper interfaces.HelperInterface) {
+	adminService := service.NewAdminChannelService()
+	resp, err := adminService.GetActiveChannels()
+	if err != nil {
+		controller.ErrorResponse(ctx, 500, "failed to get active channels: "+err.Error())
+		return
+	}
+
+	controller.SuccessResponse(ctx, resp)
+}

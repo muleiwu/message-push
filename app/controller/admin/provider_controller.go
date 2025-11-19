@@ -111,3 +111,42 @@ func (c ProviderController) DeleteProvider(ctx *gin.Context, helper interfaces.H
 
 	controller.SuccessResponse(ctx, gin.H{"message": "deleted successfully"})
 }
+
+// GetActiveProviders 获取活跃服务商列表
+func (c ProviderController) GetActiveProviders(ctx *gin.Context, helper interfaces.HelperInterface) {
+	adminService := service.NewAdminProviderService()
+	providerType := ctx.Query("type")
+
+	resp, err := adminService.GetActiveProviders(providerType)
+	if err != nil {
+		controller.ErrorResponse(ctx, 500, "failed to get active providers: "+err.Error())
+		return
+	}
+
+	controller.SuccessResponse(ctx, resp)
+}
+
+// TestProvider 测试服务商配置
+func (c ProviderController) TestProvider(ctx *gin.Context, helper interfaces.HelperInterface) {
+	adminService := service.NewAdminProviderService()
+	idStr := ctx.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		controller.ErrorResponse(ctx, 400, "invalid id")
+		return
+	}
+
+	var req dto.TestProviderRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		controller.ErrorResponse(ctx, 400, "invalid request: "+err.Error())
+		return
+	}
+
+	resp, err := adminService.TestProvider(uint(id), &req)
+	if err != nil {
+		controller.ErrorResponse(ctx, 500, "test failed: "+err.Error())
+		return
+	}
+
+	controller.SuccessResponse(ctx, resp)
+}

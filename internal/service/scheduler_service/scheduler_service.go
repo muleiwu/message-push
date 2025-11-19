@@ -9,10 +9,11 @@ import (
 
 // SchedulerService 调度服务
 type SchedulerService struct {
-	Helper  interfaces.HelperInterface
-	scanner *scheduler.ScheduledTaskScanner
-	ctx     context.Context
-	cancel  context.CancelFunc
+	Helper      interfaces.HelperInterface
+	scanner     *scheduler.ScheduledTaskScanner
+	quotaSyncer *scheduler.QuotaSyncer
+	ctx         context.Context
+	cancel      context.CancelFunc
 }
 
 // Run 启动服务
@@ -23,6 +24,12 @@ func (receiver *SchedulerService) Run() error {
 	// 创建并启动扫描器
 	receiver.scanner = scheduler.NewScheduledTaskScanner()
 	if err := receiver.scanner.Start(receiver.ctx); err != nil {
+		return err
+	}
+
+	// 创建并启动配额同步器
+	receiver.quotaSyncer = scheduler.NewQuotaSyncer()
+	if err := receiver.quotaSyncer.Start(receiver.ctx); err != nil {
 		return err
 	}
 
@@ -37,6 +44,10 @@ func (receiver *SchedulerService) Stop() error {
 
 	if receiver.scanner != nil {
 		receiver.scanner.Stop()
+	}
+
+	if receiver.quotaSyncer != nil {
+		receiver.quotaSyncer.Stop()
 	}
 
 	return nil

@@ -1,6 +1,9 @@
 package service
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -17,6 +20,15 @@ type AdminApplicationService struct{}
 // NewAdminApplicationService 创建应用管理服务实例
 func NewAdminApplicationService() *AdminApplicationService {
 	return &AdminApplicationService{}
+}
+
+// generateRandomKey 生成随机字符串
+func generateRandomKey(length int) (string, error) {
+	bytes := make([]byte, length/2)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
 }
 
 // CreateApplication 创建应用
@@ -214,5 +226,42 @@ func (s *AdminApplicationService) RegenerateSecret(appID uint) (*dto.RegenerateS
 	return &dto.RegenerateSecretResponse{
 		AppKey:    app.AppID,
 		AppSecret: appSecret,
+	}, nil
+}
+
+// GetQuotaUsage 获取应用配额使用情况
+func (s *AdminApplicationService) GetQuotaUsage(id uint) (*dto.QuotaUsageResponse, error) {
+	app, err := dao.GetAppByID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	// 从 Redis 获取今日使用量
+	redisClient := helper.GetHelper().GetRedis()
+	used, limit, err := apphelper.GetQuotaUsage(context.Background(), redisClient, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get quota usage from redis: %w", err)
+	}
+
+	// 如果 model 中有设置，优先使用 model 中的 limit
+	if app.DailyQuota > 0 {
+		limit = int64(app.DailyQuota)
+	}
+
+	remaining := limit - used
+	if remaining < 0 {
+		remaining = 0
+	}
+
+	usagePercentage := 0.0
+	if limit > 0 {
+		usagePercentage = float64(used) / float64(limit) * 100
+	}
+
+	return &dto.QuotaUsageResponse{
+		DailyQuota:      int(limit),
+		TodayUsed:       int(used),
+		Remaining:       int(remaining),
+		UsagePercentage: usagePercentage,
 	}, nil
 }

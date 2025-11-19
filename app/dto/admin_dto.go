@@ -174,3 +174,86 @@ type StatisticsResponse struct {
 	} `json:"summary"`
 	Daily []*DailyStatistics `json:"daily"`
 }
+
+// ChannelProviderResponse 通道绑定的服务商响应
+type ChannelProviderResponse struct {
+	ID           uint   `json:"id"`
+	ChannelID    uint   `json:"channel_id"`
+	ProviderID   uint   `json:"provider_id"`
+	ProviderName string `json:"provider_name"`
+	ProviderType string `json:"provider_type"`
+	Priority     int    `json:"priority"`
+	Weight       int    `json:"weight"`
+	Status       int    `json:"status"`
+	CreatedAt    string `json:"created_at"`
+}
+
+// UpdateRelationRequest 更新关联请求
+type UpdateRelationRequest struct {
+	Priority int `json:"priority" binding:"min=0,max=100"`
+	Weight   int `json:"weight" binding:"min=1,max=100"`
+}
+
+// ActiveItem 活跃项（用于下拉列表）
+type ActiveItem struct {
+	ID           uint   `json:"id"`
+	Name         string `json:"name"`
+	Type         string `json:"type,omitempty"`
+	ProviderCode string `json:"provider_code,omitempty"`
+	ProviderName string `json:"provider_name,omitempty"`
+	ProviderType string `json:"provider_type,omitempty"`
+}
+
+// TestProviderRequest 测试服务商配置请求
+type TestProviderRequest struct {
+	Phone   string `json:"phone"`
+	Email   string `json:"email"`
+	Message string `json:"message"`
+}
+
+// TestProviderResponse 测试结果
+type TestProviderResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+// DashboardResponse 仪表盘响应
+type DashboardResponse struct {
+	TotalApplications  int64  `json:"total_applications"`
+	ActiveApplications int64  `json:"active_applications"`
+	TotalChannels      int64  `json:"total_channels"`
+	ActiveChannels     int64  `json:"active_channels"`
+	TotalProviders     int64  `json:"total_providers"`
+	ActiveProviders    int64  `json:"active_providers"`
+	TodayPushCount     int64  `json:"today_push_count"`
+	TodaySuccessCount  int64  `json:"today_success_count"`
+	TodayFailedCount   int64  `json:"today_failed_count"`
+	TodaySuccessRate   string `json:"today_success_rate"`
+	TotalPushCount     int64  `json:"total_push_count"`
+}
+
+// TopApplicationResponse 热门应用
+type TopApplicationResponse struct {
+	ID           uint   `json:"id"`
+	AppID        string `json:"app_id"`
+	AppName      string `json:"app_name"`
+	PushCount    int64  `json:"push_count"`
+	SuccessCount int64  `json:"success_count"`
+	SuccessRate  string `json:"success_rate"`
+}
+
+// RecentActivityResponse 近期活动
+type RecentActivityResponse struct {
+	ID          uint   `json:"id"`
+	Description string `json:"description"`
+	AppName     string `json:"app_name"`
+	CreatedAt   string `json:"created_at"`
+}
+
+// QuotaUsageResponse 配额使用情况
+type QuotaUsageResponse struct {
+	DailyQuota      int     `json:"daily_quota"`
+	TodayUsed       int     `json:"today_used"`
+	Remaining       int     `json:"remaining"`
+	UsagePercentage float64 `json:"usage_percentage"`
+}

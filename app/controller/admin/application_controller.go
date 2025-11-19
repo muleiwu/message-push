@@ -129,3 +129,22 @@ func (c ApplicationController) RegenerateSecret(ctx *gin.Context, helper interfa
 
 	controller.SuccessResponse(ctx, resp)
 }
+
+// GetQuotaUsage 获取配额使用情况
+func (c ApplicationController) GetQuotaUsage(ctx *gin.Context, helper interfaces.HelperInterface) {
+	adminService := service.NewAdminApplicationService()
+	idStr := ctx.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		controller.ErrorResponse(ctx, 400, "invalid id")
+		return
+	}
+
+	resp, err := adminService.GetQuotaUsage(uint(id))
+	if err != nil {
+		controller.ErrorResponse(ctx, 500, "failed to get quota usage: "+err.Error())
+		return
+	}
+
+	controller.SuccessResponse(ctx, resp)
+}

@@ -11,6 +11,7 @@ type SendRequest struct {
 	Task            *model.PushTask
 	ProviderChannel *model.ProviderChannel
 	Provider        *model.Provider
+	Relation        *model.ChannelProviderRelation // 关联配置（签名/模板等）
 }
 
 // SendResponse 发送响应

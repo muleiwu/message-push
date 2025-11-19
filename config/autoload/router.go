@@ -73,31 +73,51 @@ func (receiver Router) InitConfig(helper envInterface.HelperInterface) map[strin
 					apps.PUT("/:id", deps.WrapHandler(admin.ApplicationController{}.UpdateApplication))
 					apps.DELETE("/:id", deps.WrapHandler(admin.ApplicationController{}.DeleteApplication))
 					apps.POST("/regenerate-secret", deps.WrapHandler(admin.ApplicationController{}.RegenerateSecret))
+					apps.GET("/:id/quota-usage", deps.WrapHandler(admin.ApplicationController{}.GetQuotaUsage))
 				}
 
 				// 服务商管理
 				providers := adminGroup.Group("/providers")
 				{
+					providers.GET("/active", deps.WrapHandler(admin.ProviderController{}.GetActiveProviders)) // 先注册 /active
 					providers.GET("", deps.WrapHandler(admin.ProviderController{}.GetProviderList))
 					providers.POST("", deps.WrapHandler(admin.ProviderController{}.CreateProvider))
 					providers.GET("/:id", deps.WrapHandler(admin.ProviderController{}.GetProvider))
 					providers.PUT("/:id", deps.WrapHandler(admin.ProviderController{}.UpdateProvider))
 					providers.DELETE("/:id", deps.WrapHandler(admin.ProviderController{}.DeleteProvider))
+					providers.POST("/:id/test", deps.WrapHandler(admin.ProviderController{}.TestProvider))
 				}
 
 				// 通道管理
 				channels := adminGroup.Group("/channels")
 				{
+					channels.GET("/active", deps.WrapHandler(admin.ChannelController{}.GetActiveChannels)) // 先注册 /active
 					channels.GET("", deps.WrapHandler(admin.ChannelController{}.GetChannelList))
 					channels.POST("", deps.WrapHandler(admin.ChannelController{}.CreateChannel))
 					channels.GET("/:id", deps.WrapHandler(admin.ChannelController{}.GetChannel))
 					channels.PUT("/:id", deps.WrapHandler(admin.ChannelController{}.UpdateChannel))
 					channels.DELETE("/:id", deps.WrapHandler(admin.ChannelController{}.DeleteChannel))
 					channels.POST("/bind-provider", deps.WrapHandler(admin.ChannelController{}.BindProviderToChannel))
+					channels.GET("/:id/providers", deps.WrapHandler(admin.ChannelController{}.GetChannelProviders))
+					channels.PUT("/provider-relation/:relationId", deps.WrapHandler(admin.ChannelController{}.UpdateChannelProviderRelation))
+					channels.DELETE("/provider-relation/:relationId", deps.WrapHandler(admin.ChannelController{}.UnbindChannelProvider))
 				}
 
 				// 统计查询
-				adminGroup.GET("/statistics", deps.WrapHandler(admin.StatisticsController{}.GetStatistics))
+				stats := adminGroup.Group("/statistics")
+				{
+					stats.GET("", deps.WrapHandler(admin.StatisticsController{}.GetStatistics))
+					stats.GET("/dashboard", deps.WrapHandler(admin.StatisticsController{}.GetDashboard))
+					stats.GET("/top-applications", deps.WrapHandler(admin.StatisticsController{}.GetTopApplications))
+					stats.GET("/recent-activities", deps.WrapHandler(admin.StatisticsController{}.GetRecentActivities))
+				}
+
+				// 日志管理
+				logs := adminGroup.Group("/logs")
+				{
+					logs.GET("", deps.WrapHandler(admin.LogController{}.GetLogList))
+					logs.GET("/:id", deps.WrapHandler(admin.LogController{}.GetLog))
+				}
 			}
 
 		},

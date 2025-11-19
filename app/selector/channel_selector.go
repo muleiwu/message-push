@@ -45,7 +45,7 @@ func NewChannelSelector() *ChannelSelector {
 }
 
 // Select 选择通道（平滑加权轮询）
-func (s *ChannelSelector) Select(ctx context.Context, channelID uint, messageType string) (*model.ProviderChannel, error) {
+func (s *ChannelSelector) Select(ctx context.Context, channelID uint, messageType string) (*ChannelNode, error) {
 	nodes, err := s.getChannelNodes(ctx, channelID, messageType)
 	if err != nil {
 		return nil, err
@@ -61,7 +61,7 @@ func (s *ChannelSelector) Select(ctx context.Context, channelID uint, messageTyp
 		return nil, fmt.Errorf("failed to select channel")
 	}
 
-	return selected.Channel, nil
+	return selected, nil
 }
 
 // getChannelNodes 获取通道节点列表

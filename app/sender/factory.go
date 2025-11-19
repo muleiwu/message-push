@@ -20,9 +20,9 @@ func NewFactory() *Factory {
 	// 注册所有发送器
 	factory.Register(NewAliyunSMSSender())
 	factory.Register(NewSMTPSender())
-	// factory.Register(NewTencentSMSSender())
-	// factory.Register(NewWeChatWorkSender())
-	// factory.Register(NewDingTalkSender())
+	factory.Register(NewTencentSMSSender())
+	factory.Register(NewWeChatWorkSender())
+	factory.Register(NewDingTalkSender())
 
 	return factory
 }
