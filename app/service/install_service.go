@@ -237,11 +237,20 @@ func (s *InstallService) CreateInitialData(admin dto.AdminAccountInfo) error {
 }
 
 // MarkAsInstalled 标记系统为已安装
-// 注意：这里通过创建管理员用户来标记已安装
-// 在 CheckInstallStatus 中会检查是否有管理员用户
 func (s *InstallService) MarkAsInstalled() error {
-	// 在本项目中，不需要单独的标记
-	// 已安装状态通过检查 admin_users 表是否有记录来判断
+	// 设置安装标记
+	viper.Set("app.installed", true)
+
+	// 写入配置文件
+	// 先尝试 SafeWriteConfig（如果文件不存在会创建）
+	viper.SetConfigFile("./config.yaml")
+	if err := viper.SafeWriteConfig(); err != nil {
+		// 如果文件已存在，使用 WriteConfig 更新
+		if err := viper.WriteConfig(); err != nil {
+			return fmt.Errorf("标记系统已安装失败: %w", err)
+		}
+	}
+
 	return nil
 }
 
