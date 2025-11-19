@@ -9,6 +9,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/config"
 	"cnb.cool/mliev/push/message-push/internal/helper"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -67,6 +68,7 @@ func migrateUp(db *gorm.DB) {
 		&model.ChannelHealthHistory{},
 		&model.AppQuotaStat{},
 		&model.ProviderQuotaStat{},
+		&model.AdminUser{},
 	}
 
 	for _, m := range models {
@@ -84,6 +86,7 @@ func migrateDown(db *gorm.DB) {
 
 	// 删除所有表
 	tables := []string{
+		"admin_users",
 		"provider_quota_stats",
 		"app_quota_stats",
 		"channel_health_history",
@@ -116,6 +119,24 @@ func migrateFresh(db *gorm.DB) {
 // seed 填充测试数据
 func seed(db *gorm.DB) {
 	log.Println("Seeding data...")
+
+	// 创建默认管理员账号
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
+	if err != nil {
+		log.Printf("Failed to hash password: %v", err)
+	} else {
+		adminUser := &model.AdminUser{
+			Username: "admin",
+			Password: string(hashedPassword),
+			RealName: "系统管理员",
+			Status:   1,
+		}
+		if err := db.Create(adminUser).Error; err != nil {
+			log.Printf("Failed to create admin user: %v", err)
+		} else {
+			log.Println("Default admin user created (username: admin, password: admin123)")
+		}
+	}
 
 	// 创建测试应用
 	app := &model.Application{

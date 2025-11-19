@@ -40,9 +40,21 @@ func (receiver Router) InitConfig(helper envInterface.HelperInterface) map[strin
 				v1.GET("/messages/:task_id", deps.WrapHandler(controller.MessageController{}.QueryTask))
 			}
 
-			// Admin API - 管理后台接口（暂时不需要认证，生产环境建议添加JWT等认证）
-			adminGroup := router.Group("/api/admin")
+			// Admin API - 管理后台认证接口（不需要认证）
+			adminAuth := router.Group("/api/admin/auth")
 			{
+				adminAuth.POST("/login", deps.WrapHandler(admin.AuthController{}.Login))
+				adminAuth.POST("/logout", deps.WrapHandler(admin.AuthController{}.Logout))
+			}
+
+			// Admin API - 管理后台业务接口（需要 JWT 认证）
+			adminGroup := router.Group("/api/admin")
+			adminGroup.Use(middleware.AdminJWTMiddleware())
+			{
+				// 用户信息和权限
+				adminGroup.GET("/user/info", deps.WrapHandler(admin.AuthController{}.GetUserInfo))
+				adminGroup.GET("/auth/codes", deps.WrapHandler(admin.AuthController{}.GetAccessCodes))
+
 				// 应用管理
 				apps := adminGroup.Group("/applications")
 				{

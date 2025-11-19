@@ -51,9 +51,9 @@ log:
   max_backups: 10
   compress: true
 
-# JWT 配置
+# JWT 配置（管理后台认证使用）
 jwt:
-  secret: your-secret-key
+  secret: your-secret-key-change-in-production
   expire_hours: 24
 
 # 短链接配置
