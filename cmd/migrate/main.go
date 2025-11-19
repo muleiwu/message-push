@@ -1,0 +1,142 @@
+package main
+
+import (
+	"flag"
+	"fmt"
+	"log"
+	"os"
+
+	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/config"
+	"cnb.cool/mliev/push/message-push/internal/helper"
+	"gorm.io/gorm"
+)
+
+func main() {
+	action := flag.String("action", "", "migrate action: up, down, fresh, seed")
+	flag.Parse()
+
+	if *action == "" {
+		fmt.Println("Usage: go run cmd/migrate/main.go -action=<up|down|fresh|seed>")
+		os.Exit(1)
+	}
+
+	// 初始化配置和数据库
+	h := helper.GetHelper()
+	assembly := &config.Assembly{Helper: h}
+	for _, a := range assembly.Get() {
+		if err := a.Assembly(); err != nil {
+			log.Fatal("Failed to initialize:", err)
+		}
+	}
+
+	db := h.GetDatabase()
+	if db == nil {
+		log.Fatal("Database not initialized")
+	}
+
+	// 执行迁移
+	switch *action {
+	case "up":
+		migrateUp(db)
+	case "down":
+		migrateDown(db)
+	case "fresh":
+		migrateFresh(db)
+	case "seed":
+		seed(db)
+	default:
+		log.Fatal("Invalid action:", *action)
+	}
+}
+
+// migrateUp 执行迁移
+func migrateUp(db *gorm.DB) {
+	log.Println("Running migrations...")
+
+	// 自动迁移所有模型
+	models := []interface{}{
+		&model.Application{},
+		&model.Provider{},
+		&model.ProviderChannel{},
+		&model.PushChannel{},
+		&model.ChannelProviderRelation{},
+		&model.PushTask{},
+		&model.PushBatchTask{},
+		&model.PushLog{},
+		&model.ChannelHealthHistory{},
+		&model.AppQuotaStat{},
+		&model.ProviderQuotaStat{},
+	}
+
+	for _, m := range models {
+		if err := db.AutoMigrate(m); err != nil {
+			log.Fatalf("Failed to migrate %T: %v", m, err)
+		}
+	}
+
+	log.Println("Migrations completed successfully!")
+}
+
+// migrateDown 回滚迁移
+func migrateDown(db *gorm.DB) {
+	log.Println("Rolling back migrations...")
+
+	// 删除所有表
+	tables := []string{
+		"provider_quota_stats",
+		"app_quota_stats",
+		"channel_health_history",
+		"push_logs",
+		"push_batch_tasks",
+		"push_tasks",
+		"channel_provider_relations",
+		"push_channels",
+		"provider_channels",
+		"providers",
+		"applications",
+	}
+
+	for _, table := range tables {
+		if err := db.Migrator().DropTable(table); err != nil {
+			log.Printf("Failed to drop table %s: %v", table, err)
+		}
+	}
+
+	log.Println("Rollback completed successfully!")
+}
+
+// migrateFresh 清空并重新迁移
+func migrateFresh(db *gorm.DB) {
+	log.Println("Fresh migration...")
+	migrateDown(db)
+	migrateUp(db)
+}
+
+// seed 填充测试数据
+func seed(db *gorm.DB) {
+	log.Println("Seeding data...")
+
+	// 创建测试应用
+	app := &model.Application{
+		AppID:      "test_app_001",
+		AppSecret:  "test_secret_please_change_in_production",
+		AppName:    "测试应用",
+		Status:     1,
+		DailyQuota: 10000,
+		RateLimit:  100,
+	}
+	db.Create(app)
+
+	// 创建服务商
+	provider := &model.Provider{
+		ProviderCode: "aliyun_sms",
+		ProviderName: "阿里云短信",
+		ProviderType: "sms",
+		Config:       `{"access_key_id":"your_key","access_key_secret":"your_secret"}`,
+		Status:       1,
+	}
+	db.Create(provider)
+
+	log.Println("Seeding completed!")
+}

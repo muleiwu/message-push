@@ -1,0 +1,223 @@
+package worker
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"strconv"
+	"time"
+
+	"cnb.cool/mliev/push/message-push/app/constants"
+	"cnb.cool/mliev/push/message-push/app/dao"
+	"cnb.cool/mliev/push/message-push/app/helper"
+	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/app/queue"
+	"cnb.cool/mliev/push/message-push/app/selector"
+	"cnb.cool/mliev/push/message-push/app/sender"
+	internalHelper "cnb.cool/mliev/push/message-push/internal/helper"
+	"github.com/muleiwu/gsr"
+)
+
+// MessageHandler 消息处理器
+type MessageHandler struct {
+	logger             gsr.Logger
+	taskDao            *dao.PushTaskDAO
+	providerChannelDao *dao.ProviderChannelDAO
+	providerDao        *dao.ProviderDAO
+	logDao             *dao.PushLogDAO
+	selector           *selector.ChannelSelector
+	senderFactory      *sender.Factory
+	retryHelper        *helper.RetryHelper
+}
+
+// NewMessageHandler 创建消息处理器
+func NewMessageHandler() *MessageHandler {
+	return &MessageHandler{
+		logger:             internalHelper.GetHelper().GetLogger(),
+		taskDao:            dao.NewPushTaskDAO(),
+		providerChannelDao: dao.NewProviderChannelDAO(),
+		providerDao:        dao.NewProviderDAO(),
+		logDao:             dao.NewPushLogDAO(),
+		selector:           selector.NewChannelSelector(),
+		senderFactory:      sender.NewFactory(),
+		retryHelper:        helper.NewRetryHelper(),
+	}
+}
+
+// Handle 处理消息
+func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
+	// 解析任务ID
+	taskID, ok := msg.Data["task_id"].(string)
+	if !ok {
+		return fmt.Errorf("invalid task_id in message")
+	}
+
+	// 获取任务
+	task, err := h.taskDao.GetByTaskID(taskID)
+	if err != nil {
+		h.logger.Error(fmt.Sprintf("failed to get task id=%s: %v", taskID, err))
+		return err
+	}
+
+	// 更新任务状态为处理中
+	task.Status = constants.TaskStatusProcessing
+	h.taskDao.Update(task)
+
+	// 选择通道
+	providerChannel, err := h.selectChannel(ctx, task)
+	if err != nil {
+		h.logger.Error(fmt.Sprintf("failed to select channel task_id=%s: %v", taskID, err))
+		h.handleFailure(task, err.Error())
+		return err
+	}
+
+	// 获取服务商信息
+	provider, err := h.providerDao.GetByID(providerChannel.ProviderID)
+	if err != nil {
+		h.logger.Error(fmt.Sprintf("failed to get provider task_id=%s: %v", taskID, err))
+		h.handleFailure(task, err.Error())
+		return err
+	}
+
+	// 获取发送器
+	messageSender, err := h.senderFactory.GetSender(task.MessageType)
+	if err != nil {
+		h.logger.Error(fmt.Sprintf("failed to get sender task_id=%s: %v", taskID, err))
+		h.handleFailure(task, err.Error())
+		return err
+	}
+
+	// 发送消息
+	sendReq := &sender.SendRequest{
+		Task:            task,
+		ProviderChannel: providerChannel,
+		Provider:        provider,
+	}
+
+	resp, err := messageSender.Send(ctx, sendReq)
+	if err != nil {
+		h.logger.Error(fmt.Sprintf("sender error task_id=%s: %v", taskID, err))
+		h.handleSendError(task, providerChannel, err.Error())
+		return err
+	}
+
+	// 处理发送结果
+	if resp.Success {
+		h.handleSuccess(task, providerChannel, resp.ProviderID)
+	} else {
+		h.handleSendError(task, providerChannel, resp.ErrorMessage)
+	}
+
+	return nil
+}
+
+// selectChannel 选择发送通道
+func (h *MessageHandler) selectChannel(ctx context.Context, task *model.PushTask) (*model.ProviderChannel, error) {
+	// 如果任务已指定服务商通道，直接使用
+	if task.ProviderChannelID != nil {
+		return h.providerChannelDao.GetByID(*task.ProviderChannelID)
+	}
+
+	// 使用选择器选择通道
+	channelID, err := parseUint(task.PushChannelID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid push_channel_id: %w", err)
+	}
+
+	providerChannel, err := h.selector.Select(ctx, channelID, task.MessageType)
+	if err != nil {
+		return nil, err
+	}
+
+	// 更新任务的服务商通道ID
+	task.ProviderChannelID = &providerChannel.ID
+	h.taskDao.Update(task)
+
+	return providerChannel, nil
+}
+
+// handleSuccess 处理成功
+func (h *MessageHandler) handleSuccess(task *model.PushTask, providerChannel *model.ProviderChannel, providerID string) {
+	task.Status = constants.TaskStatusSuccess
+	h.taskDao.Update(task)
+
+	// 记录日志
+	h.logDao.Create(&model.PushLog{
+		TaskID:            task.TaskID,
+		AppID:             task.AppID,
+		ProviderChannelID: providerChannel.ID,
+		Status:            "success",
+		ResponseData:      fmt.Sprintf("{\"provider_id\":\"%s\"}", providerID),
+	})
+
+	// 通知选择器成功
+	h.selector.ReportSuccess(providerChannel.ProviderID, providerChannel.ID)
+
+	h.logger.Info(fmt.Sprintf("message sent successfully task_id=%s provider_id=%s", task.TaskID, providerID))
+}
+
+// handleSendError 处理发送错误
+func (h *MessageHandler) handleSendError(task *model.PushTask, providerChannel *model.ProviderChannel, errorMsg string) {
+	// 通知选择器失败
+	h.selector.ReportFailure(providerChannel.ProviderID, providerChannel.ID)
+
+	// 判断是否需要重试
+	shouldRetry, delay := h.retryHelper.ShouldRetry(errorMsg, task.RetryCount, task.MaxRetry)
+
+	if shouldRetry {
+		task.RetryCount++
+		h.taskDao.Update(task)
+
+		// 重新推送到队列
+		go func() {
+			time.Sleep(delay)
+			producer := queue.NewProducer(internalHelper.GetHelper().GetRedis())
+			producer.Push(context.Background(), task)
+		}()
+
+		h.logger.Info(fmt.Sprintf("message will retry task_id=%s retry_count=%d delay=%v", task.TaskID, task.RetryCount, delay))
+	} else {
+		h.handleFailure(task, errorMsg)
+	}
+}
+
+// handleFailure 处理失败
+func (h *MessageHandler) handleFailure(task *model.PushTask, errorMsg string) {
+	task.Status = constants.TaskStatusFailed
+	h.taskDao.Update(task)
+
+	// 记录日志
+	if task.ProviderChannelID != nil {
+		h.logDao.Create(&model.PushLog{
+			TaskID:            task.TaskID,
+			AppID:             task.AppID,
+			ProviderChannelID: *task.ProviderChannelID,
+			Status:            "failed",
+			ErrorMessage:      errorMsg,
+		})
+	}
+
+	h.logger.Error(fmt.Sprintf("message failed task_id=%s error=%s", task.TaskID, errorMsg))
+}
+
+// parseUint 解析uint
+func parseUint(value interface{}) (uint, error) {
+	switch v := value.(type) {
+	case uint:
+		return v, nil
+	case uint64:
+		return uint(v), nil
+	case int:
+		return uint(v), nil
+	case int64:
+		return uint(v), nil
+	case string:
+		i, err := strconv.ParseUint(v, 10, 32)
+		return uint(i), err
+	case json.Number:
+		i, err := v.Int64()
+		return uint(i), err
+	default:
+		return 0, fmt.Errorf("unsupported type: %T", value)
+	}
+}

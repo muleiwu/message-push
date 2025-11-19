@@ -14,8 +14,8 @@ type BaseResponse struct {
 // Success 成功响应
 func (receiver BaseResponse) Success(c *gin.Context, data any) {
 	c.JSON(http.StatusOK, dto.Response{
-		Code:    constants.ErrCodeSuccess,
-		Message: constants.GetErrMessage(constants.ErrCodeSuccess),
+		Code:    constants.CodeSuccess,
+		Message: constants.GetErrorMessage(constants.CodeSuccess),
 		Data:    data,
 	})
 }
@@ -23,7 +23,7 @@ func (receiver BaseResponse) Success(c *gin.Context, data any) {
 // SuccessWithMessage 带自定义消息的成功响应
 func (receiver BaseResponse) SuccessWithMessage(c *gin.Context, message string, data any) {
 	c.JSON(http.StatusOK, dto.Response{
-		Code:    constants.ErrCodeSuccess,
+		Code:    constants.CodeSuccess,
 		Message: message,
 		Data:    data,
 	})
@@ -33,7 +33,7 @@ func (receiver BaseResponse) SuccessWithMessage(c *gin.Context, message string, 
 func (receiver BaseResponse) Error(c *gin.Context, code int, message string) {
 	httpStatus := receiver.getHTTPStatus(code)
 	if message == "" {
-		message = constants.GetErrMessage(code)
+		message = constants.GetErrorMessage(code)
 	}
 
 	c.JSON(httpStatus, dto.Response{
@@ -46,7 +46,7 @@ func (receiver BaseResponse) Error(c *gin.Context, code int, message string) {
 func (receiver BaseResponse) ErrorWithData(c *gin.Context, code int, message string, data any) {
 	httpStatus := receiver.getHTTPStatus(code)
 	if message == "" {
-		message = constants.GetErrMessage(code)
+		message = constants.GetErrorMessage(code)
 	}
 
 	c.JSON(httpStatus, dto.Response{
@@ -54,6 +54,33 @@ func (receiver BaseResponse) ErrorWithData(c *gin.Context, code int, message str
 		Message: message,
 		Data:    data,
 	})
+}
+
+// Helper functions for convenience
+
+// SuccessWithData sends success response with data
+func SuccessWithData(c *gin.Context, data any) {
+	BaseResponse{}.Success(c, data)
+}
+
+// FailWithMessage sends error response with message
+func FailWithMessage(c *gin.Context, message string) {
+	BaseResponse{}.Error(c, constants.CodeBadRequest, message)
+}
+
+// FailWithCode sends error response with error code
+func FailWithCode(c *gin.Context, code int) {
+	BaseResponse{}.Error(c, code, "")
+}
+
+// SuccessResponse 成功响应（便捷函数）
+func SuccessResponse(c *gin.Context, data any) {
+	BaseResponse{}.Success(c, data)
+}
+
+// ErrorResponse 错误响应（便捷函数）
+func ErrorResponse(c *gin.Context, code int, message string) {
+	BaseResponse{}.Error(c, code, message)
 }
 
 // getHTTPStatus 根据业务错误码获取HTTP状态码

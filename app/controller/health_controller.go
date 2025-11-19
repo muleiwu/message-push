@@ -34,7 +34,7 @@ func (receiver HealthController) GetHealth(c *gin.Context, helper interfaces.Hel
 	if dbStatus.Status == "DOWN" || redisStatus.Status == "DOWN" {
 		healthStatus.Status = "DOWN"
 		var baseResponse BaseResponse
-		baseResponse.Error(c, constants.ErrCodeUnavailable, "服务不健康")
+		baseResponse.Error(c, constants.CodeInternalError, "服务不健康")
 		return
 	}
 
