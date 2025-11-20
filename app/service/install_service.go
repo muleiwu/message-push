@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"github.com/redis/go-redis/v9"
@@ -54,9 +53,8 @@ func (s *InstallService) CheckInstallStatus() dto.InstallCheckResponse {
 
 	// 检查是否已有管理员用户（判断是否已安装）
 	if response.DatabaseConnected {
-		adminDAO := dao.NewAdminUserDAO()
 		var count int64
-		if err := adminDAO.CountAll(&count); err == nil && count > 0 {
+		if err := s.db.Model(&model.AdminUser{}).Count(&count).Error; err == nil && count > 0 {
 			response.Installed = true
 			response.Message = "系统已安装"
 		} else {
@@ -135,7 +133,7 @@ func (s *InstallService) TestRedisConnection(config dto.RedisConfig) (*redis.Cli
 
 	// 测试连接
 	if err := client.Ping(ctx).Err(); err != nil {
-		return nil, fmt.Errorf("Redis 连接失败: %w", err)
+		return nil, fmt.Errorf("redis 连接失败: %w", err)
 	}
 
 	return client, nil
@@ -209,9 +207,12 @@ func (s *InstallService) CreateInitialData(admin dto.AdminAccountInfo) error {
 		return fmt.Errorf("管理员信息不完整")
 	}
 
-	// 检查用户名是否已存在
-	adminDAO := dao.NewAdminUserDAO()
-	if adminDAO.UsernameExists(admin.Username) {
+	// 检查用户名是否已存在（使用 service 内部的数据库连接）
+	var count int64
+	if err := s.db.Model(&model.AdminUser{}).Where("username = ?", admin.Username).Count(&count).Error; err != nil {
+		return fmt.Errorf("检查用户名失败: %w", err)
+	}
+	if count > 0 {
 		return fmt.Errorf("用户名 %s 已存在", admin.Username)
 	}
 
@@ -221,7 +222,7 @@ func (s *InstallService) CreateInitialData(admin dto.AdminAccountInfo) error {
 		return fmt.Errorf("密码加密失败: %w", err)
 	}
 
-	// 创建管理员用户
+	// 创建管理员用户（使用 service 内部的数据库连接）
 	adminUser := &model.AdminUser{
 		Username: admin.Username,
 		Password: string(hashedPassword),
@@ -229,7 +230,7 @@ func (s *InstallService) CreateInitialData(admin dto.AdminAccountInfo) error {
 		Status:   1, // 启用状态
 	}
 
-	if err := adminDAO.Create(adminUser); err != nil {
+	if err := s.db.Create(adminUser).Error; err != nil {
 		return fmt.Errorf("创建管理员账户失败: %w", err)
 	}
 
