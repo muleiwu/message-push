@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Message Push - 企业级消息推送服务</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-dark: #4338ca;
+            --secondary: #10b981;
+            --text-main: #111827;
+            --text-muted: #6b7280;
+            --bg-body: #f9fafb;
+            --bg-card: #ffffff;
+            --border-color: #e5e7eb;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            margin: 0;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        /* Header */
+        header {
+            background-color: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1.5rem 0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .nav-wrapper {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--primary);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nav-links a {
+            color: var(--text-main);
+            text-decoration: none;
+            margin-left: 2rem;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover {
+            color: var(--primary);
+        }
+
+        .nav-btn {
+            background-color: var(--primary);
+            color: white !important;
+            padding: 0.5rem 1.25rem;
+            border-radius: 0.5rem;
+            transition: background-color 0.2s;
+        }
+
+        .nav-btn:hover {
+            background-color: var(--primary-dark);
+        }
+
+        /* Hero Section */
+        .hero {
+            padding: 6rem 0;
+            text-align: center;
+        }
+
+        .hero h1 {
+            font-size: 3.5rem;
+            font-weight: 900;
+            margin-bottom: 1.5rem;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            line-height: 1.2;
+        }
+
+        .hero p {
+            font-size: 1.25rem;
+            color: var(--text-muted);
+            max-width: 700px;
+            margin: 0 auto 2.5rem;
+        }
+
+        .cta-group {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 0.875rem 2rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+            color: white;
+            box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-dark);
+            transform: translateY(-1px);
+        }
+
+        .btn-outline {
+            background-color: white;
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-outline:hover {
+            border-color: var(--text-muted);
+            background-color: #f3f4f6;
+        }
+
+        /* Features Grid */
+        .features {
+            padding: 4rem 0;
+        }
+
+        .section-title {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .section-title h2 {
+            font-size: 2.25rem;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+        }
+
+        .section-title p {
+            color: var(--text-muted);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+
+        .card {
+            background: var(--bg-card);
+            padding: 2rem;
+            border-radius: 1rem;
+            border: 1px solid var(--border-color);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        .icon {
+            width: 48px;
+            height: 48px;
+            background-color: #e0e7ff;
+            color: var(--primary);
+            border-radius: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+            font-size: 1.5rem;
+        }
+
+        .card h3 {
+            font-size: 1.25rem;
+            margin-bottom: 0.75rem;
+            font-weight: 700;
+        }
+
+        .card p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            margin: 0;
+        }
+
+        /* Tech Stack */
+        .tech-stack {
+            background-color: white;
+            padding: 4rem 0;
+            border-top: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-color);
+            text-align: center;
+        }
+
+        .tech-badges {
+            display: flex;
+            justify-content: center;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+            margin-top: 2rem;
+        }
+
+        .badge {
+            background-color: #f3f4f6;
+            padding: 0.5rem 1rem;
+            border-radius: 2rem;
+            font-weight: 600;
+            color: #4b5563;
+            font-size: 0.875rem;
+        }
+
+        /* Footer */
+        footer {
+            padding: 3rem 0;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+
+            .nav-links {
+                display: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <div class="container nav-wrapper">
+            <a href="/" class="logo">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+                Message Push
+            </a>
+            <nav class="nav-links">
+                <a href="#features">特性</a>
+                <a href="#architecture">架构</a>
+                <a href="https://github.com/cnb-cool/mliev/push/message-push" target="_blank">GitHub</a>
+                <a href="/admin" class="nav-btn">进入控制台</a>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div class="container">
+                <h1>企业级统一消息推送平台</h1>
+                <p>基于 Go + Gin 构建的高性能消息推送服务。支持多渠道分发、流量控制、实时监控，助力企业构建稳定可靠的消息触达能力。</p>
+                <div class="cta-group">
+                    <a href="/admin" class="btn btn-primary">立即开始</a>
+                    <a href="https://github.com/cnb-cool/mliev/push/message-push" target="_blank"
+                        class="btn btn-outline">查看源码</a>
+                </div>
+            </div>
+        </section>
+
+        <section id="features" class="features">
+            <div class="container">
+                <div class="section-title">
+                    <h2>核心特性</h2>
+                    <p>为生产环境打造的完备功能集</p>
+                </div>
+                <div class="grid">
+                    <div class="card">
+                        <div class="icon">🚀</div>
+                        <h3>高性能架构</h3>
+                        <p>基于 Go 语言开发，采用 Gin 框架，内置连接池与协程池，轻松应对高并发场景。</p>
+                    </div>
+                    <div class="card">
+                        <div class="icon">📡</div>
+                        <h3>多渠道支持</h3>
+                        <p>统一接口适配阿里云 SMS、邮件等多种渠道，支持权重配置与智能路由。</p>
+                    </div>
+                    <div class="card">
+                        <div class="icon">🛡️</div>
+                        <h3>稳定性保障</h3>
+                        <p>内置熔断降级、重试机制、QPS 限流与每日配额控制，保障系统稳健运行。</p>
+                    </div>
+                    <div class="card">
+                        <div class="icon">📊</div>
+                        <h3>可观测性</h3>
+                        <p>集成 Zap 结构化日志，提供详细的请求追踪 (TraceID) 与健康检查端点。</p>
+                    </div>
+                    <div class="card">
+                        <div class="icon">🔐</div>
+                        <h3>安全可靠</h3>
+                        <p>支持 AppSecret 签名验证、防重放攻击，确保 API 调用的安全性。</p>
+                    </div>
+                    <div class="card">
+                        <div class="icon">📦</div>
+                        <h3>开箱即用</h3>
+                        <p>提供 Docker 镜像与 K8s 部署配置，支持一键初始化与数据库迁移。</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="architecture" class="tech-stack">
+            <div class="container">
+                <div class="section-title">
+                    <h2>技术栈</h2>
+                    <p>采用主流成熟的开源技术构建</p>
+                </div>
+                <div class="tech-badges">
+                    <span class="badge">Go 1.23+</span>
+                    <span class="badge">Gin Web Framework</span>
+                    <span class="badge">GORM</span>
+                    <span class="badge">Redis</span>
+                    <span class="badge">MySQL / PostgreSQL</span>
+                    <span class="badge">Viper</span>
+                    <span class="badge">Zap Logger</span>
+                    <span class="badge">Docker</span>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Message Push Service. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+
+</html>

@@ -3,14 +3,22 @@ module cnb.cool/mliev/push/message-push
 go 1.25.0
 
 require (
+	github.com/alibabacloud-go/darabonba-openapi/v2 v2.1.13
+	github.com/alibabacloud-go/dysmsapi-20170525/v3 v3.0.6
+	github.com/alibabacloud-go/tea v1.3.13
+	github.com/alibabacloud-go/tea-utils/v2 v2.0.8
 	github.com/gin-gonic/gin v1.10.1
 	github.com/glebarez/sqlite v1.11.0
+	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/uuid v1.6.0
 	github.com/muleiwu/go-cache v1.0.1
 	github.com/muleiwu/gsr v1.0.0
 	github.com/redis/go-redis/v9 v9.16.0
 	github.com/spf13/viper v1.21.0
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.2.2
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sms v1.1.49
 	go.uber.org/zap v1.27.0
+	golang.org/x/crypto v0.42.0
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/driver/postgres v1.6.0
 	gorm.io/gorm v1.31.0
@@ -19,14 +27,10 @@ require (
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/alibabacloud-go/alibabacloud-gateway-spi v0.0.5 // indirect
-	github.com/alibabacloud-go/darabonba-openapi/v2 v2.1.13 // indirect
 	github.com/alibabacloud-go/debug v1.0.1 // indirect
-	github.com/alibabacloud-go/dysmsapi-20170525/v3 v3.0.6 // indirect
 	github.com/alibabacloud-go/endpoint-util v1.1.0 // indirect
 	github.com/alibabacloud-go/openapi-util v0.1.0 // indirect
-	github.com/alibabacloud-go/tea v1.3.13 // indirect
 	github.com/alibabacloud-go/tea-utils v1.3.1 // indirect
-	github.com/alibabacloud-go/tea-utils/v2 v2.0.8 // indirect
 	github.com/aliyun/credentials-go v1.4.5 // indirect
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/bytedance/sonic v1.14.1 // indirect
@@ -46,7 +50,6 @@ require (
 	github.com/go-sql-driver/mysql v1.9.3 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
-	github.com/golang-jwt/jwt/v5 v5.3.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/pgx/v5 v5.7.6 // indirect
@@ -69,8 +72,6 @@ require (
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
-	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.2.2 // indirect
-	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sms v1.1.49 // indirect
 	github.com/tjfoc/gmsm v1.4.1 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.0 // indirect
@@ -79,7 +80,6 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/arch v0.21.0 // indirect
-	golang.org/x/crypto v0.42.0 // indirect
 	golang.org/x/exp v0.0.0-20250911091902-df9299821621 // indirect
 	golang.org/x/net v0.44.0 // indirect
 	golang.org/x/sync v0.17.0 // indirect
