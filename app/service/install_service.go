@@ -142,14 +142,6 @@ func (s *InstallService) TestRedisConnection(config dto.RedisConfig) (*redis.Cli
 // UpdateDatabaseConfig 更新数据库配置到配置文件
 func (s *InstallService) UpdateDatabaseConfig(config dto.DatabaseConfig) error {
 	// 读取配置文件
-	viper.SetConfigName("config")
-	viper.SetConfigType("yaml")
-	viper.AddConfigPath(".")
-
-	if err := viper.ReadInConfig(); err != nil {
-		return fmt.Errorf("读取配置文件失败: %w", err)
-	}
-
 	driver := config.Driver
 	if driver == "" {
 		driver = "mysql"
@@ -168,23 +160,19 @@ func (s *InstallService) UpdateDatabaseConfig(config dto.DatabaseConfig) error {
 	}
 
 	// 写入配置文件
-	if err := viper.WriteConfig(); err != nil {
-		return fmt.Errorf("写入配置文件失败: %w", err)
+	// 先尝试 SafeWriteConfig（如果文件不存在会创建）
+	viper.SetConfigFile("./config/config.yaml")
+	if err := viper.SafeWriteConfig(); err != nil {
+		// 如果文件已存在，使用 WriteConfig 更新
+		if err := viper.WriteConfig(); err != nil {
+			return fmt.Errorf("写入数据库配置失败: %w", err)
+		}
 	}
-
 	return nil
 }
 
 // UpdateRedisConfig 更新 Redis 配置到配置文件
 func (s *InstallService) UpdateRedisConfig(config dto.RedisConfig) error {
-	// 读取配置文件
-	viper.SetConfigName("config")
-	viper.SetConfigType("yaml")
-	viper.AddConfigPath(".")
-
-	if err := viper.ReadInConfig(); err != nil {
-		return fmt.Errorf("读取配置文件失败: %w", err)
-	}
 
 	// 更新 Redis 配置
 	viper.Set("redis.host", config.Host)
@@ -193,10 +181,14 @@ func (s *InstallService) UpdateRedisConfig(config dto.RedisConfig) error {
 	viper.Set("redis.db", config.DB)
 
 	// 写入配置文件
-	if err := viper.WriteConfig(); err != nil {
-		return fmt.Errorf("写入配置文件失败: %w", err)
+	// 先尝试 SafeWriteConfig（如果文件不存在会创建）
+	viper.SetConfigFile("./config/config.yaml")
+	if err := viper.SafeWriteConfig(); err != nil {
+		// 如果文件已存在，使用 WriteConfig 更新
+		if err := viper.WriteConfig(); err != nil {
+			return fmt.Errorf("写入数据库配置失败: %w", err)
+		}
 	}
-
 	return nil
 }
 

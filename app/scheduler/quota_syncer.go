@@ -73,6 +73,10 @@ func (s *QuotaSyncer) Stop() {
 // sync 同步配额数据
 func (s *QuotaSyncer) sync(ctx context.Context) {
 	s.logger.Info("starting quota sync...")
+	if !helper.GetHelper().GetConfig().GetBool("app.installed", false) {
+		helper.GetHelper().GetLogger().Warn("数据库未安装，不执行")
+		return
+	}
 
 	// 1. 获取所有应用
 	// 这里假设应用数量不多，可以直接全部获取。如果很多，需要分页。

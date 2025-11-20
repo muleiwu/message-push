@@ -13,6 +13,10 @@ type Migration struct {
 
 func (receiver *Migration) Run() error {
 
+	if !receiver.Helper.GetConfig().GetBool("app.installed", false) {
+		receiver.Helper.GetLogger().Warn("[db migration] 数据库未安装，不执行迁移")
+		return nil
+	}
 	if len(receiver.Migration) > 0 {
 		err := receiver.Helper.GetDatabase().AutoMigrate(receiver.Migration...)
 		if err != nil {
