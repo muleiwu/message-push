@@ -113,9 +113,9 @@ func (s *AdminStatisticsService) GetDashboard() (*dto.DashboardResponse, error) 
 	db.Model(&model.Channel{}).Count(&resp.TotalChannels)
 	db.Model(&model.Channel{}).Where("status = ?", 1).Count(&resp.ActiveChannels)
 
-	// 3. 统计 Providers
-	db.Model(&model.Provider{}).Count(&resp.TotalProviders)
-	db.Model(&model.Provider{}).Where("status = ?", 1).Count(&resp.ActiveProviders)
+	// 3. 统计 Provider Accounts
+	db.Model(&model.ProviderAccount{}).Count(&resp.TotalProviders)
+	db.Model(&model.ProviderAccount{}).Where("status = ?", 1).Count(&resp.ActiveProviders)
 
 	// 4. 统计今日推送
 	todayStart := time.Now().Format("2006-01-02 00:00:00")

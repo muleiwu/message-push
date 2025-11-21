@@ -55,16 +55,16 @@ type RegenerateSecretResponse struct {
 	AppSecret string `json:"app_secret"`
 }
 
-// CreateProviderRequest 创建服务商请求
+// CreateProviderRequest 创建服务商请求（已废弃，使用CreateProviderAccountRequest）
 type CreateProviderRequest struct {
 	Name        string                 `json:"name" binding:"required,min=2,max=50"`
-	Type        string                 `json:"type" binding:"required,oneof=sms email wechat_work dingtalk"`
+	Type        string                 `json:"type" binding:"required,oneof=sms email wechat_work dingtalk webhook push"`
 	Description string                 `json:"description" binding:"max=200"`
 	Config      map[string]interface{} `json:"config" binding:"required"`
 	Status      int                    `json:"status" binding:"omitempty,oneof=1 2"`
 }
 
-// UpdateProviderRequest 更新服务商请求
+// UpdateProviderRequest 更新服务商请求（已废弃，使用UpdateProviderAccountRequest）
 type UpdateProviderRequest struct {
 	Name        string                 `json:"name" binding:"omitempty,min=2,max=50"`
 	Description string                 `json:"description" binding:"omitempty,max=200"`
@@ -72,15 +72,15 @@ type UpdateProviderRequest struct {
 	Status      int                    `json:"status" binding:"omitempty,oneof=1 2"`
 }
 
-// ProviderListRequest 服务商列表请求
+// ProviderListRequest 服务商列表请求（已废弃，使用ProviderAccountListRequest）
 type ProviderListRequest struct {
 	Page     int    `form:"page" binding:"omitempty,min=1"`
 	PageSize int    `form:"page_size" binding:"omitempty,min=1,max=100"`
-	Type     string `form:"type" binding:"omitempty,oneof=sms email wechat_work dingtalk"`
+	Type     string `form:"type" binding:"omitempty,oneof=sms email wechat_work dingtalk webhook push"`
 	Status   int    `form:"status" binding:"omitempty,oneof=1 2"`
 }
 
-// ProviderResponse 服务商响应
+// ProviderResponse 服务商响应（已废弃，使用ProviderAccountResponse）
 type ProviderResponse struct {
 	ID          uint                   `json:"id"`
 	Name        string                 `json:"name"`
@@ -92,7 +92,7 @@ type ProviderResponse struct {
 	UpdatedAt   string                 `json:"updated_at"`
 }
 
-// ProviderListResponse 服务商列表响应
+// ProviderListResponse 服务商列表响应（已废弃，使用ProviderAccountListResponse）
 type ProviderListResponse struct {
 	Total int                 `json:"total"`
 	Page  int                 `json:"page"`
@@ -100,10 +100,81 @@ type ProviderListResponse struct {
 	Items []*ProviderResponse `json:"items"`
 }
 
+// CreateProviderAccountRequest 创建服务商账号配置请求
+type CreateProviderAccountRequest struct {
+	Name         string                 `json:"name" binding:"required,min=2,max=50"`
+	ProviderCode string                 `json:"provider_code" binding:"required"` // 服务商代码，如：aliyun_sms
+	Description  string                 `json:"description" binding:"max=200"`
+	Config       map[string]interface{} `json:"config" binding:"required"`
+	Status       int                    `json:"status" binding:"omitempty,oneof=1 2"`
+}
+
+// UpdateProviderAccountRequest 更新服务商账号配置请求
+type UpdateProviderAccountRequest struct {
+	Name        string                 `json:"name" binding:"omitempty,min=2,max=50"`
+	Description string                 `json:"description" binding:"omitempty,max=200"`
+	Config      map[string]interface{} `json:"config" binding:"omitempty"`
+	Status      int                    `json:"status" binding:"omitempty,oneof=1 2"`
+}
+
+// ProviderAccountListRequest 服务商账号列表请求
+type ProviderAccountListRequest struct {
+	Page         int    `form:"page" binding:"omitempty,min=1"`
+	PageSize     int    `form:"page_size" binding:"omitempty,min=1,max=100"`
+	ProviderType string `form:"provider_type" binding:"omitempty,oneof=sms email wechat_work dingtalk webhook push"`
+	Status       int    `form:"status" binding:"omitempty,oneof=1 2"`
+}
+
+// ProviderAccountResponse 服务商账号配置响应
+type ProviderAccountResponse struct {
+	ID           uint                   `json:"id"`
+	AccountCode  string                 `json:"account_code"`
+	AccountName  string                 `json:"account_name"`
+	ProviderCode string                 `json:"provider_code"`
+	ProviderName string                 `json:"provider_name"`
+	ProviderType string                 `json:"provider_type"`
+	Description  string                 `json:"description"`
+	Config       map[string]interface{} `json:"config"`
+	Status       int                    `json:"status"`
+	CreatedAt    string                 `json:"created_at"`
+	UpdatedAt    string                 `json:"updated_at"`
+}
+
+// ProviderAccountListResponse 服务商账号列表响应
+type ProviderAccountListResponse struct {
+	Total int                        `json:"total"`
+	Page  int                        `json:"page"`
+	Size  int                        `json:"size"`
+	Items []*ProviderAccountResponse `json:"items"`
+}
+
+// AvailableProviderResponse 可用服务商响应
+type AvailableProviderResponse struct {
+	Code         string                `json:"code"`
+	Name         string                `json:"name"`
+	Type         string                `json:"type"`
+	Description  string                `json:"description"`
+	ConfigFields []ConfigFieldResponse `json:"config_fields"`
+}
+
+// ConfigFieldResponse 配置字段响应
+type ConfigFieldResponse struct {
+	Key            string `json:"key"`
+	Label          string `json:"label"`
+	Description    string `json:"description"`
+	Type           string `json:"type"`
+	Required       bool   `json:"required"`
+	Example        string `json:"example"`
+	Placeholder    string `json:"placeholder"`
+	ValidationRule string `json:"validation_rule"`
+	HelpLink       string `json:"help_link"`
+	DefaultValue   string `json:"default_value"`
+}
+
 // CreateChannelRequest 创建通道请求
 type CreateChannelRequest struct {
 	Name   string `json:"name" binding:"required,min=2,max=50"`
-	Type   string `json:"type" binding:"required,oneof=sms email wechat_work dingtalk"`
+	Type   string `json:"type" binding:"required,oneof=sms email wechat_work dingtalk webhook push"`
 	Status int    `json:"status" binding:"omitempty,oneof=1 2"`
 }
 
@@ -117,7 +188,7 @@ type UpdateChannelRequest struct {
 type ChannelListRequest struct {
 	Page     int    `form:"page" binding:"omitempty,min=1"`
 	PageSize int    `form:"page_size" binding:"omitempty,min=1,max=100"`
-	Type     string `form:"type" binding:"omitempty,oneof=sms email wechat_work dingtalk"`
+	Type     string `form:"type" binding:"omitempty,oneof=sms email wechat_work dingtalk webhook push"`
 	Status   int    `form:"status" binding:"omitempty,oneof=1 2"`
 }
 

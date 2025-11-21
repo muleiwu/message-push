@@ -76,7 +76,21 @@ func (receiver Router) InitConfig(helper envInterface.HelperInterface) map[strin
 					apps.GET("/:id/quota-usage", deps.WrapHandler(admin.ApplicationController{}.GetQuotaUsage))
 				}
 
-				// 服务商管理
+				// 服务商账号配置管理（新版）
+				providerAccounts := adminGroup.Group("/provider-accounts")
+				{
+					providerAccounts.GET("/available", deps.WrapHandler(admin.ProviderAccountController{}.GetAvailableProviders))                     // 获取可用服务商列表
+					providerAccounts.GET("/config-fields/:providerCode", deps.WrapHandler(admin.ProviderAccountController{}.GetProviderConfigFields)) // 获取配置字段定义
+					providerAccounts.GET("/active", deps.WrapHandler(admin.ProviderAccountController{}.GetActiveProviderAccounts))                    // 获取活跃账号
+					providerAccounts.GET("", deps.WrapHandler(admin.ProviderAccountController{}.GetProviderAccountList))
+					providerAccounts.POST("", deps.WrapHandler(admin.ProviderAccountController{}.CreateProviderAccount))
+					providerAccounts.GET("/:id", deps.WrapHandler(admin.ProviderAccountController{}.GetProviderAccount))
+					providerAccounts.PUT("/:id", deps.WrapHandler(admin.ProviderAccountController{}.UpdateProviderAccount))
+					providerAccounts.DELETE("/:id", deps.WrapHandler(admin.ProviderAccountController{}.DeleteProviderAccount))
+					providerAccounts.POST("/:id/test", deps.WrapHandler(admin.ProviderAccountController{}.TestProviderAccount))
+				}
+
+				// 服务商管理（旧版，保持向后兼容）
 				providers := adminGroup.Group("/providers")
 				{
 					providers.GET("/active", deps.WrapHandler(admin.ProviderController{}.GetActiveProviders)) // 先注册 /active

@@ -12,7 +12,8 @@ func (receiver Migration) Get() []any {
 	return []any{
 		// 应用和通道管理
 		&model.Application{},
-		&model.Provider{},
+		&model.ProviderAccount{}, // 新的服务商账号配置表
+		&model.Provider{},        // 保留旧表以支持数据迁移
 		&model.Channel{},
 		&model.ProviderChannel{},
 		&model.PushChannel{},

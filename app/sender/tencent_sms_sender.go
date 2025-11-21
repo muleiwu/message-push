@@ -6,10 +6,73 @@ import (
 	"fmt"
 
 	"cnb.cool/mliev/push/message-push/app/constants"
+	"cnb.cool/mliev/push/message-push/app/registry"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 	sms "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sms/v20210111"
 )
+
+func init() {
+	// 注册腾讯云短信服务商
+	registry.Register(&registry.ProviderMeta{
+		Code:        constants.ProviderTencentSMS,
+		Name:        "腾讯云短信",
+		Type:        constants.MessageTypeSMS,
+		Description: "腾讯云短信服务，支持国内短信和国际短信发送",
+		ConfigFields: []registry.ConfigField{
+			{
+				Key:            "secret_id",
+				Label:          "SecretId",
+				Description:    "腾讯云账号的SecretId",
+				Type:           registry.FieldTypeText,
+				Required:       true,
+				Example:        "AKIDxxxxxxxxxxxxxxxx",
+				Placeholder:    "请输入SecretId",
+				ValidationRule: "min:16,max:64",
+				HelpLink:       "https://cloud.tencent.com/document/product/382/37794",
+			},
+			{
+				Key:            "secret_key",
+				Label:          "SecretKey",
+				Description:    "腾讯云账号的SecretKey",
+				Type:           registry.FieldTypePassword,
+				Required:       true,
+				Example:        "xxxxxxxxxxxxxxxxxxxxxx",
+				Placeholder:    "请输入SecretKey",
+				ValidationRule: "min:16,max:64",
+				HelpLink:       "https://cloud.tencent.com/document/product/382/37794",
+			},
+			{
+				Key:         "sdk_app_id",
+				Label:       "应用ID",
+				Description: "短信应用的SdkAppId",
+				Type:        registry.FieldTypeText,
+				Required:    true,
+				Example:     "1400000000",
+				Placeholder: "请输入SdkAppId",
+			},
+			{
+				Key:          "region",
+				Label:        "地域",
+				Description:  "腾讯云地域，默认为ap-guangzhou",
+				Type:         registry.FieldTypeText,
+				Required:     false,
+				Example:      "ap-guangzhou",
+				Placeholder:  "请输入地域",
+				DefaultValue: "ap-guangzhou",
+			},
+			{
+				Key:         "sign_name",
+				Label:       "短信签名",
+				Description: "默认短信签名（可在通道配置中覆盖）",
+				Type:        registry.FieldTypeText,
+				Required:    false,
+				Example:     "腾讯云",
+				Placeholder: "请输入短信签名",
+			},
+		},
+	})
+}
 
 type TencentSMSSender struct {
 }

@@ -23,7 +23,7 @@ type MessageHandler struct {
 	logger             gsr.Logger
 	taskDao            *dao.PushTaskDAO
 	providerChannelDao *dao.ProviderChannelDAO
-	providerDao        *dao.ProviderDAO
+	providerAccountDao *dao.ProviderAccountDAO
 	logDao             *dao.PushLogDAO
 	selector           *selector.ChannelSelector
 	senderFactory      *sender.Factory
@@ -36,7 +36,7 @@ func NewMessageHandler() *MessageHandler {
 		logger:             internalHelper.GetHelper().GetLogger(),
 		taskDao:            dao.NewPushTaskDAO(),
 		providerChannelDao: dao.NewProviderChannelDAO(),
-		providerDao:        dao.NewProviderDAO(),
+		providerAccountDao: dao.NewProviderAccountDAO(),
 		logDao:             dao.NewPushLogDAO(),
 		selector:           selector.NewChannelSelector(),
 		senderFactory:      sender.NewFactory(),
@@ -71,12 +71,22 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 		return err
 	}
 
-	// 获取服务商信息
-	provider, err := h.providerDao.GetByID(node.Channel.ProviderID)
+	// 获取服务商账号信息
+	providerAccount, err := h.providerAccountDao.GetByID(node.Channel.ProviderID)
 	if err != nil {
-		h.logger.Error(fmt.Sprintf("failed to get provider task_id=%s: %v", taskID, err))
+		h.logger.Error(fmt.Sprintf("failed to get provider account task_id=%s: %v", taskID, err))
 		h.handleFailure(task, err.Error())
 		return err
+	}
+
+	// 转换为旧的Provider结构（为了兼容现有Sender接口）
+	provider := &model.Provider{
+		ID:           providerAccount.ID,
+		ProviderCode: providerAccount.AccountCode,
+		ProviderName: providerAccount.AccountName,
+		ProviderType: providerAccount.ProviderType,
+		Config:       providerAccount.Config,
+		Status:       providerAccount.Status,
 	}
 
 	// 获取发送器

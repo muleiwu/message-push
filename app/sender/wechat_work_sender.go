@@ -10,8 +10,50 @@ import (
 	"time"
 
 	"cnb.cool/mliev/push/message-push/app/constants"
+	"cnb.cool/mliev/push/message-push/app/registry"
 	"cnb.cool/mliev/push/message-push/internal/helper"
 )
+
+func init() {
+	// 注册企业微信服务商
+	registry.Register(&registry.ProviderMeta{
+		Code:        constants.ProviderWeChatWork,
+		Name:        "企业微信",
+		Type:        constants.MessageTypeWeChatWork,
+		Description: "企业微信应用消息推送服务，支持文本和Markdown消息",
+		ConfigFields: []registry.ConfigField{
+			{
+				Key:         "corp_id",
+				Label:       "企业ID",
+				Description: "企业微信的企业ID（CorpID）",
+				Type:        registry.FieldTypeText,
+				Required:    true,
+				Example:     "ww1234567890abcdef",
+				Placeholder: "请输入企业ID",
+				HelpLink:    "https://developer.work.weixin.qq.com/document/path/90665",
+			},
+			{
+				Key:         "agent_secret",
+				Label:       "应用Secret",
+				Description: "企业微信应用的Secret",
+				Type:        registry.FieldTypePassword,
+				Required:    true,
+				Example:     "xxxxxxxxxxxxxxxxxxxxxx",
+				Placeholder: "请输入应用Secret",
+				HelpLink:    "https://developer.work.weixin.qq.com/document/path/90665",
+			},
+			{
+				Key:         "agent_id",
+				Label:       "应用ID",
+				Description: "企业微信应用的AgentID",
+				Type:        registry.FieldTypeText,
+				Required:    true,
+				Example:     "1000002",
+				Placeholder: "请输入应用ID",
+			},
+		},
+	})
+}
 
 type WeChatWorkSender struct {
 }

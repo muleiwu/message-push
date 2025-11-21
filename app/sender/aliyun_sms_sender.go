@@ -6,7 +6,51 @@ import (
 	"fmt"
 
 	"cnb.cool/mliev/push/message-push/app/constants"
+	"cnb.cool/mliev/push/message-push/app/registry"
 )
+
+func init() {
+	// 注册阿里云短信服务商
+	registry.Register(&registry.ProviderMeta{
+		Code:        constants.ProviderAliyunSMS,
+		Name:        "阿里云短信",
+		Type:        constants.MessageTypeSMS,
+		Description: "阿里云短信服务，支持国内短信和国际短信发送",
+		ConfigFields: []registry.ConfigField{
+			{
+				Key:            "access_key_id",
+				Label:          "AccessKeyID",
+				Description:    "阿里云账号的AccessKeyID",
+				Type:           registry.FieldTypeText,
+				Required:       true,
+				Example:        "LTAI5tXXXXXXXXXXXXXX",
+				Placeholder:    "请输入AccessKeyID",
+				ValidationRule: "min:16,max:64",
+				HelpLink:       "https://help.aliyun.com/document_detail/53045.html",
+			},
+			{
+				Key:            "access_key_secret",
+				Label:          "AccessKeySecret",
+				Description:    "阿里云账号的AccessKeySecret",
+				Type:           registry.FieldTypePassword,
+				Required:       true,
+				Example:        "xxxxxxxxxxxxxxxxxxxxxx",
+				Placeholder:    "请输入AccessKeySecret",
+				ValidationRule: "min:16,max:64",
+				HelpLink:       "https://help.aliyun.com/document_detail/53045.html",
+			},
+			{
+				Key:         "sign_name",
+				Label:       "短信签名",
+				Description: "短信签名名称",
+				Type:        registry.FieldTypeText,
+				Required:    true,
+				Example:     "阿里云",
+				Placeholder: "请输入短信签名",
+			},
+		},
+	})
+}
 
 // AliyunSMSSender 阿里云短信发送器
 type AliyunSMSSender struct {

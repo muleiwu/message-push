@@ -10,8 +10,50 @@ import (
 	"time"
 
 	"cnb.cool/mliev/push/message-push/app/constants"
+	"cnb.cool/mliev/push/message-push/app/registry"
 	"cnb.cool/mliev/push/message-push/internal/helper"
 )
+
+func init() {
+	// 注册钉钉服务商
+	registry.Register(&registry.ProviderMeta{
+		Code:        constants.ProviderDingTalk,
+		Name:        "钉钉",
+		Type:        constants.MessageTypeDingTalk,
+		Description: "钉钉工作通知消息推送服务，支持文本和Markdown消息",
+		ConfigFields: []registry.ConfigField{
+			{
+				Key:         "app_key",
+				Label:       "应用AppKey",
+				Description: "钉钉应用的AppKey",
+				Type:        registry.FieldTypeText,
+				Required:    true,
+				Example:     "dingxxxxxxxxxxxxxx",
+				Placeholder: "请输入AppKey",
+				HelpLink:    "https://open.dingtalk.com/document/orgapp/obtain-the-access_token-of-an-internal-app",
+			},
+			{
+				Key:         "app_secret",
+				Label:       "应用AppSecret",
+				Description: "钉钉应用的AppSecret",
+				Type:        registry.FieldTypePassword,
+				Required:    true,
+				Example:     "xxxxxxxxxxxxxxxxxxxxxx",
+				Placeholder: "请输入AppSecret",
+				HelpLink:    "https://open.dingtalk.com/document/orgapp/obtain-the-access_token-of-an-internal-app",
+			},
+			{
+				Key:         "agent_id",
+				Label:       "应用AgentId",
+				Description: "钉钉应用的AgentId",
+				Type:        registry.FieldTypeText,
+				Required:    true,
+				Example:     "123456789",
+				Placeholder: "请输入AgentId",
+			},
+		},
+	})
+}
 
 type DingTalkSender struct {
 }

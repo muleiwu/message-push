@@ -6,6 +6,8 @@ const (
 	MessageTypeEmail      = "email"       // 邮件
 	MessageTypeWeChatWork = "wechat_work" // 企业微信
 	MessageTypeDingTalk   = "dingtalk"    // 钉钉
+	MessageTypeWebhook    = "webhook"     // Webhook
+	MessageTypePush       = "push"        // 推送通知
 )
 
 // 服务商代码常量
@@ -20,7 +22,7 @@ const (
 // IsValidMessageType 检查消息类型是否有效
 func IsValidMessageType(msgType string) bool {
 	switch msgType {
-	case MessageTypeSMS, MessageTypeEmail, MessageTypeWeChatWork, MessageTypeDingTalk:
+	case MessageTypeSMS, MessageTypeEmail, MessageTypeWeChatWork, MessageTypeDingTalk, MessageTypeWebhook, MessageTypePush:
 		return true
 	default:
 		return false

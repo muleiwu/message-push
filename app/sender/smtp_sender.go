@@ -7,7 +7,66 @@ import (
 	"net/smtp"
 
 	"cnb.cool/mliev/push/message-push/app/constants"
+	"cnb.cool/mliev/push/message-push/app/registry"
 )
+
+func init() {
+	// 注册SMTP邮件服务商
+	registry.Register(&registry.ProviderMeta{
+		Code:        constants.ProviderSMTP,
+		Name:        "SMTP邮件",
+		Type:        constants.MessageTypeEmail,
+		Description: "通用SMTP邮件发送服务，支持各类邮件服务器",
+		ConfigFields: []registry.ConfigField{
+			{
+				Key:         "host",
+				Label:       "SMTP服务器",
+				Description: "SMTP服务器地址",
+				Type:        registry.FieldTypeText,
+				Required:    true,
+				Example:     "smtp.qq.com",
+				Placeholder: "请输入SMTP服务器地址",
+			},
+			{
+				Key:          "port",
+				Label:        "端口",
+				Description:  "SMTP服务器端口",
+				Type:         registry.FieldTypeNumber,
+				Required:     true,
+				Example:      "587",
+				Placeholder:  "请输入端口号",
+				DefaultValue: "587",
+			},
+			{
+				Key:         "username",
+				Label:       "用户名",
+				Description: "SMTP登录用户名",
+				Type:        registry.FieldTypeText,
+				Required:    true,
+				Example:     "your-email@example.com",
+				Placeholder: "请输入用户名",
+			},
+			{
+				Key:         "password",
+				Label:       "密码",
+				Description: "SMTP登录密码或授权码",
+				Type:        registry.FieldTypePassword,
+				Required:    true,
+				Example:     "your-password",
+				Placeholder: "请输入密码或授权码",
+			},
+			{
+				Key:         "from",
+				Label:       "发件人地址",
+				Description: "邮件发件人地址",
+				Type:        registry.FieldTypeText,
+				Required:    true,
+				Example:     "noreply@example.com",
+				Placeholder: "请输入发件人地址",
+			},
+		},
+	})
+}
 
 // SMTPSender SMTP邮件发送器
 type SMTPSender struct {

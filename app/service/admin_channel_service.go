@@ -272,9 +272,9 @@ func (s *AdminChannelService) GetChannelProviders(channelID uint) ([]*dto.Channe
 
 		if r.ProviderChannel != nil {
 			item.ProviderID = r.ProviderChannel.ProviderID
-			if r.ProviderChannel.Provider != nil {
-				item.ProviderName = r.ProviderChannel.Provider.ProviderName
-				item.ProviderType = r.ProviderChannel.Provider.ProviderType
+			if r.ProviderChannel.ProviderAccount != nil {
+				item.ProviderName = r.ProviderChannel.ProviderAccount.AccountName
+				item.ProviderType = r.ProviderChannel.ProviderAccount.ProviderType
 			}
 		}
 

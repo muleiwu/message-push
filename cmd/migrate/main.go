@@ -85,7 +85,8 @@ func migrateDown(db *gorm.DB) {
 		"push_channels",
 		"provider_channels",
 		"channels",
-		"providers",
+		"provider_accounts", // 新表
+		"providers",         // 旧表
 		"applications",
 	}
 
@@ -138,15 +139,17 @@ func seed(db *gorm.DB) {
 	}
 	db.Create(app)
 
-	// 创建服务商
-	provider := &model.Provider{
+	// 创建服务商账号配置
+	providerAccount := &model.ProviderAccount{
+		AccountCode:  "aliyun_sms_001",
+		AccountName:  "阿里云短信测试账号",
 		ProviderCode: "aliyun_sms",
-		ProviderName: "阿里云短信",
 		ProviderType: "sms",
-		Config:       `{"access_key_id":"your_key","access_key_secret":"your_secret"}`,
+		Config:       `{"access_key_id":"your_key","access_key_secret":"your_secret","sign_name":"测试签名"}`,
 		Status:       1,
+		Remark:       "测试服务商账号，请在生产环境中修改配置",
 	}
-	db.Create(provider)
+	db.Create(providerAccount)
 
 	log.Println("Seeding completed!")
 }
