@@ -10,7 +10,6 @@ import (
 // MessageTemplate 系统模板表
 type MessageTemplate struct {
 	ID           uint           `gorm:"primaryKey;autoIncrement" json:"id"`
-	TemplateCode string         `gorm:"type:varchar(100);uniqueIndex:uk_template_code;not null;comment:模板代码（唯一标识）" json:"template_code"`
 	TemplateName string         `gorm:"type:varchar(200);not null;comment:模板名称" json:"template_name"`
 	MessageType  string         `gorm:"type:varchar(20);not null;index:idx_type_status;comment:消息类型：sms, email, wechat_work, dingtalk, webhook, push" json:"message_type"`
 	Content      string         `gorm:"type:text;not null;comment:模板内容，使用{variable}占位符" json:"content"`

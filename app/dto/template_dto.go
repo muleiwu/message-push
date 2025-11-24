@@ -6,7 +6,6 @@ import "time"
 
 // CreateMessageTemplateRequest 创建系统模板请求
 type CreateMessageTemplateRequest struct {
-	TemplateCode string   `json:"template_code" binding:"required"`
 	TemplateName string   `json:"template_name" binding:"required"`
 	MessageType  string   `json:"message_type" binding:"required"`
 	Content      string   `json:"content" binding:"required"`
@@ -28,7 +27,6 @@ type UpdateMessageTemplateRequest struct {
 // MessageTemplateResponse 系统模板响应
 type MessageTemplateResponse struct {
 	ID           uint      `json:"id"`
-	TemplateCode string    `json:"template_code"`
 	TemplateName string    `json:"template_name"`
 	MessageType  string    `json:"message_type"`
 	Content      string    `json:"content"`
@@ -155,7 +153,6 @@ type TemplateBindingResponse struct {
 // SimpleMessageTemplateInfo 简单系统模板信息
 type SimpleMessageTemplateInfo struct {
 	ID           uint   `json:"id"`
-	TemplateCode string `json:"template_code"`
 	TemplateName string `json:"template_name"`
 	MessageType  string `json:"message_type"`
 }

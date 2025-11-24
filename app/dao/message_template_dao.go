@@ -30,13 +30,6 @@ func (d *MessageTemplateDAO) GetByID(id uint) (*model.MessageTemplate, error) {
 	return &template, err
 }
 
-// GetByCode 根据模板代码获取系统模板
-func (d *MessageTemplateDAO) GetByCode(code string) (*model.MessageTemplate, error) {
-	var template model.MessageTemplate
-	err := d.db.Where("template_code = ?", code).First(&template).Error
-	return &template, err
-}
-
 // Update 更新系统模板
 func (d *MessageTemplateDAO) Update(template *model.MessageTemplate) error {
 	return d.db.Save(template).Error
@@ -71,22 +64,4 @@ func (d *MessageTemplateDAO) List(messageType string, status *int8, page, pageSi
 	err := query.Order("id DESC").Offset(offset).Limit(pageSize).Find(&templates).Error
 
 	return templates, total, err
-}
-
-// GetActiveByTypeAndCode 根据消息类型和模板代码获取启用的系统模板
-func (d *MessageTemplateDAO) GetActiveByTypeAndCode(messageType, templateCode string) (*model.MessageTemplate, error) {
-	var template model.MessageTemplate
-	err := d.db.Where("message_type = ? AND template_code = ? AND status = 1", messageType, templateCode).First(&template).Error
-	return &template, err
-}
-
-// ExistsByCode 检查模板代码是否已存在
-func (d *MessageTemplateDAO) ExistsByCode(code string, excludeID uint) (bool, error) {
-	var count int64
-	query := d.db.Model(&model.MessageTemplate{}).Where("template_code = ?", code)
-	if excludeID > 0 {
-		query = query.Where("id != ?", excludeID)
-	}
-	err := query.Count(&count).Error
-	return count > 0, err
 }

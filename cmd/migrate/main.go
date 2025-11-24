@@ -87,6 +87,11 @@ func preMigrationCleanup(db *gorm.DB) error {
 		return fmt.Errorf("failed to fix channel_template_bindings: %w", err)
 	}
 
+	// 移除 message_templates 表的 template_code 字段
+	if err := removeMessageTemplateCodeColumn(db); err != nil {
+		return fmt.Errorf("failed to remove template_code from message_templates: %w", err)
+	}
+
 	log.Println("Pre-migration cleanup completed!")
 	return nil
 }
@@ -212,6 +217,49 @@ func fixChannelTemplateBindingsPreMigration(db *gorm.DB) error {
 	}
 
 	log.Println("Successfully fixed channel_template_bindings table")
+	return nil
+}
+
+// removeMessageTemplateCodeColumn 移除 message_templates 表的 template_code 字段
+func removeMessageTemplateCodeColumn(db *gorm.DB) error {
+	// 检查表是否存在
+	if !db.Migrator().HasTable("message_templates") {
+		log.Println("Table message_templates does not exist, skipping...")
+		return nil
+	}
+
+	// 检查 template_code 列是否存在
+	if !db.Migrator().HasColumn(&model.MessageTemplate{}, "template_code") {
+		log.Println("Column template_code does not exist in message_templates, skipping...")
+		return nil
+	}
+
+	log.Println("Removing template_code column from message_templates table...")
+
+	// 步骤 1: 删除唯一索引 uk_template_code（如果存在）
+	var indexExists int64
+	db.Raw(`
+		SELECT COUNT(*) 
+		FROM INFORMATION_SCHEMA.STATISTICS 
+		WHERE TABLE_SCHEMA = DATABASE()
+		  AND TABLE_NAME = 'message_templates'
+		  AND INDEX_NAME = 'uk_template_code'
+	`).Scan(&indexExists)
+
+	if indexExists > 0 {
+		log.Println("Dropping unique index uk_template_code...")
+		if err := db.Exec("ALTER TABLE message_templates DROP INDEX uk_template_code").Error; err != nil {
+			log.Printf("Warning: Failed to drop index uk_template_code: %v", err)
+		}
+	}
+
+	// 步骤 2: 删除 template_code 列
+	log.Println("Dropping template_code column...")
+	if err := db.Migrator().DropColumn(&model.MessageTemplate{}, "template_code"); err != nil {
+		return fmt.Errorf("failed to drop template_code column: %w", err)
+	}
+
+	log.Println("Successfully removed template_code column from message_templates table")
 	return nil
 }
 

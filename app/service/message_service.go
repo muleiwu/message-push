@@ -18,40 +18,42 @@ import (
 
 // MessageService 消息服务
 type MessageService struct {
-	logger          gsr.Logger
-	producer        *queue.Producer
-	selector        *selector.ChannelSelector
-	taskDao         *dao.PushTaskDAO
-	appDao          *dao.ApplicationDAO
-	templateHelper  *helper.TemplateHelper
-	signatureHelper *helper.SignatureHelper
+	logger             gsr.Logger
+	producer           *queue.Producer
+	selector           *selector.ChannelSelector
+	taskDao            *dao.PushTaskDAO
+	appDao             *dao.ApplicationDAO
+	messageTemplateDao *dao.MessageTemplateDAO
+	templateHelper     *helper.TemplateHelper
+	signatureHelper    *helper.SignatureHelper
 }
 
 // NewMessageService 创建消息服务
 func NewMessageService() *MessageService {
 	h := internalHelper.GetHelper()
 	return &MessageService{
-		logger:          h.GetLogger(),
-		producer:        queue.NewProducer(h.GetRedis()),
-		selector:        selector.NewChannelSelector(),
-		taskDao:         dao.NewPushTaskDAO(),
-		appDao:          dao.NewApplicationDAO(),
-		templateHelper:  helper.NewTemplateHelper(),
-		signatureHelper: helper.NewSignatureHelper(),
+		logger:             h.GetLogger(),
+		producer:           queue.NewProducer(h.GetRedis()),
+		selector:           selector.NewChannelSelector(),
+		taskDao:            dao.NewPushTaskDAO(),
+		appDao:             dao.NewApplicationDAO(),
+		messageTemplateDao: dao.NewMessageTemplateDAO(),
+		templateHelper:     helper.NewTemplateHelper(),
+		signatureHelper:    helper.NewSignatureHelper(),
 	}
 }
 
 // SendRequest 发送请求参数
 type SendRequest struct {
-	AppID          string                 `json:"app_id" binding:"required"`
-	ChannelID      uint                   `json:"channel_id" binding:"required"`
-	MessageType    string                 `json:"message_type" binding:"required"`
-	Receiver       string                 `json:"receiver" binding:"required"`
-	TemplateCode   string                 `json:"template_code" binding:"required"`
-	TemplateParams map[string]interface{} `json:"template_params"`
-	ScheduledAt    *time.Time             `json:"scheduled_at"`
-	Signature      string                 `json:"signature" binding:"required"`
-	Timestamp      int64                  `json:"timestamp" binding:"required"`
+	AppID             string                 `json:"app_id" binding:"required"`
+	ChannelID         uint                   `json:"channel_id" binding:"required"`
+	MessageType       string                 `json:"message_type" binding:"required"`
+	Receiver          string                 `json:"receiver" binding:"required"`
+	MessageTemplateID uint                   `json:"message_template_id" binding:"required"`
+	TemplateParams    map[string]interface{} `json:"template_params"`
+	ScheduledAt       *time.Time             `json:"scheduled_at"`
+	Signature         string                 `json:"signature" binding:"required"`
+	Timestamp         int64                  `json:"timestamp" binding:"required"`
 }
 
 // SendResponse 发送响应
@@ -79,7 +81,7 @@ func (s *MessageService) Send(ctx context.Context, req *SendRequest) (*SendRespo
 		return nil, fmt.Errorf("failed to decrypt app secret: %w", err)
 	}
 
-	body := []byte(fmt.Sprintf("%s|%d|%s|%s", req.ChannelID, req.Receiver, req.TemplateCode, req.TemplateParams))
+	body := []byte(fmt.Sprintf("%d|%s|%d|%s", req.ChannelID, req.Receiver, req.MessageTemplateID, req.TemplateParams))
 	if !s.signatureHelper.VerifySignature(req.AppID, appSecret, req.Signature, req.Timestamp, body) {
 		return nil, fmt.Errorf("invalid signature")
 	}
@@ -101,8 +103,17 @@ func (s *MessageService) Send(ctx context.Context, req *SendRequest) (*SendRespo
 		return nil, fmt.Errorf("invalid message_type: %s", req.MessageType)
 	}
 
-	// 5. 渲染模板
-	content, err := s.templateHelper.Render(req.TemplateCode, req.TemplateParams)
+	// 5. 加载并渲染系统模板
+	messageTemplate, err := s.messageTemplateDao.GetByID(req.MessageTemplateID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid message_template_id: %w", err)
+	}
+
+	if messageTemplate.Status != 1 {
+		return nil, fmt.Errorf("message template is not active")
+	}
+
+	content, err := s.templateHelper.RenderSimple(messageTemplate.Content, req.TemplateParams)
 	if err != nil {
 		return nil, fmt.Errorf("failed to render template: %w", err)
 	}
@@ -117,7 +128,7 @@ func (s *MessageService) Send(ctx context.Context, req *SendRequest) (*SendRespo
 		MessageType:    req.MessageType,
 		Receiver:       req.Receiver,
 		Content:        content,
-		TemplateCode:   req.TemplateCode,
+		TemplateCode:   "", // 将由 worker 更新为实际使用的供应商模板代码
 		TemplateParams: templateParamsJSON,
 		Status:         constants.TaskStatusPending,
 		RetryCount:     0,
@@ -148,13 +159,13 @@ func (s *MessageService) Send(ctx context.Context, req *SendRequest) (*SendRespo
 
 // BatchSendRequest 批量发送请求
 type BatchSendRequest struct {
-	AppID        string                   `json:"app_id" binding:"required"`
-	ChannelID    uint                     `json:"channel_id" binding:"required"`
-	MessageType  string                   `json:"message_type" binding:"required"`
-	TemplateCode string                   `json:"template_code" binding:"required"`
-	Receivers    []map[string]interface{} `json:"receivers" binding:"required"` // [{receiver, params}, ...]
-	Signature    string                   `json:"signature" binding:"required"`
-	Timestamp    int64                    `json:"timestamp" binding:"required"`
+	AppID             string                   `json:"app_id" binding:"required"`
+	ChannelID         uint                     `json:"channel_id" binding:"required"`
+	MessageType       string                   `json:"message_type" binding:"required"`
+	MessageTemplateID uint                     `json:"message_template_id" binding:"required"`
+	Receivers         []map[string]interface{} `json:"receivers" binding:"required"` // [{receiver, params}, ...]
+	Signature         string                   `json:"signature" binding:"required"`
+	Timestamp         int64                    `json:"timestamp" binding:"required"`
 }
 
 // BatchSendResponse 批量发送响应
@@ -174,6 +185,16 @@ func (s *MessageService) BatchSend(ctx context.Context, req *BatchSendRequest) (
 		return nil, fmt.Errorf("invalid app_id: %w", err)
 	}
 
+	// 加载系统模板
+	messageTemplate, err := s.messageTemplateDao.GetByID(req.MessageTemplateID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid message_template_id: %w", err)
+	}
+
+	if messageTemplate.Status != 1 {
+		return nil, fmt.Errorf("message template is not active")
+	}
+
 	batchID := uuid.New().String()
 	var tasks []*model.PushTask
 	successCount := 0
@@ -182,7 +203,7 @@ func (s *MessageService) BatchSend(ctx context.Context, req *BatchSendRequest) (
 		receiver, _ := item["receiver"].(string)
 		params, _ := item["params"].(map[string]interface{})
 
-		content, err := s.templateHelper.Render(req.TemplateCode, params)
+		content, err := s.templateHelper.RenderSimple(messageTemplate.Content, params)
 		if err != nil {
 			s.logger.Error(fmt.Sprintf("failed to render template for receiver=%s: %v", receiver, err))
 			continue
@@ -197,7 +218,7 @@ func (s *MessageService) BatchSend(ctx context.Context, req *BatchSendRequest) (
 			MessageType:    req.MessageType,
 			Receiver:       receiver,
 			Content:        content,
-			TemplateCode:   req.TemplateCode,
+			TemplateCode:   "", // 将由 worker 更新为实际使用的供应商模板代码
 			TemplateParams: templateParamsJSON,
 			Status:         constants.TaskStatusPending,
 			RetryCount:     0,

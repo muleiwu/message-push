@@ -30,18 +30,8 @@ func NewTemplateService() *TemplateService {
 
 // CreateMessageTemplate 创建系统模板
 func (s *TemplateService) CreateMessageTemplate(req *dto.CreateMessageTemplateRequest) (*dto.MessageTemplateResponse, error) {
-	// 检查模板代码是否已存在
-	exists, err := s.messageTemplateDAO.ExistsByCode(req.TemplateCode, 0)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check template code: %w", err)
-	}
-	if exists {
-		return nil, errors.New("template code already exists")
-	}
-
 	// 创建模板
 	template := &model.MessageTemplate{
-		TemplateCode: req.TemplateCode,
 		TemplateName: req.TemplateName,
 		MessageType:  req.MessageType,
 		Content:      req.Content,
@@ -293,7 +283,6 @@ func (s *TemplateService) buildMessageTemplateResponse(template *model.MessageTe
 
 	return &dto.MessageTemplateResponse{
 		ID:           template.ID,
-		TemplateCode: template.TemplateCode,
 		TemplateName: template.TemplateName,
 		MessageType:  template.MessageType,
 		Content:      template.Content,
