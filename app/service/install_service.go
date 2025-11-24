@@ -236,7 +236,7 @@ func (s *InstallService) MarkAsInstalled() error {
 
 	// 写入配置文件
 	// 先尝试 SafeWriteConfig（如果文件不存在会创建）
-	viper.SetConfigFile("./config.yaml")
+	viper.SetConfigFile("./config/config.yaml")
 	if err := viper.SafeWriteConfig(); err != nil {
 		// 如果文件已存在，使用 WriteConfig 更新
 		if err := viper.WriteConfig(); err != nil {
