@@ -24,6 +24,7 @@ type MessageHandler struct {
 	taskDao            *dao.PushTaskDAO
 	providerChannelDao *dao.ProviderChannelDAO
 	providerAccountDao *dao.ProviderAccountDAO
+	signatureDao       *dao.ProviderSignatureDAO
 	logDao             *dao.PushLogDAO
 	selector           *selector.ChannelSelector
 	senderFactory      *sender.Factory
@@ -33,11 +34,13 @@ type MessageHandler struct {
 
 // NewMessageHandler 创建消息处理器
 func NewMessageHandler() *MessageHandler {
+	db := internalHelper.GetHelper().GetDatabase()
 	return &MessageHandler{
 		logger:             internalHelper.GetHelper().GetLogger(),
 		taskDao:            dao.NewPushTaskDAO(),
 		providerChannelDao: dao.NewProviderChannelDAO(),
 		providerAccountDao: dao.NewProviderAccountDAO(),
+		signatureDao:       dao.NewProviderSignatureDAO(db),
 		logDao:             dao.NewPushLogDAO(),
 		selector:           selector.NewChannelSelector(),
 		senderFactory:      sender.NewFactory(),
@@ -102,12 +105,23 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 		return err
 	}
 
+	// 对于SMS类型，加载默认签名
+	var signature *model.ProviderSignature
+	if task.MessageType == constants.MessageTypeSMS {
+		signature, err = h.signatureDao.GetDefaultSignature(providerAccount.ID)
+		if err != nil {
+			h.logger.Warn(fmt.Sprintf("no default signature found for provider_account_id=%d: %v", providerAccount.ID, err))
+			// 不中断发送，让发送器自己处理错误
+		}
+	}
+
 	// 发送消息
 	sendReq := &sender.SendRequest{
 		Task:            task,
 		ProviderChannel: node.Channel,
 		Provider:        provider,
 		Relation:        node.Relation,
+		Signature:       signature,
 	}
 
 	resp, err := messageSender.Send(ctx, sendReq)

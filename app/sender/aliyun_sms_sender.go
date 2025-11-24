@@ -15,7 +15,7 @@ func init() {
 		Code:        constants.ProviderAliyunSMS,
 		Name:        "阿里云短信",
 		Type:        constants.MessageTypeSMS,
-		Description: "阿里云短信服务，支持国内短信和国际短信发送",
+		Description: "阿里云短信服务，支持国内短信和国际短信发送。注意：短信签名需在「签名管理」中单独配置",
 		ConfigFields: []registry.ConfigField{
 			{
 				Key:            "access_key_id",
@@ -38,15 +38,6 @@ func init() {
 				Placeholder:    "请输入AccessKeySecret",
 				ValidationRule: "min:16,max:64",
 				HelpLink:       "https://help.aliyun.com/document_detail/53045.html",
-			},
-			{
-				Key:         "sign_name",
-				Label:       "短信签名",
-				Description: "短信签名名称",
-				Type:        registry.FieldTypeText,
-				Required:    true,
-				Example:     "阿里云",
-				Placeholder: "请输入短信签名",
 			},
 		},
 	})
@@ -72,11 +63,20 @@ func (s *AliyunSMSSender) Send(ctx context.Context, req *SendRequest) (*SendResp
 	var config struct {
 		AccessKeyID     string `json:"access_key_id"`
 		AccessKeySecret string `json:"access_key_secret"`
-		SignName        string `json:"sign_name"`
 	}
 
 	if err := json.Unmarshal([]byte(req.Provider.Config), &config); err != nil {
 		return nil, fmt.Errorf("invalid provider config: %w", err)
+	}
+
+	// 从签名表获取默认签名
+	signName := ""
+	if req.Signature != nil {
+		signName = req.Signature.SignatureCode
+	}
+
+	if signName == "" {
+		return nil, fmt.Errorf("no signature configured for this provider account")
 	}
 
 	// 解析通道配置（模板ID等）
@@ -97,7 +97,7 @@ func (s *AliyunSMSSender) Send(ctx context.Context, req *SendRequest) (*SendResp
 	//
 	// request := dysmsapi.CreateSendSmsRequest()
 	// request.PhoneNumbers = req.Task.Receiver
-	// request.SignName = config.SignName
+	// request.SignName = signName
 	// request.TemplateCode = channelConfig.TemplateCode
 	// request.TemplateParam = req.Task.TemplateParams
 	//
@@ -125,6 +125,6 @@ func (s *AliyunSMSSender) Send(ctx context.Context, req *SendRequest) (*SendResp
 	// 模拟发送（开发阶段）
 	return &SendResponse{
 		Success:    true,
-		ProviderID: fmt.Sprintf("mock_aliyun_%s", req.Task.TaskID),
+		ProviderID: fmt.Sprintf("mock_aliyun_%s_%s", signName, req.Task.TaskID),
 	}, nil
 }

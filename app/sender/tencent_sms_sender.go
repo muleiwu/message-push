@@ -18,7 +18,7 @@ func init() {
 		Code:        constants.ProviderTencentSMS,
 		Name:        "腾讯云短信",
 		Type:        constants.MessageTypeSMS,
-		Description: "腾讯云短信服务，支持国内短信和国际短信发送",
+		Description: "腾讯云短信服务，支持国内短信和国际短信发送。注意：短信签名需在「签名管理」中单独配置",
 		ConfigFields: []registry.ConfigField{
 			{
 				Key:            "secret_id",
@@ -60,15 +60,6 @@ func init() {
 				Example:      "ap-guangzhou",
 				Placeholder:  "请输入地域",
 				DefaultValue: "ap-guangzhou",
-			},
-			{
-				Key:         "sign_name",
-				Label:       "短信签名",
-				Description: "默认短信签名（可在通道配置中覆盖）",
-				Type:        registry.FieldTypeText,
-				Required:    false,
-				Example:     "腾讯云",
-				Placeholder: "请输入短信签名",
 			},
 		},
 	})
@@ -125,12 +116,14 @@ func (s *TencentSMSSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 	}
 
 	if signName == "" {
-		// 如果通道未配置，尝试从Config获取默认值
-		signName, _ = config["sign_name"].(string)
+		// 如果通道未配置，从签名表获取默认签名
+		if req.Signature != nil {
+			signName = req.Signature.SignatureCode
+		}
 	}
 
 	if signName == "" {
-		return nil, fmt.Errorf("missing sign_name in channel or provider config")
+		return nil, fmt.Errorf("no signature configured for this provider account")
 	}
 
 	if templateID == "" {

@@ -12,6 +12,7 @@ type SendRequest struct {
 	ProviderChannel *model.ProviderChannel
 	Provider        *model.Provider
 	Relation        *model.ChannelProviderRelation // 关联配置（签名/模板等）
+	Signature       *model.ProviderSignature       // 签名配置（用于SMS类型）
 }
 
 // SendResponse 发送响应

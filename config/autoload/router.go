@@ -88,6 +88,19 @@ func (receiver Router) InitConfig(helper envInterface.HelperInterface) map[strin
 					providerAccounts.PUT("/:id", deps.WrapHandler(admin.ProviderAccountController{}.UpdateProviderAccount))
 					providerAccounts.DELETE("/:id", deps.WrapHandler(admin.ProviderAccountController{}.DeleteProviderAccount))
 					providerAccounts.POST("/:id/test", deps.WrapHandler(admin.ProviderAccountController{}.TestProviderAccount))
+
+					// 签名管理（嵌套在账号下）
+					providerAccounts.GET("/:accountId/signatures", deps.WrapHandler(admin.ProviderSignatureController{}.GetSignatureList))
+					providerAccounts.POST("/:accountId/signatures", deps.WrapHandler(admin.ProviderSignatureController{}.CreateSignature))
+				}
+
+				// 服务商签名管理（独立路由，用于更新/删除操作）
+				signatures := adminGroup.Group("/provider-signatures")
+				{
+					signatures.GET("/:id", deps.WrapHandler(admin.ProviderSignatureController{}.GetSignature))
+					signatures.PUT("/:id", deps.WrapHandler(admin.ProviderSignatureController{}.UpdateSignature))
+					signatures.DELETE("/:id", deps.WrapHandler(admin.ProviderSignatureController{}.DeleteSignature))
+					signatures.PUT("/:id/set-default", deps.WrapHandler(admin.ProviderSignatureController{}.SetDefaultSignature))
 				}
 
 				// 服务商管理（旧版，保持向后兼容）
