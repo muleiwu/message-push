@@ -19,7 +19,7 @@ type ProviderSignatureController struct {
 func (c ProviderSignatureController) GetSignatureList(ctx *gin.Context, helper interfaces.HelperInterface) {
 	signatureService := service.NewAdminProviderSignatureService()
 
-	accountIDStr := ctx.Param("accountId")
+	accountIDStr := ctx.Param("id")
 	accountID, err := strconv.ParseUint(accountIDStr, 10, 32)
 	if err != nil {
 		controller.ErrorResponse(ctx, 400, "invalid account id")
@@ -45,7 +45,7 @@ func (c ProviderSignatureController) GetSignatureList(ctx *gin.Context, helper i
 func (c ProviderSignatureController) CreateSignature(ctx *gin.Context, helper interfaces.HelperInterface) {
 	signatureService := service.NewAdminProviderSignatureService()
 
-	accountIDStr := ctx.Param("accountId")
+	accountIDStr := ctx.Param("id")
 	accountID, err := strconv.ParseUint(accountIDStr, 10, 32)
 	if err != nil {
 		controller.ErrorResponse(ctx, 400, "invalid account id")

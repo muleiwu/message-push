@@ -90,8 +90,8 @@ func (receiver Router) InitConfig(helper envInterface.HelperInterface) map[strin
 					providerAccounts.POST("/:id/test", deps.WrapHandler(admin.ProviderAccountController{}.TestProviderAccount))
 
 					// 签名管理（嵌套在账号下）
-					providerAccounts.GET("/:accountId/signatures", deps.WrapHandler(admin.ProviderSignatureController{}.GetSignatureList))
-					providerAccounts.POST("/:accountId/signatures", deps.WrapHandler(admin.ProviderSignatureController{}.CreateSignature))
+					providerAccounts.GET("/:id/signatures", deps.WrapHandler(admin.ProviderSignatureController{}.GetSignatureList))
+					providerAccounts.POST("/:id/signatures", deps.WrapHandler(admin.ProviderSignatureController{}.CreateSignature))
 				}
 
 				// 服务商签名管理（独立路由，用于更新/删除操作）
