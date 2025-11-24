@@ -69,14 +69,10 @@ func (s *AliyunSMSSender) Send(ctx context.Context, req *SendRequest) (*SendResp
 		return nil, fmt.Errorf("invalid provider config: %w", err)
 	}
 
-	// 从签名表获取默认签名
+	// 从请求中获取签名（可能为空）
 	signName := ""
 	if req.Signature != nil {
 		signName = req.Signature.SignatureCode
-	}
-
-	if signName == "" {
-		return nil, fmt.Errorf("no signature configured for this provider account")
 	}
 
 	// 解析通道配置（模板ID等）

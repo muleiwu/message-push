@@ -247,3 +247,127 @@ func (c ChannelController) GetAvailableTemplateBindings(ctx *gin.Context, helper
 
 	controller.SuccessResponse(ctx, resp)
 }
+
+// GetChannelSignatureMappings 获取通道的签名映射列表
+func (c ChannelController) GetChannelSignatureMappings(ctx *gin.Context, helper interfaces.HelperInterface) {
+	adminService := service.NewAdminChannelService()
+	idStr := ctx.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		controller.ErrorResponse(ctx, 400, "invalid id")
+		return
+	}
+
+	resp, err := adminService.GetChannelSignatureMappings(uint(id))
+	if err != nil {
+		controller.ErrorResponse(ctx, 500, "failed to get channel signature mappings: "+err.Error())
+		return
+	}
+
+	controller.SuccessResponse(ctx, resp)
+}
+
+// GetChannelSignatureMapping 获取单个通道签名映射
+func (c ChannelController) GetChannelSignatureMapping(ctx *gin.Context, helper interfaces.HelperInterface) {
+	adminService := service.NewAdminChannelService()
+	mappingIDStr := ctx.Param("mappingId")
+	mappingID, err := strconv.ParseUint(mappingIDStr, 10, 32)
+	if err != nil {
+		controller.ErrorResponse(ctx, 400, "invalid mapping id")
+		return
+	}
+
+	resp, err := adminService.GetChannelSignatureMapping(uint(mappingID))
+	if err != nil {
+		controller.ErrorResponse(ctx, 500, "failed to get channel signature mapping: "+err.Error())
+		return
+	}
+
+	controller.SuccessResponse(ctx, resp)
+}
+
+// CreateChannelSignatureMapping 创建通道签名映射
+func (c ChannelController) CreateChannelSignatureMapping(ctx *gin.Context, helper interfaces.HelperInterface) {
+	adminService := service.NewAdminChannelService()
+	idStr := ctx.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		controller.ErrorResponse(ctx, 400, "invalid id")
+		return
+	}
+
+	var req dto.CreateChannelSignatureMappingRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		controller.ErrorResponse(ctx, 400, "invalid request: "+err.Error())
+		return
+	}
+
+	resp, err := adminService.CreateChannelSignatureMapping(uint(id), &req)
+	if err != nil {
+		controller.ErrorResponse(ctx, 500, "failed to create channel signature mapping: "+err.Error())
+		return
+	}
+
+	controller.SuccessResponse(ctx, resp)
+}
+
+// UpdateChannelSignatureMapping 更新通道签名映射
+func (c ChannelController) UpdateChannelSignatureMapping(ctx *gin.Context, helper interfaces.HelperInterface) {
+	adminService := service.NewAdminChannelService()
+	mappingIDStr := ctx.Param("mappingId")
+	mappingID, err := strconv.ParseUint(mappingIDStr, 10, 32)
+	if err != nil {
+		controller.ErrorResponse(ctx, 400, "invalid mapping id")
+		return
+	}
+
+	var req dto.UpdateChannelSignatureMappingRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		controller.ErrorResponse(ctx, 400, "invalid request: "+err.Error())
+		return
+	}
+
+	if err := adminService.UpdateChannelSignatureMapping(uint(mappingID), &req); err != nil {
+		controller.ErrorResponse(ctx, 500, "failed to update channel signature mapping: "+err.Error())
+		return
+	}
+
+	controller.SuccessResponse(ctx, gin.H{"message": "updated successfully"})
+}
+
+// DeleteChannelSignatureMapping 删除通道签名映射
+func (c ChannelController) DeleteChannelSignatureMapping(ctx *gin.Context, helper interfaces.HelperInterface) {
+	adminService := service.NewAdminChannelService()
+	mappingIDStr := ctx.Param("mappingId")
+	mappingID, err := strconv.ParseUint(mappingIDStr, 10, 32)
+	if err != nil {
+		controller.ErrorResponse(ctx, 400, "invalid mapping id")
+		return
+	}
+
+	if err := adminService.DeleteChannelSignatureMapping(uint(mappingID)); err != nil {
+		controller.ErrorResponse(ctx, 500, "failed to delete channel signature mapping: "+err.Error())
+		return
+	}
+
+	controller.SuccessResponse(ctx, gin.H{"message": "deleted successfully"})
+}
+
+// GetAvailableProviderSignatures 获取通道可用的供应商签名列表
+func (c ChannelController) GetAvailableProviderSignatures(ctx *gin.Context, helper interfaces.HelperInterface) {
+	adminService := service.NewAdminChannelService()
+	idStr := ctx.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		controller.ErrorResponse(ctx, 400, "invalid id")
+		return
+	}
+
+	resp, err := adminService.GetAvailableProviderSignatures(uint(id))
+	if err != nil {
+		controller.ErrorResponse(ctx, 500, "failed to get available provider signatures: "+err.Error())
+		return
+	}
+
+	controller.SuccessResponse(ctx, resp)
+}

@@ -341,19 +341,10 @@ func (s *AdminProviderAccountService) TestProviderAccount(id uint, req *dto.Test
 		Status:       account.Status,
 	}
 
-	// 对于SMS类型，尝试加载默认签名
-	var signature *model.ProviderSignature
-	if account.ProviderType == "sms" {
-		db := helper.GetHelper().GetDatabase()
-		signatureDAO := dao.NewProviderSignatureDAO(db)
-		signature, _ = signatureDAO.GetDefaultSignature(account.ID)
-		// 忽略错误，让发送器自己处理签名缺失的情况
-	}
-
 	sendReq := &sender.SendRequest{
 		Task:      task,
 		Provider:  tempProvider,
-		Signature: signature,
+		Signature: nil, // 测试时不加载签名，由服务商返回错误
 		ProviderChannel: &model.ProviderChannel{
 			ProviderID: account.ID,
 			Config:     account.Config,

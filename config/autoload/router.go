@@ -100,7 +100,6 @@ func (receiver Router) InitConfig(helper envInterface.HelperInterface) map[strin
 					signatures.GET("/:id", deps.WrapHandler(admin.ProviderSignatureController{}.GetSignature))
 					signatures.PUT("/:id", deps.WrapHandler(admin.ProviderSignatureController{}.UpdateSignature))
 					signatures.DELETE("/:id", deps.WrapHandler(admin.ProviderSignatureController{}.DeleteSignature))
-					signatures.PUT("/:id/set-default", deps.WrapHandler(admin.ProviderSignatureController{}.SetDefaultSignature))
 				}
 
 				// 服务商管理（旧版，保持向后兼容）
@@ -130,6 +129,13 @@ func (receiver Router) InitConfig(helper envInterface.HelperInterface) map[strin
 					channels.GET("/:id/bindings/:bindingId", deps.WrapHandler(admin.ChannelController{}.GetChannelBinding))
 					channels.PUT("/:id/bindings/:bindingId", deps.WrapHandler(admin.ChannelController{}.UpdateChannelBinding))
 					channels.DELETE("/:id/bindings/:bindingId", deps.WrapHandler(admin.ChannelController{}.DeleteChannelBinding))
+					// 签名映射路由
+					channels.GET("/:id/available-signatures", deps.WrapHandler(admin.ChannelController{}.GetAvailableProviderSignatures))
+					channels.GET("/:id/signature-mappings", deps.WrapHandler(admin.ChannelController{}.GetChannelSignatureMappings))
+					channels.POST("/:id/signature-mappings", deps.WrapHandler(admin.ChannelController{}.CreateChannelSignatureMapping))
+					channels.GET("/:id/signature-mappings/:mappingId", deps.WrapHandler(admin.ChannelController{}.GetChannelSignatureMapping))
+					channels.PUT("/:id/signature-mappings/:mappingId", deps.WrapHandler(admin.ChannelController{}.UpdateChannelSignatureMapping))
+					channels.DELETE("/:id/signature-mappings/:mappingId", deps.WrapHandler(admin.ChannelController{}.DeleteChannelSignatureMapping))
 				}
 
 				// 统计查询

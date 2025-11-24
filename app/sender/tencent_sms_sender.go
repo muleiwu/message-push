@@ -106,7 +106,7 @@ func (s *TencentSMSSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 	request.SmsSdkAppId = common.StringPtr(sdkAppId)
 
 	// 签名和模板
-	// 优先使用通道关联配置，其次使用请求中的模板
+	// 优先使用通道关联配置，其次使用请求中的签名
 	signName := ""
 	templateID := ""
 
@@ -116,14 +116,10 @@ func (s *TencentSMSSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 	}
 
 	if signName == "" {
-		// 如果通道未配置，从签名表获取默认签名
+		// 如果通道未配置，从请求中获取签名（可能为空）
 		if req.Signature != nil {
 			signName = req.Signature.SignatureCode
 		}
-	}
-
-	if signName == "" {
-		return nil, fmt.Errorf("no signature configured for this provider account")
 	}
 
 	if templateID == "" {

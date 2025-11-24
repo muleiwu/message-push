@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"time"
 
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
@@ -46,10 +47,9 @@ func (s *AdminProviderSignatureService) GetSignatureList(providerAccountID uint,
 			SignatureCode:     sig.SignatureCode,
 			SignatureName:     sig.SignatureName,
 			Status:            sig.Status,
-			IsDefault:         sig.IsDefault,
 			Remark:            sig.Remark,
-			CreatedAt:         sig.CreatedAt,
-			UpdatedAt:         sig.UpdatedAt,
+			CreatedAt:         sig.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:         sig.UpdatedAt.Format(time.RFC3339),
 		})
 	}
 
@@ -78,20 +78,12 @@ func (s *AdminProviderSignatureService) CreateSignature(providerAccountID uint, 
 		return nil, fmt.Errorf("signature code already exists for this account")
 	}
 
-	// 如果设置为默认签名，先取消其他默认签名
-	if req.IsDefault == 1 {
-		if err := s.signatureDAO.UpdateDefaultStatus(providerAccountID, 0); err != nil {
-			return nil, err
-		}
-	}
-
 	// 创建签名
 	signature := &model.ProviderSignature{
 		ProviderAccountID: providerAccountID,
 		SignatureCode:     req.SignatureCode,
 		SignatureName:     req.SignatureName,
 		Status:            req.Status,
-		IsDefault:         req.IsDefault,
 		Remark:            req.Remark,
 	}
 
@@ -105,10 +97,9 @@ func (s *AdminProviderSignatureService) CreateSignature(providerAccountID uint, 
 		SignatureCode:     signature.SignatureCode,
 		SignatureName:     signature.SignatureName,
 		Status:            signature.Status,
-		IsDefault:         signature.IsDefault,
 		Remark:            signature.Remark,
-		CreatedAt:         signature.CreatedAt,
-		UpdatedAt:         signature.UpdatedAt,
+		CreatedAt:         signature.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:         signature.UpdatedAt.Format(time.RFC3339),
 	}, nil
 }
 
@@ -141,29 +132,12 @@ func (s *AdminProviderSignatureService) UpdateSignature(id uint, req *dto.Update
 // DeleteSignature 删除签名
 func (s *AdminProviderSignatureService) DeleteSignature(id uint) error {
 	// 获取签名
-	signature, err := s.signatureDAO.GetByID(id)
+	_, err := s.signatureDAO.GetByID(id)
 	if err != nil {
 		return fmt.Errorf("signature not found")
-	}
-
-	// 检查是否为默认签名
-	if signature.IsDefault == 1 {
-		return fmt.Errorf("cannot delete default signature, please set another signature as default first")
 	}
 
 	return s.signatureDAO.Delete(id)
-}
-
-// SetDefaultSignature 设置默认签名
-func (s *AdminProviderSignatureService) SetDefaultSignature(id uint) error {
-	// 获取签名
-	signature, err := s.signatureDAO.GetByID(id)
-	if err != nil {
-		return fmt.Errorf("signature not found")
-	}
-
-	// 更新默认状态
-	return s.signatureDAO.UpdateDefaultStatus(signature.ProviderAccountID, id)
 }
 
 // GetSignatureByID 根据ID获取签名
@@ -179,9 +153,8 @@ func (s *AdminProviderSignatureService) GetSignatureByID(id uint) (*dto.Provider
 		SignatureCode:     signature.SignatureCode,
 		SignatureName:     signature.SignatureName,
 		Status:            signature.Status,
-		IsDefault:         signature.IsDefault,
 		Remark:            signature.Remark,
-		CreatedAt:         signature.CreatedAt,
-		UpdatedAt:         signature.UpdatedAt,
+		CreatedAt:         signature.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:         signature.UpdatedAt.Format(time.RFC3339),
 	}, nil
 }

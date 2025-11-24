@@ -12,17 +12,22 @@ import (
 
 // AdminChannelService 通道管理服务
 type AdminChannelService struct {
-	bindingDAO          *dao.ChannelTemplateBindingDAO
-	messageTemplateDAO  *dao.MessageTemplateDAO
-	providerTemplateDAO *dao.ProviderTemplateDAO
+	bindingDAO           *dao.ChannelTemplateBindingDAO
+	messageTemplateDAO   *dao.MessageTemplateDAO
+	providerTemplateDAO  *dao.ProviderTemplateDAO
+	signatureMappingDAO  *dao.ChannelSignatureMappingDAO
+	providerSignatureDAO *dao.ProviderSignatureDAO
 }
 
 // NewAdminChannelService 创建通道管理服务实例
 func NewAdminChannelService() *AdminChannelService {
+	db := helper.GetHelper().GetDatabase()
 	return &AdminChannelService{
-		bindingDAO:          dao.NewChannelTemplateBindingDAO(),
-		messageTemplateDAO:  dao.NewMessageTemplateDAO(),
-		providerTemplateDAO: dao.NewProviderTemplateDAO(),
+		bindingDAO:           dao.NewChannelTemplateBindingDAO(),
+		messageTemplateDAO:   dao.NewMessageTemplateDAO(),
+		providerTemplateDAO:  dao.NewProviderTemplateDAO(),
+		signatureMappingDAO:  dao.NewChannelSignatureMappingDAO(db),
+		providerSignatureDAO: dao.NewProviderSignatureDAO(db),
 	}
 }
 
@@ -545,6 +550,249 @@ func (s *AdminChannelService) GetAvailableTemplateBindings(channelID uint) ([]*d
 			item.ProviderAccountName = pt.ProviderAccount.AccountName
 			item.ProviderCode = pt.ProviderAccount.ProviderCode
 			item.ProviderType = pt.ProviderAccount.ProviderType
+		}
+
+		items = append(items, item)
+	}
+
+	return items, nil
+}
+
+// GetChannelSignatureMappings 获取通道签名映射列表
+func (s *AdminChannelService) GetChannelSignatureMappings(channelID uint) ([]*dto.ChannelSignatureMappingResponse, error) {
+	mappings, err := s.signatureMappingDAO.GetByChannelID(channelID)
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]*dto.ChannelSignatureMappingResponse, 0, len(mappings))
+	for _, m := range mappings {
+		item := &dto.ChannelSignatureMappingResponse{
+			ID:                  m.ID,
+			ChannelID:           m.ChannelID,
+			SignatureName:       m.SignatureName,
+			ProviderSignatureID: m.ProviderSignatureID,
+			ProviderID:          m.ProviderID,
+			Status:              m.Status,
+			CreatedAt:           m.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:           m.UpdatedAt.Format(time.RFC3339),
+		}
+
+		if m.ProviderSignature != nil {
+			item.ProviderSignatureName = m.ProviderSignature.SignatureName
+			item.ProviderSignatureCode = m.ProviderSignature.SignatureCode
+		}
+
+		if m.ProviderAccount != nil {
+			item.ProviderAccountName = m.ProviderAccount.AccountName
+			item.ProviderCode = m.ProviderAccount.ProviderCode
+		}
+
+		items = append(items, item)
+	}
+
+	return items, nil
+}
+
+// GetChannelSignatureMapping 获取单个签名映射
+func (s *AdminChannelService) GetChannelSignatureMapping(mappingID uint) (*dto.ChannelSignatureMappingResponse, error) {
+	mapping, err := s.signatureMappingDAO.GetByID(mappingID)
+	if err != nil {
+		return nil, fmt.Errorf("signature mapping not found: %w", err)
+	}
+
+	item := &dto.ChannelSignatureMappingResponse{
+		ID:                  mapping.ID,
+		ChannelID:           mapping.ChannelID,
+		SignatureName:       mapping.SignatureName,
+		ProviderSignatureID: mapping.ProviderSignatureID,
+		ProviderID:          mapping.ProviderID,
+		Status:              mapping.Status,
+		CreatedAt:           mapping.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:           mapping.UpdatedAt.Format(time.RFC3339),
+	}
+
+	if mapping.ProviderSignature != nil {
+		item.ProviderSignatureName = mapping.ProviderSignature.SignatureName
+		item.ProviderSignatureCode = mapping.ProviderSignature.SignatureCode
+	}
+
+	if mapping.ProviderAccount != nil {
+		item.ProviderAccountName = mapping.ProviderAccount.AccountName
+		item.ProviderCode = mapping.ProviderAccount.ProviderCode
+	}
+
+	return item, nil
+}
+
+// CreateChannelSignatureMapping 创建签名映射
+func (s *AdminChannelService) CreateChannelSignatureMapping(channelID uint, req *dto.CreateChannelSignatureMappingRequest) (*dto.ChannelSignatureMappingResponse, error) {
+	logger := helper.GetHelper().GetLogger()
+	db := helper.GetHelper().GetDatabase()
+
+	// 验证通道是否存在
+	var channel model.Channel
+	if err := db.First(&channel, channelID).Error; err != nil {
+		return nil, fmt.Errorf("channel not found: %w", err)
+	}
+
+	// 验证供应商签名是否存在
+	providerSignature, err := s.providerSignatureDAO.GetByID(req.ProviderSignatureID)
+	if err != nil {
+		return nil, fmt.Errorf("provider signature not found: %w", err)
+	}
+
+	// 验证供应商账号是否匹配
+	if providerSignature.ProviderAccountID != req.ProviderID {
+		return nil, fmt.Errorf("provider signature does not belong to the specified provider account")
+	}
+
+	// 检查签名名称是否已存在
+	exists, err := s.signatureMappingDAO.CheckDuplicateSignatureName(channelID, req.SignatureName, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check duplicate signature name: %w", err)
+	}
+	if exists {
+		return nil, fmt.Errorf("signature name '%s' already exists in this channel", req.SignatureName)
+	}
+
+	// 设置默认值
+	status := int8(1)
+	if req.Status != nil {
+		status = *req.Status
+	}
+
+	// 创建签名映射
+	mapping := &model.ChannelSignatureMapping{
+		ChannelID:           channelID,
+		SignatureName:       req.SignatureName,
+		ProviderSignatureID: req.ProviderSignatureID,
+		ProviderID:          req.ProviderID,
+		Status:              status,
+	}
+
+	if err := s.signatureMappingDAO.Create(mapping); err != nil {
+		logger.Error("创建签名映射失败")
+		return nil, fmt.Errorf("failed to create signature mapping: %w", err)
+	}
+
+	// 重新加载以获取关联数据
+	mapping, err = s.signatureMappingDAO.GetByID(mapping.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load signature mapping: %w", err)
+	}
+
+	// 构建响应
+	response := &dto.ChannelSignatureMappingResponse{
+		ID:                  mapping.ID,
+		ChannelID:           mapping.ChannelID,
+		SignatureName:       mapping.SignatureName,
+		ProviderSignatureID: mapping.ProviderSignatureID,
+		ProviderID:          mapping.ProviderID,
+		Status:              mapping.Status,
+		CreatedAt:           mapping.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:           mapping.UpdatedAt.Format(time.RFC3339),
+	}
+
+	if mapping.ProviderSignature != nil {
+		response.ProviderSignatureName = mapping.ProviderSignature.SignatureName
+		response.ProviderSignatureCode = mapping.ProviderSignature.SignatureCode
+	}
+
+	if mapping.ProviderAccount != nil {
+		response.ProviderAccountName = mapping.ProviderAccount.AccountName
+		response.ProviderCode = mapping.ProviderAccount.ProviderCode
+	}
+
+	logger.Info("签名映射创建成功")
+	return response, nil
+}
+
+// UpdateChannelSignatureMapping 更新签名映射
+func (s *AdminChannelService) UpdateChannelSignatureMapping(mappingID uint, req *dto.UpdateChannelSignatureMappingRequest) error {
+	// 检查映射是否存在
+	mapping, err := s.signatureMappingDAO.GetByID(mappingID)
+	if err != nil {
+		return fmt.Errorf("signature mapping not found: %w", err)
+	}
+
+	// 如果更新签名名称，检查是否重复
+	if req.SignatureName != "" && req.SignatureName != mapping.SignatureName {
+		exists, err := s.signatureMappingDAO.CheckDuplicateSignatureName(mapping.ChannelID, req.SignatureName, &mappingID)
+		if err != nil {
+			return fmt.Errorf("failed to check duplicate signature name: %w", err)
+		}
+		if exists {
+			return fmt.Errorf("signature name '%s' already exists in this channel", req.SignatureName)
+		}
+		mapping.SignatureName = req.SignatureName
+	}
+
+	// 如果更新供应商签名，需要验证
+	if req.ProviderSignatureID > 0 && req.ProviderSignatureID != mapping.ProviderSignatureID {
+		providerSignature, err := s.providerSignatureDAO.GetByID(req.ProviderSignatureID)
+		if err != nil {
+			return fmt.Errorf("provider signature not found: %w", err)
+		}
+		// 验证供应商账号是否匹配
+		if providerSignature.ProviderAccountID != mapping.ProviderID {
+			return fmt.Errorf("provider signature does not belong to the current provider account")
+		}
+		mapping.ProviderSignatureID = req.ProviderSignatureID
+	}
+
+	if req.Status != nil {
+		mapping.Status = *req.Status
+	}
+
+	return s.signatureMappingDAO.Update(mapping)
+}
+
+// DeleteChannelSignatureMapping 删除签名映射
+func (s *AdminChannelService) DeleteChannelSignatureMapping(mappingID uint) error {
+	// 检查映射是否存在
+	_, err := s.signatureMappingDAO.GetByID(mappingID)
+	if err != nil {
+		return fmt.Errorf("signature mapping not found: %w", err)
+	}
+
+	// 删除映射
+	return s.signatureMappingDAO.Delete(mappingID)
+}
+
+// GetAvailableProviderSignatures 获取可用的供应商签名列表（根据通道类型）
+func (s *AdminChannelService) GetAvailableProviderSignatures(channelID uint) ([]*dto.ProviderSignatureResponse, error) {
+	db := helper.GetHelper().GetDatabase()
+
+	// 验证通道是否存在
+	var channel model.Channel
+	if err := db.First(&channel, channelID).Error; err != nil {
+		return nil, fmt.Errorf("channel not found: %w", err)
+	}
+
+	// 获取所有匹配通道类型的供应商签名
+	var signatures []*model.ProviderSignature
+	if err := db.Joins("JOIN provider_accounts ON provider_accounts.id = provider_signatures.provider_account_id").
+		Where("provider_accounts.provider_type = ? AND provider_accounts.status = 1 AND provider_signatures.status = 1", channel.Type).
+		Preload("ProviderAccount").
+		Find(&signatures).Error; err != nil {
+		return nil, fmt.Errorf("failed to get provider signatures: %w", err)
+	}
+
+	items := make([]*dto.ProviderSignatureResponse, 0, len(signatures))
+	for _, sig := range signatures {
+		item := &dto.ProviderSignatureResponse{
+			ID:            sig.ID,
+			SignatureCode: sig.SignatureCode,
+			SignatureName: sig.SignatureName,
+			Status:        sig.Status,
+			CreatedAt:     sig.CreatedAt.Format(time.RFC3339),
+		}
+
+		if sig.ProviderAccount != nil {
+			item.ProviderAccountID = sig.ProviderAccountID
+			item.ProviderAccountName = sig.ProviderAccount.AccountName
+			item.ProviderCode = sig.ProviderAccount.ProviderCode
 		}
 
 		items = append(items, item)

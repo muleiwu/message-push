@@ -111,25 +111,6 @@ func (c ProviderSignatureController) DeleteSignature(ctx *gin.Context, helper in
 	controller.SuccessResponse(ctx, gin.H{"message": "deleted successfully"})
 }
 
-// SetDefaultSignature 设置默认签名
-func (c ProviderSignatureController) SetDefaultSignature(ctx *gin.Context, helper interfaces.HelperInterface) {
-	signatureService := service.NewAdminProviderSignatureService()
-
-	idStr := ctx.Param("id")
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		controller.ErrorResponse(ctx, 400, "invalid id")
-		return
-	}
-
-	if err := signatureService.SetDefaultSignature(uint(id)); err != nil {
-		controller.ErrorResponse(ctx, 500, "failed to set default signature: "+err.Error())
-		return
-	}
-
-	controller.SuccessResponse(ctx, gin.H{"message": "set default successfully"})
-}
-
 // GetSignature 获取签名详情
 func (c ProviderSignatureController) GetSignature(ctx *gin.Context, helper interfaces.HelperInterface) {
 	signatureService := service.NewAdminProviderSignatureService()
