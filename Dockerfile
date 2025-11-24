@@ -11,7 +11,7 @@ COPY . /app
 
 # 安装 pnpm 并构建前端项目
 RUN pnpm config set registry https://mirrors.cloud.tencent.com/npm/ && \
-    cd /app/admin-web && \
+    cd /app/admin-webui && \
     pnpm install && \
     pnpm build:antd && pnpm build:install && ls /app && ls /app/static
 
@@ -43,7 +43,7 @@ RUN go mod download
 # 复制源代码
 COPY . .
 
-RUN rm -rf /app/admin-web && ls /app/static
+RUN rm -rf /app/admin-webui && ls /app/static
 
 # 下载依赖
 # 复制构建产物到 nginx 的默认静态文件目录
