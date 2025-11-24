@@ -22,7 +22,6 @@ type MessageService struct {
 	producer        *queue.Producer
 	selector        *selector.ChannelSelector
 	taskDao         *dao.PushTaskDAO
-	channelDao      *dao.PushChannelDAO
 	appDao          *dao.ApplicationDAO
 	templateHelper  *helper.TemplateHelper
 	signatureHelper *helper.SignatureHelper
@@ -36,7 +35,6 @@ func NewMessageService() *MessageService {
 		producer:        queue.NewProducer(h.GetRedis()),
 		selector:        selector.NewChannelSelector(),
 		taskDao:         dao.NewPushTaskDAO(),
-		channelDao:      dao.NewPushChannelDAO(),
 		appDao:          dao.NewApplicationDAO(),
 		templateHelper:  helper.NewTemplateHelper(),
 		signatureHelper: helper.NewSignatureHelper(),
@@ -87,12 +85,16 @@ func (s *MessageService) Send(ctx context.Context, req *SendRequest) (*SendRespo
 	}
 
 	// 3. 验证通道
-	_, err = s.channelDao.GetByID(req.ChannelID)
-	if err != nil {
+	var channel model.Channel
+	db := internalHelper.GetHelper().GetDatabase()
+	if err := db.First(&channel, req.ChannelID).Error; err != nil {
 		return nil, fmt.Errorf("invalid channel_id: %w", err)
 	}
 
-	// TODO: add AppID field to PushChannel or validate via relations table
+	// 检查通道状态
+	if channel.Status != 1 {
+		return nil, fmt.Errorf("channel is not active")
+	}
 
 	// 4. 验证消息类型
 	if !s.isValidMessageType(req.MessageType) {
@@ -111,7 +113,7 @@ func (s *MessageService) Send(ctx context.Context, req *SendRequest) (*SendRespo
 	task := &model.PushTask{
 		TaskID:         taskID,
 		AppID:          app.AppID,
-		PushChannelID:  req.ChannelID,
+		ChannelID:      req.ChannelID,
 		MessageType:    req.MessageType,
 		Receiver:       req.Receiver,
 		Content:        content,
@@ -191,7 +193,7 @@ func (s *MessageService) BatchSend(ctx context.Context, req *BatchSendRequest) (
 		task := &model.PushTask{
 			TaskID:         taskID,
 			AppID:          app.AppID,
-			PushChannelID:  req.ChannelID,
+			ChannelID:      req.ChannelID,
 			MessageType:    req.MessageType,
 			Receiver:       receiver,
 			Content:        content,

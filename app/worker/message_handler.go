@@ -151,9 +151,9 @@ func (h *MessageHandler) selectChannel(ctx context.Context, task *model.PushTask
 	}
 
 	// 使用选择器选择通道
-	channelID, err := parseUint(task.PushChannelID)
+	channelID, err := parseUint(task.ChannelID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid push_channel_id: %w", err)
+		return nil, fmt.Errorf("invalid channel_id: %w", err)
 	}
 
 	node, err := h.selector.Select(ctx, channelID, task.MessageType)

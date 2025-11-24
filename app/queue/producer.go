@@ -33,7 +33,7 @@ func (p *Producer) Push(ctx context.Context, task *model.PushTask) error {
 	data := map[string]interface{}{
 		"task_id":         task.TaskID,
 		"app_id":          task.AppID,
-		"push_channel_id": task.PushChannelID,
+		"channel_id":      task.ChannelID,
 		"receiver":        task.Receiver,
 		"template_code":   task.TemplateCode,
 		"template_params": task.TemplateParams,
@@ -69,7 +69,7 @@ func (p *Producer) PushBatch(ctx context.Context, tasks []*model.PushTask) error
 		data := map[string]interface{}{
 			"task_id":         task.TaskID,
 			"app_id":          task.AppID,
-			"push_channel_id": task.PushChannelID,
+			"channel_id":      task.ChannelID,
 			"receiver":        task.Receiver,
 			"template_code":   task.TemplateCode,
 			"template_params": task.TemplateParams,

@@ -229,7 +229,6 @@ func migrateDown(db *gorm.DB) {
 		"push_batch_tasks",
 		"push_tasks",
 		"channel_provider_relations",
-		"push_channels",
 		"provider_channels",
 		"channels",
 		"provider_accounts", // 新表

@@ -16,7 +16,6 @@ func (receiver Migration) Get() []any {
 		&model.Provider{},        // 保留旧表以支持数据迁移
 		&model.Channel{},
 		&model.ProviderChannel{},
-		&model.PushChannel{},
 		&model.ChannelProviderRelation{}, // 保留旧表以支持数据迁移
 
 		// 推送任务

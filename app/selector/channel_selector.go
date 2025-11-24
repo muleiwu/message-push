@@ -27,7 +27,6 @@ type ChannelNode struct {
 // ChannelSelector 通道选择器
 type ChannelSelector struct {
 	logger                    gsr.Logger
-	channelDao                *dao.PushChannelDAO
 	channelTemplateBindingDao *dao.ChannelTemplateBindingDAO
 	providerChannelDAO        *dao.ProviderChannelDAO
 	// 保留旧的DAO以兼容
@@ -42,7 +41,6 @@ func NewChannelSelector() *ChannelSelector {
 	h := helper.GetHelper()
 	return &ChannelSelector{
 		logger:                    h.GetLogger(),
-		channelDao:                dao.NewPushChannelDAO(),
 		channelTemplateBindingDao: dao.NewChannelTemplateBindingDAO(),
 		providerChannelDAO:        dao.NewProviderChannelDAO(),
 		relationDao:               dao.NewChannelProviderRelationDAO(),

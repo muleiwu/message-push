@@ -38,7 +38,7 @@ func (d *ChannelProviderRelationDAO) GetByID(id uint) (*model.ChannelProviderRel
 func (d *ChannelProviderRelationDAO) GetByChannelID(channelID uint) ([]*model.ChannelProviderRelation, error) {
 	var relations []*model.ChannelProviderRelation
 	err := d.db.Preload("ProviderChannel.Provider").
-		Where("push_channel_id = ?", channelID).
+		Where("channel_id = ?", channelID).
 		Order("priority DESC, weight DESC").
 		Find(&relations).Error
 	if err != nil {
@@ -52,9 +52,9 @@ func (d *ChannelProviderRelationDAO) GetByChannelIDAndType(channelID uint, messa
 	var relations []*model.ChannelProviderRelation
 	// 这里原本查询了 message_type，但 ChannelProviderRelation 表本身可能没有 message_type 字段
 	// 如果有，则保留。如果没有，需要检查 model 定义。
-	// 假设 push_channel_id 已经足够过滤，且业务逻辑保证同一通道只关联同类型服务商。
+	// 假设 channel_id 已经足够过滤，且业务逻辑保证同一通道只关联同类型服务商。
 	// 若需严格过滤，应 Join provider_channels 和 providers。
-	err := d.db.Where("push_channel_id = ?", channelID).
+	err := d.db.Where("channel_id = ?", channelID).
 		Order("priority DESC, weight DESC").
 		Find(&relations).Error
 	if err != nil {
@@ -75,7 +75,7 @@ func (d *ChannelProviderRelationDAO) Delete(id uint) error {
 
 // DeleteByChannelID 删除业务通道的所有关联
 func (d *ChannelProviderRelationDAO) DeleteByChannelID(channelID uint) error {
-	return d.db.Where("push_channel_id = ?", channelID).
+	return d.db.Where("channel_id = ?", channelID).
 		Delete(&model.ChannelProviderRelation{}).Error
 }
 
