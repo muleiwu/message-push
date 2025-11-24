@@ -18,6 +18,13 @@ type SchedulerService struct {
 
 // Run 启动服务
 func (receiver *SchedulerService) Run() error {
+	// 检查系统是否已安装
+	installed := receiver.Helper.GetConfig().GetBool("app.installed", false)
+	if !installed {
+		receiver.Helper.GetLogger().Info("系统未安装，跳过 SchedulerService 启动")
+		return nil
+	}
+
 	// 创建上下文
 	receiver.ctx, receiver.cancel = context.WithCancel(context.Background())
 
