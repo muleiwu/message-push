@@ -17,12 +17,18 @@ func (receiver Migration) Get() []any {
 		&model.Channel{},
 		&model.ProviderChannel{},
 		&model.PushChannel{},
-		&model.ChannelProviderRelation{},
+		&model.ChannelProviderRelation{}, // 保留旧表以支持数据迁移
 
 		// 推送任务
 		&model.PushTask{},
 		&model.PushBatchTask{},
 		&model.PushLog{},
+
+		// 模板管理
+		&model.MessageTemplate{},
+		&model.ProviderTemplate{},
+		&model.TemplateBinding{},
+		&model.ChannelTemplateBinding{}, // 新的通道模板绑定配置表
 
 		// 健康检查和配额统计
 		&model.ChannelHealthHistory{},

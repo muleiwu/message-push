@@ -111,10 +111,10 @@ func (receiver Router) InitConfig(helper envInterface.HelperInterface) map[strin
 					channels.GET("/:id", deps.WrapHandler(admin.ChannelController{}.GetChannel))
 					channels.PUT("/:id", deps.WrapHandler(admin.ChannelController{}.UpdateChannel))
 					channels.DELETE("/:id", deps.WrapHandler(admin.ChannelController{}.DeleteChannel))
-					channels.POST("/bind-provider", deps.WrapHandler(admin.ChannelController{}.BindProviderToChannel))
-					channels.GET("/:id/providers", deps.WrapHandler(admin.ChannelController{}.GetChannelProviders))
-					channels.PUT("/provider-relation/:relationId", deps.WrapHandler(admin.ChannelController{}.UpdateChannelProviderRelation))
-					channels.DELETE("/provider-relation/:relationId", deps.WrapHandler(admin.ChannelController{}.UnbindChannelProvider))
+					channels.GET("/:id/available-bindings", deps.WrapHandler(admin.ChannelController{}.GetAvailableTemplateBindings)) // 先注册具体路径
+					channels.GET("/:id/bindings", deps.WrapHandler(admin.ChannelController{}.GetChannelBindings))
+					channels.POST("/:id/bindings", deps.WrapHandler(admin.ChannelController{}.CreateChannelBinding))
+					channels.PUT("/:id/bindings/:bindingId", deps.WrapHandler(admin.ChannelController{}.UpdateChannelBinding))
 				}
 
 				// 统计查询
@@ -131,6 +131,36 @@ func (receiver Router) InitConfig(helper envInterface.HelperInterface) map[strin
 				{
 					logs.GET("", deps.WrapHandler(admin.LogController{}.GetLogList))
 					logs.GET("/:id", deps.WrapHandler(admin.LogController{}.GetLog))
+				}
+
+				// 模板管理
+				templates := adminGroup.Group("/templates")
+				{
+					templates.GET("", deps.WrapHandler(admin.TemplateController{}.ListMessageTemplates))
+					templates.POST("", deps.WrapHandler(admin.TemplateController{}.CreateMessageTemplate))
+					templates.GET("/:id", deps.WrapHandler(admin.TemplateController{}.GetMessageTemplate))
+					templates.PUT("/:id", deps.WrapHandler(admin.TemplateController{}.UpdateMessageTemplate))
+					templates.DELETE("/:id", deps.WrapHandler(admin.TemplateController{}.DeleteMessageTemplate))
+				}
+
+				// 供应商模板管理
+				providerTemplates := adminGroup.Group("/provider-templates")
+				{
+					providerTemplates.GET("", deps.WrapHandler(admin.TemplateController{}.ListProviderTemplates))
+					providerTemplates.POST("", deps.WrapHandler(admin.TemplateController{}.CreateProviderTemplate))
+					providerTemplates.GET("/:id", deps.WrapHandler(admin.TemplateController{}.GetProviderTemplate))
+					providerTemplates.PUT("/:id", deps.WrapHandler(admin.TemplateController{}.UpdateProviderTemplate))
+					providerTemplates.DELETE("/:id", deps.WrapHandler(admin.TemplateController{}.DeleteProviderTemplate))
+				}
+
+				// 模板绑定管理
+				templateBindings := adminGroup.Group("/template-bindings")
+				{
+					templateBindings.GET("", deps.WrapHandler(admin.TemplateController{}.ListTemplateBindings))
+					templateBindings.POST("", deps.WrapHandler(admin.TemplateController{}.CreateTemplateBinding))
+					templateBindings.GET("/:id", deps.WrapHandler(admin.TemplateController{}.GetTemplateBinding))
+					templateBindings.PUT("/:id", deps.WrapHandler(admin.TemplateController{}.UpdateTemplateBinding))
+					templateBindings.DELETE("/:id", deps.WrapHandler(admin.TemplateController{}.DeleteTemplateBinding))
 				}
 			}
 

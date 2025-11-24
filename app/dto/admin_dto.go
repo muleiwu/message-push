@@ -173,9 +173,10 @@ type ConfigFieldResponse struct {
 
 // CreateChannelRequest 创建通道请求
 type CreateChannelRequest struct {
-	Name   string `json:"name" binding:"required,min=2,max=50"`
-	Type   string `json:"type" binding:"required,oneof=sms email wechat_work dingtalk webhook push"`
-	Status int    `json:"status" binding:"omitempty,oneof=1 2"`
+	Name              string `json:"name" binding:"required,min=2,max=50"`
+	Type              string `json:"type" binding:"required,oneof=sms email wechat_work dingtalk webhook push"`
+	MessageTemplateID uint   `json:"message_template_id" binding:"required"`
+	Status            int    `json:"status" binding:"omitempty,oneof=1 2"`
 }
 
 // UpdateChannelRequest 更新通道请求
@@ -194,12 +195,15 @@ type ChannelListRequest struct {
 
 // ChannelResponse 通道响应
 type ChannelResponse struct {
-	ID        uint   `json:"id"`
-	Name      string `json:"name"`
-	Type      string `json:"type"`
-	Status    int    `json:"status"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
+	ID                uint                      `json:"id"`
+	Name              string                    `json:"name"`
+	Type              string                    `json:"type"`
+	MessageTemplateID uint                      `json:"message_template_id"`
+	TemplateName      string                    `json:"template_name"`
+	Status            int                       `json:"status"`
+	CreatedAt         string                    `json:"created_at"`
+	UpdatedAt         string                    `json:"updated_at"`
+	Bindings          []*ChannelBindingResponse `json:"bindings,omitempty"`
 }
 
 // ChannelListResponse 通道列表响应
@@ -210,7 +214,55 @@ type ChannelListResponse struct {
 	Items []*ChannelResponse `json:"items"`
 }
 
-// BindProviderToChannelRequest 绑定服务商到通道
+// ChannelBindingResponse 通道绑定配置响应
+type ChannelBindingResponse struct {
+	ID                   uint   `json:"id"`
+	TemplateBindingID    uint   `json:"template_binding_id"`
+	ProviderTemplateID   uint   `json:"provider_template_id"`
+	ProviderTemplateName string `json:"provider_template_name"`
+	ProviderID           uint   `json:"provider_id"`
+	ProviderName         string `json:"provider_name"`
+	ProviderType         string `json:"provider_type"`
+	Weight               int    `json:"weight"`
+	Priority             int    `json:"priority"`
+	IsActive             int8   `json:"is_active"`
+	AutoDisableOnFail    bool   `json:"auto_disable_on_fail"`
+	AutoDisableThreshold int    `json:"auto_disable_threshold"`
+	CreatedAt            string `json:"created_at"`
+}
+
+// CreateChannelBindingRequest 创建通道绑定配置请求
+type CreateChannelBindingRequest struct {
+	TemplateBindingID    uint `json:"template_binding_id" binding:"required"`
+	Weight               int  `json:"weight" binding:"omitempty,min=1,max=100"`
+	Priority             int  `json:"priority" binding:"omitempty,min=0,max=1000"`
+	IsActive             int8 `json:"is_active" binding:"omitempty,oneof=0 1"`
+	AutoDisableOnFail    bool `json:"auto_disable_on_fail"`
+	AutoDisableThreshold int  `json:"auto_disable_threshold" binding:"omitempty,min=1,max=100"`
+}
+
+// UpdateChannelBindingRequest 更新通道绑定配置请求
+type UpdateChannelBindingRequest struct {
+	Weight               int  `json:"weight" binding:"omitempty,min=1,max=100"`
+	Priority             int  `json:"priority" binding:"omitempty,min=0,max=1000"`
+	IsActive             int8 `json:"is_active" binding:"omitempty,oneof=0 1"`
+	AutoDisableOnFail    bool `json:"auto_disable_on_fail"`
+	AutoDisableThreshold int  `json:"auto_disable_threshold" binding:"omitempty,min=1,max=100"`
+}
+
+// AvailableTemplateBindingResponse 可用模板绑定响应
+type AvailableTemplateBindingResponse struct {
+	ID                   uint   `json:"id"`
+	ProviderTemplateID   uint   `json:"provider_template_id"`
+	ProviderTemplateName string `json:"provider_template_name"`
+	ProviderID           uint   `json:"provider_id"`
+	ProviderName         string `json:"provider_name"`
+	ProviderType         string `json:"provider_type"`
+	Priority             int    `json:"priority"`
+	Status               int8   `json:"status"`
+}
+
+// BindProviderToChannelRequest 绑定服务商到通道（已废弃，保留兼容性）
 type BindProviderToChannelRequest struct {
 	ChannelID  uint `json:"channel_id" binding:"required"`
 	ProviderID uint `json:"provider_id" binding:"required"`
@@ -246,7 +298,7 @@ type StatisticsResponse struct {
 	Daily []*DailyStatistics `json:"daily"`
 }
 
-// ChannelProviderResponse 通道绑定的服务商响应
+// ChannelProviderResponse 通道绑定的服务商响应（已废弃，保留兼容性）
 type ChannelProviderResponse struct {
 	ID           uint   `json:"id"`
 	ChannelID    uint   `json:"channel_id"`
@@ -259,7 +311,7 @@ type ChannelProviderResponse struct {
 	CreatedAt    string `json:"created_at"`
 }
 
-// UpdateRelationRequest 更新关联请求
+// UpdateRelationRequest 更新关联请求（已废弃，保留兼容性）
 type UpdateRelationRequest struct {
 	Priority int `json:"priority" binding:"min=0,max=100"`
 	Weight   int `json:"weight" binding:"min=1,max=100"`

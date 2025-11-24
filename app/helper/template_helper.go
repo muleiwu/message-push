@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"strings"
 	"text/template"
 )
 
@@ -19,7 +21,7 @@ func NewTemplateHelper() *TemplateHelper {
 	}
 }
 
-// Render 渲染模板
+// Render 渲染模板（支持旧的{{.variable}}和新的{variable}格式）
 func (h *TemplateHelper) Render(templateCode string, params map[string]interface{}) (string, error) {
 	templateContent, err := h.getTemplateContent(templateCode)
 	if err != nil {
@@ -39,9 +41,49 @@ func (h *TemplateHelper) Render(templateCode string, params map[string]interface
 	return buf.String(), nil
 }
 
-// getTemplateContent 获取模板内容
+// RenderSimple 渲染简单模板（使用{variable}占位符格式）
+func (h *TemplateHelper) RenderSimple(templateContent string, params map[string]interface{}) (string, error) {
+	result := templateContent
+
+	// 使用正则表达式匹配 {variable} 格式
+	re := regexp.MustCompile(`\{([a-zA-Z0-9_]+)\}`)
+
+	result = re.ReplaceAllStringFunc(result, func(match string) string {
+		// 提取变量名（去掉大括号）
+		varName := strings.Trim(match, "{}")
+
+		// 从参数中获取值
+		if value, exists := params[varName]; exists {
+			return fmt.Sprintf("%v", value)
+		}
+
+		// 如果参数不存在，保持原样
+		return match
+	})
+
+	return result, nil
+}
+
+// MapParams 根据参数映射转换参数
+func (h *TemplateHelper) MapParams(params map[string]interface{}, mapping map[string]string) map[string]interface{} {
+	if len(mapping) == 0 {
+		return params
+	}
+
+	result := make(map[string]interface{})
+
+	for systemVar, providerVar := range mapping {
+		if value, exists := params[systemVar]; exists {
+			result[providerVar] = value
+		}
+	}
+
+	return result
+}
+
+// getTemplateContent 获取模板内容（保留向后兼容的预定义模板）
 func (h *TemplateHelper) getTemplateContent(templateCode string) (string, error) {
-	// 预定义模板
+	// 预定义模板（向后兼容）
 	templates := map[string]string{
 		"verify_code":   "您的验证码是：{{.code}}，有效期{{.expire}}分钟。",
 		"marketing_sms": "尊敬的{{.name}}，我们的新产品已上线，欢迎体验！",

@@ -8,13 +8,15 @@ import (
 
 // Channel 推送通道表
 type Channel struct {
-	ID        uint           `gorm:"primaryKey;autoIncrement" json:"id"`
-	Name      string         `gorm:"type:varchar(100);not null" json:"name"`
-	Type      string         `gorm:"type:varchar(20);not null;index:idx_type;comment:类型：sms, email, wechat_work, dingtalk" json:"type"`
-	Status    int8           `gorm:"type:tinyint;default:1;index:idx_status;comment:状态：1=启用 0=禁用" json:"status"`
-	CreatedAt time.Time      `gorm:"type:timestamp;default:CURRENT_TIMESTAMP" json:"created_at"`
-	UpdatedAt time.Time      `gorm:"type:timestamp;default:CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"deleted_at"`
+	ID                uint             `gorm:"primaryKey;autoIncrement" json:"id"`
+	Name              string           `gorm:"type:varchar(100);not null" json:"name"`
+	Type              string           `gorm:"type:varchar(20);not null;index:idx_type;comment:类型：sms, email, wechat_work, dingtalk" json:"type"`
+	MessageTemplateID uint             `gorm:"type:bigint unsigned;index:idx_message_template;comment:绑定的系统模板ID" json:"message_template_id"`
+	Status            int8             `gorm:"type:tinyint;default:1;index:idx_status;comment:状态：1=启用 0=禁用" json:"status"`
+	CreatedAt         time.Time        `gorm:"type:timestamp;default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt         time.Time        `gorm:"type:timestamp;default:CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" json:"updated_at"`
+	DeletedAt         gorm.DeletedAt   `gorm:"index" json:"deleted_at"`
+	MessageTemplate   *MessageTemplate `gorm:"foreignKey:MessageTemplateID;references:ID" json:"message_template,omitempty"`
 }
 
 // TableName 指定表名

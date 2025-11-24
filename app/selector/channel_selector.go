@@ -13,34 +13,42 @@ import (
 
 // ChannelNode 通道节点（带权重）
 type ChannelNode struct {
+	// 保留旧字段以兼容现有代码
 	Relation        *model.ChannelProviderRelation
 	Channel         *model.ProviderChannel
 	Provider        *model.Provider
 	CurrentWeight   int // 当前权重
 	EffectiveWeight int // 有效权重
+
+	// 新字段
+	ChannelTemplateBinding *model.ChannelTemplateBinding // 通道模板绑定配置
+	TemplateBinding        *model.TemplateBinding        // 模板绑定
 }
 
 // ChannelSelector 通道选择器
 type ChannelSelector struct {
-	logger             gsr.Logger
-	channelDao         *dao.PushChannelDAO
-	relationDao        *dao.ChannelProviderRelationDAO
-	providerDAO        *dao.ProviderDAO
-	providerChannelDAO *dao.ProviderChannelDAO
-	cache              map[string][]*ChannelNode // 按业务通道ID缓存
-	mu                 sync.RWMutex
+	logger                    gsr.Logger
+	channelDao                *dao.PushChannelDAO
+	channelTemplateBindingDao *dao.ChannelTemplateBindingDAO
+	providerChannelDAO        *dao.ProviderChannelDAO
+	// 保留旧的DAO以兼容
+	relationDao *dao.ChannelProviderRelationDAO
+	providerDAO *dao.ProviderDAO
+	cache       map[string][]*ChannelNode // 按业务通道ID缓存
+	mu          sync.RWMutex
 }
 
 // NewChannelSelector 创建通道选择器
 func NewChannelSelector() *ChannelSelector {
 	h := helper.GetHelper()
 	return &ChannelSelector{
-		logger:             h.GetLogger(),
-		channelDao:         dao.NewPushChannelDAO(),
-		relationDao:        dao.NewChannelProviderRelationDAO(),
-		providerDAO:        dao.NewProviderDAO(),
-		providerChannelDAO: dao.NewProviderChannelDAO(),
-		cache:              make(map[string][]*ChannelNode),
+		logger:                    h.GetLogger(),
+		channelDao:                dao.NewPushChannelDAO(),
+		channelTemplateBindingDao: dao.NewChannelTemplateBindingDAO(),
+		providerChannelDAO:        dao.NewProviderChannelDAO(),
+		relationDao:               dao.NewChannelProviderRelationDAO(),
+		providerDAO:               dao.NewProviderDAO(),
+		cache:                     make(map[string][]*ChannelNode),
 	}
 }
 
@@ -64,7 +72,7 @@ func (s *ChannelSelector) Select(ctx context.Context, channelID uint, messageTyp
 	return selected, nil
 }
 
-// getChannelNodes 获取通道节点列表
+// getChannelNodes 获取通道节点列表（使用新的ChannelTemplateBinding）
 func (s *ChannelSelector) getChannelNodes(ctx context.Context, channelID uint, messageType string) ([]*ChannelNode, error) {
 	cacheKey := fmt.Sprintf("%d:%s", channelID, messageType)
 
@@ -85,6 +93,64 @@ func (s *ChannelSelector) getChannelNodes(ctx context.Context, channelID uint, m
 		return s.filterAvailableNodes(nodes), nil
 	}
 
+	// 获取通道的所有模板绑定配置
+	channelBindings, err := s.channelTemplateBindingDao.GetActiveByChannelID(channelID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get channel template bindings: %w", err)
+	}
+
+	if len(channelBindings) == 0 {
+		// 新系统没有配置，尝试使用旧系统（向后兼容）
+		s.logger.Info(fmt.Sprintf("no channel template bindings found, falling back to legacy relations for channel_id=%d", channelID))
+		return s.getChannelNodesLegacy(ctx, channelID, messageType)
+	}
+
+	// 构建节点列表
+	var nodes []*ChannelNode
+	for _, ctb := range channelBindings {
+		if ctb.TemplateBinding == nil || ctb.TemplateBinding.ProviderTemplate == nil {
+			s.logger.Warn(fmt.Sprintf("incomplete channel template binding id=%d", ctb.ID))
+			continue
+		}
+
+		providerTemplate := ctb.TemplateBinding.ProviderTemplate
+		providerID := providerTemplate.ProviderID
+
+		// 查找对应的 ProviderChannel
+		providerChannels, err := s.providerChannelDAO.GetByProviderID(providerID)
+		if err != nil || len(providerChannels) == 0 {
+			// 如果不存在，跳过
+			s.logger.Warn(fmt.Sprintf("no provider channel found for provider_id=%d", providerID))
+			continue
+		}
+		// 使用第一个可用的 ProviderChannel
+		providerChannel := providerChannels[0]
+
+		node := &ChannelNode{
+			ChannelTemplateBinding: ctb,
+			TemplateBinding:        ctb.TemplateBinding,
+			Channel:                providerChannel,
+			CurrentWeight:          0,
+			EffectiveWeight:        ctb.Weight,
+			// 构造兼容的Relation（用于旧代码）
+			Relation: &model.ChannelProviderRelation{
+				Priority: ctb.Priority,
+				Weight:   ctb.Weight,
+				IsActive: ctb.IsActive,
+			},
+		}
+
+		nodes = append(nodes, node)
+	}
+
+	// 缓存结果
+	s.cache[cacheKey] = nodes
+
+	return s.filterAvailableNodes(nodes), nil
+}
+
+// getChannelNodesLegacy 使用旧的ChannelProviderRelation获取通道节点（向后兼容）
+func (s *ChannelSelector) getChannelNodesLegacy(ctx context.Context, channelID uint, messageType string) ([]*ChannelNode, error) {
 	// 加载通道关联关系
 	relations, err := s.relationDao.GetByChannelIDAndType(channelID, messageType)
 	if err != nil {
@@ -123,19 +189,23 @@ func (s *ChannelSelector) getChannelNodes(ctx context.Context, channelID uint, m
 		nodes = append(nodes, node)
 	}
 
-	// 缓存结果
-	s.cache[cacheKey] = nodes
-
-	return s.filterAvailableNodes(nodes), nil
+	return nodes, nil
 }
 
 // filterAvailableNodes 过滤可用节点
 func (s *ChannelSelector) filterAvailableNodes(nodes []*ChannelNode) []*ChannelNode {
 	var available []*ChannelNode
 	for _, node := range nodes {
-		// 检查优先级和熔断状态
-		if node.Relation.Priority > 0 {
-			// TODO: integrate circuit breaker gating here
+		// 新系统：检查 ChannelTemplateBinding 状态
+		if node.ChannelTemplateBinding != nil {
+			if node.ChannelTemplateBinding.IsActive == 1 {
+				available = append(available, node)
+			}
+			continue
+		}
+
+		// 旧系统：检查 Relation 优先级
+		if node.Relation != nil && node.Relation.Priority > 0 {
 			available = append(available, node)
 		}
 	}
@@ -152,10 +222,40 @@ func (s *ChannelSelector) smoothWeightedRoundRobin(nodes []*ChannelNode) *Channe
 		return nodes[0]
 	}
 
+	// 按优先级分组
+	priorityGroups := make(map[int][]*ChannelNode)
+	minPriority := -1
+
+	for _, node := range nodes {
+		priority := 100 // 默认优先级
+		if node.ChannelTemplateBinding != nil {
+			priority = node.ChannelTemplateBinding.Priority
+		} else if node.Relation != nil {
+			priority = node.Relation.Priority
+		}
+
+		if minPriority == -1 || priority < minPriority {
+			minPriority = priority
+		}
+
+		priorityGroups[priority] = append(priorityGroups[priority], node)
+	}
+
+	// 使用最高优先级组（数字最小）
+	candidates := priorityGroups[minPriority]
+	if len(candidates) == 0 {
+		return nil
+	}
+
+	if len(candidates) == 1 {
+		return candidates[0]
+	}
+
+	// 在同优先级组内使用加权轮询
 	var totalWeight int
 	var selected *ChannelNode
 
-	for _, node := range nodes {
+	for _, node := range candidates {
 		// 当前权重 += 有效权重
 		node.CurrentWeight += node.EffectiveWeight
 		totalWeight += node.EffectiveWeight
@@ -176,12 +276,12 @@ func (s *ChannelSelector) smoothWeightedRoundRobin(nodes []*ChannelNode) *Channe
 
 // ReportSuccess 报告成功
 func (s *ChannelSelector) ReportSuccess(providerID, channelID uint) {
-	// TODO: record success to circuit breaker
+	// TODO: record success to circuit breaker and auto-enable if disabled
 }
 
 // ReportFailure 报告失败
 func (s *ChannelSelector) ReportFailure(providerID, channelID uint) {
-	// TODO: record failure to circuit breaker
+	// TODO: record failure to circuit breaker and auto-disable based on threshold
 }
 
 // ClearCache 清除缓存

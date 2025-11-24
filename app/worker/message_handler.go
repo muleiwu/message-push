@@ -25,9 +25,11 @@ type MessageHandler struct {
 	providerChannelDao *dao.ProviderChannelDAO
 	providerAccountDao *dao.ProviderAccountDAO
 	logDao             *dao.PushLogDAO
+	templateBindingDao *dao.TemplateBindingDAO
 	selector           *selector.ChannelSelector
 	senderFactory      *sender.Factory
 	retryHelper        *helper.RetryHelper
+	templateHelper     *helper.TemplateHelper
 }
 
 // NewMessageHandler 创建消息处理器
@@ -38,9 +40,11 @@ func NewMessageHandler() *MessageHandler {
 		providerChannelDao: dao.NewProviderChannelDAO(),
 		providerAccountDao: dao.NewProviderAccountDAO(),
 		logDao:             dao.NewPushLogDAO(),
+		templateBindingDao: dao.NewTemplateBindingDAO(),
 		selector:           selector.NewChannelSelector(),
 		senderFactory:      sender.NewFactory(),
 		retryHelper:        helper.NewRetryHelper(),
+		templateHelper:     helper.NewTemplateHelper(),
 	}
 }
 
@@ -88,6 +92,9 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 		Config:       providerAccount.Config,
 		Status:       providerAccount.Status,
 	}
+
+	// 尝试使用新的模板系统处理模板和参数
+	h.processTemplateBinding(task, providerAccount.ID)
 
 	// 获取发送器
 	messageSender, err := h.senderFactory.GetSender(task.MessageType)
@@ -225,6 +232,66 @@ func (h *MessageHandler) handleFailure(task *model.PushTask, errorMsg string) {
 	}
 
 	h.logger.Error(fmt.Sprintf("message failed task_id=%s error=%s", task.TaskID, errorMsg))
+}
+
+// processTemplateBinding 处理模板绑定和参数映射（集成新的模板系统）
+func (h *MessageHandler) processTemplateBinding(task *model.PushTask, providerID uint) {
+	// 如果任务没有模板代码，跳过
+	if task.TemplateCode == "" {
+		return
+	}
+
+	// 查询模板绑定关系
+	binding, err := h.templateBindingDao.GetActiveBindingByTemplateCodeAndProvider(task.TemplateCode, providerID)
+	if err != nil {
+		// 没有找到模板绑定，使用原有逻辑（向后兼容）
+		h.logger.Info(fmt.Sprintf("no template binding found for template_code=%s provider_id=%d, using legacy mode", task.TemplateCode, providerID))
+		return
+	}
+
+	// 找到了模板绑定，使用供应商模板
+	if binding.ProviderTemplate != nil {
+		h.logger.Info(fmt.Sprintf("using template binding: system_template=%s provider_template=%s", task.TemplateCode, binding.ProviderTemplate.TemplateCode))
+
+		// 更新任务的模板代码为供应商模板代码
+		task.TemplateCode = binding.ProviderTemplate.TemplateCode
+
+		// 解析原始参数
+		var originalParams map[string]interface{}
+		if task.TemplateParams != "" {
+			if err := json.Unmarshal([]byte(task.TemplateParams), &originalParams); err != nil {
+				h.logger.Error(fmt.Sprintf("failed to parse template params: %v", err))
+				return
+			}
+		} else {
+			originalParams = make(map[string]interface{})
+		}
+
+		// 获取参数映射
+		paramMapping, err := binding.GetParamMapping()
+		if err != nil {
+			h.logger.Error(fmt.Sprintf("failed to get param mapping: %v", err))
+			return
+		}
+
+		// 如果有参数映射，转换参数
+		if len(paramMapping) > 0 {
+			mappedParams := h.templateHelper.MapParams(originalParams, paramMapping)
+
+			// 更新任务的模板参数
+			if mappedJSON, err := json.Marshal(mappedParams); err == nil {
+				task.TemplateParams = string(mappedJSON)
+				h.logger.Info(fmt.Sprintf("params mapped from %v to %v", originalParams, mappedParams))
+			}
+		}
+
+		// 如果系统模板有内容，使用简单占位符渲染内容
+		if binding.MessageTemplate != nil && binding.MessageTemplate.Content != "" {
+			if renderedContent, err := h.templateHelper.RenderSimple(binding.MessageTemplate.Content, originalParams); err == nil {
+				task.Content = renderedContent
+			}
+		}
+	}
 }
 
 // parseUint 解析uint
