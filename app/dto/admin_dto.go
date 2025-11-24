@@ -216,50 +216,59 @@ type ChannelListResponse struct {
 
 // ChannelBindingResponse 通道绑定配置响应
 type ChannelBindingResponse struct {
-	ID                   uint   `json:"id"`
-	TemplateBindingID    uint   `json:"template_binding_id"`
-	ProviderTemplateID   uint   `json:"provider_template_id"`
-	ProviderTemplateName string `json:"provider_template_name"`
-	ProviderID           uint   `json:"provider_id"`
-	ProviderName         string `json:"provider_name"`
-	ProviderType         string `json:"provider_type"`
-	Weight               int    `json:"weight"`
-	Priority             int    `json:"priority"`
-	IsActive             int8   `json:"is_active"`
-	AutoDisableOnFail    bool   `json:"auto_disable_on_fail"`
-	AutoDisableThreshold int    `json:"auto_disable_threshold"`
-	CreatedAt            string `json:"created_at"`
+	ID                   uint              `json:"id"`
+	ProviderTemplateID   uint              `json:"provider_template_id"`
+	ProviderTemplateName string            `json:"provider_template_name"`
+	ProviderID           uint              `json:"provider_id"`
+	ProviderName         string            `json:"provider_name"`
+	ProviderType         string            `json:"provider_type"`
+	ParamMapping         map[string]string `json:"param_mapping"`
+	Weight               int               `json:"weight"`
+	Priority             int               `json:"priority"`
+	Status               int8              `json:"status"`
+	IsActive             int8              `json:"is_active"`
+	AutoDisableOnFail    bool              `json:"auto_disable_on_fail"`
+	AutoDisableThreshold int               `json:"auto_disable_threshold"`
+	CreatedAt            string            `json:"created_at"`
 }
 
 // CreateChannelBindingRequest 创建通道绑定配置请求
 type CreateChannelBindingRequest struct {
-	TemplateBindingID    uint `json:"template_binding_id" binding:"required"`
-	Weight               int  `json:"weight" binding:"omitempty,min=1,max=100"`
-	Priority             int  `json:"priority" binding:"omitempty,min=0,max=1000"`
-	IsActive             int8 `json:"is_active" binding:"omitempty,oneof=0 1"`
-	AutoDisableOnFail    bool `json:"auto_disable_on_fail"`
-	AutoDisableThreshold int  `json:"auto_disable_threshold" binding:"omitempty,min=1,max=100"`
+	ProviderTemplateID   uint              `json:"provider_template_id" binding:"required"`
+	ProviderID           uint              `json:"provider_id" binding:"required"`
+	ParamMapping         map[string]string `json:"param_mapping"`
+	Weight               int               `json:"weight" binding:"omitempty,min=1,max=100"`
+	Priority             int               `json:"priority" binding:"omitempty,min=0,max=1000"`
+	Status               int8              `json:"status" binding:"omitempty,oneof=0 1"`
+	IsActive             int8              `json:"is_active" binding:"omitempty,oneof=0 1"`
+	AutoDisableOnFail    bool              `json:"auto_disable_on_fail"`
+	AutoDisableThreshold int               `json:"auto_disable_threshold" binding:"omitempty,min=1,max=100"`
 }
 
 // UpdateChannelBindingRequest 更新通道绑定配置请求
 type UpdateChannelBindingRequest struct {
-	Weight               int  `json:"weight" binding:"omitempty,min=1,max=100"`
-	Priority             int  `json:"priority" binding:"omitempty,min=0,max=1000"`
-	IsActive             int8 `json:"is_active" binding:"omitempty,oneof=0 1"`
-	AutoDisableOnFail    bool `json:"auto_disable_on_fail"`
-	AutoDisableThreshold int  `json:"auto_disable_threshold" binding:"omitempty,min=1,max=100"`
+	ParamMapping         map[string]string `json:"param_mapping"`
+	Weight               int               `json:"weight" binding:"omitempty,min=1,max=100"`
+	Priority             int               `json:"priority" binding:"omitempty,min=0,max=1000"`
+	Status               int8              `json:"status" binding:"omitempty,oneof=0 1"`
+	IsActive             int8              `json:"is_active" binding:"omitempty,oneof=0 1"`
+	AutoDisableOnFail    bool              `json:"auto_disable_on_fail"`
+	AutoDisableThreshold int               `json:"auto_disable_threshold" binding:"omitempty,min=1,max=100"`
 }
 
-// AvailableTemplateBindingResponse 可用模板绑定响应
-type AvailableTemplateBindingResponse struct {
-	ID                   uint   `json:"id"`
-	ProviderTemplateID   uint   `json:"provider_template_id"`
-	ProviderTemplateName string `json:"provider_template_name"`
-	ProviderID           uint   `json:"provider_id"`
-	ProviderName         string `json:"provider_name"`
-	ProviderType         string `json:"provider_type"`
-	Priority             int    `json:"priority"`
-	Status               int8   `json:"status"`
+// AvailableProviderTemplateResponse 可用供应商模板响应（用于通道绑定）
+type AvailableProviderTemplateResponse struct {
+	ID                  uint     `json:"id"`
+	TemplateCode        string   `json:"template_code"`
+	TemplateName        string   `json:"template_name"`
+	TemplateContent     string   `json:"template_content"`
+	Variables           []string `json:"variables"`
+	ProviderID          uint     `json:"provider_id"`
+	ProviderAccountCode string   `json:"provider_account_code"`
+	ProviderAccountName string   `json:"provider_account_name"`
+	ProviderCode        string   `json:"provider_code"`
+	ProviderType        string   `json:"provider_type"`
+	Status              int8     `json:"status"`
 }
 
 // BindProviderToChannelRequest 绑定服务商到通道（已废弃，保留兼容性）

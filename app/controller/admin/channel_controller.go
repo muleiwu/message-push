@@ -131,6 +131,25 @@ func (c ChannelController) GetChannelBindings(ctx *gin.Context, helper interface
 	controller.SuccessResponse(ctx, resp)
 }
 
+// GetChannelBinding 获取单个通道绑定配置
+func (c ChannelController) GetChannelBinding(ctx *gin.Context, helper interfaces.HelperInterface) {
+	adminService := service.NewAdminChannelService()
+	bindingIDStr := ctx.Param("bindingId")
+	bindingID, err := strconv.ParseUint(bindingIDStr, 10, 32)
+	if err != nil {
+		controller.ErrorResponse(ctx, 400, "invalid binding id")
+		return
+	}
+
+	resp, err := adminService.GetChannelBinding(uint(bindingID))
+	if err != nil {
+		controller.ErrorResponse(ctx, 500, "failed to get channel binding: "+err.Error())
+		return
+	}
+
+	controller.SuccessResponse(ctx, resp)
+}
+
 // UpdateChannelBinding 更新通道绑定配置
 func (c ChannelController) UpdateChannelBinding(ctx *gin.Context, helper interfaces.HelperInterface) {
 	adminService := service.NewAdminChannelService()
@@ -153,6 +172,24 @@ func (c ChannelController) UpdateChannelBinding(ctx *gin.Context, helper interfa
 	}
 
 	controller.SuccessResponse(ctx, gin.H{"message": "updated successfully"})
+}
+
+// DeleteChannelBinding 删除通道绑定配置
+func (c ChannelController) DeleteChannelBinding(ctx *gin.Context, helper interfaces.HelperInterface) {
+	adminService := service.NewAdminChannelService()
+	bindingIDStr := ctx.Param("bindingId")
+	bindingID, err := strconv.ParseUint(bindingIDStr, 10, 32)
+	if err != nil {
+		controller.ErrorResponse(ctx, 400, "invalid binding id")
+		return
+	}
+
+	if err := adminService.DeleteChannelBinding(uint(bindingID)); err != nil {
+		controller.ErrorResponse(ctx, 500, "failed to delete channel binding: "+err.Error())
+		return
+	}
+
+	controller.SuccessResponse(ctx, gin.H{"message": "deleted successfully"})
 }
 
 // GetActiveChannels 获取活跃通道列表

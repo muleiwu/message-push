@@ -32,10 +32,10 @@ func (d *ChannelTemplateBindingDAO) BatchCreate(bindings []*model.ChannelTemplat
 func (d *ChannelTemplateBindingDAO) GetByID(id uint) (*model.ChannelTemplateBinding, error) {
 	var binding model.ChannelTemplateBinding
 	db := helper.GetHelper().GetDatabase()
-	err := db.Preload("TemplateBinding").
-		Preload("TemplateBinding.ProviderTemplate").
-		Preload("TemplateBinding.ProviderTemplate.ProviderAccount").
-		Preload("TemplateBinding.MessageTemplate").
+	err := db.Preload("ProviderTemplate").
+		Preload("ProviderTemplate.ProviderAccount").
+		Preload("Channel").
+		Preload("Channel.MessageTemplate").
 		First(&binding, id).Error
 	if err != nil {
 		return nil, err
@@ -48,10 +48,8 @@ func (d *ChannelTemplateBindingDAO) GetByChannelID(channelID uint) ([]*model.Cha
 	var bindings []*model.ChannelTemplateBinding
 	db := helper.GetHelper().GetDatabase()
 	err := db.Where("channel_id = ?", channelID).
-		Preload("TemplateBinding").
-		Preload("TemplateBinding.ProviderTemplate").
-		Preload("TemplateBinding.ProviderTemplate.ProviderAccount").
-		Preload("TemplateBinding.MessageTemplate").
+		Preload("ProviderTemplate").
+		Preload("ProviderTemplate.ProviderAccount").
 		Order("priority ASC, weight DESC").
 		Find(&bindings).Error
 	if err != nil {
@@ -64,11 +62,9 @@ func (d *ChannelTemplateBindingDAO) GetByChannelID(channelID uint) ([]*model.Cha
 func (d *ChannelTemplateBindingDAO) GetActiveByChannelID(channelID uint) ([]*model.ChannelTemplateBinding, error) {
 	var bindings []*model.ChannelTemplateBinding
 	db := helper.GetHelper().GetDatabase()
-	err := db.Where("channel_id = ? AND is_active = 1", channelID).
-		Preload("TemplateBinding").
-		Preload("TemplateBinding.ProviderTemplate").
-		Preload("TemplateBinding.ProviderTemplate.ProviderAccount").
-		Preload("TemplateBinding.MessageTemplate").
+	err := db.Where("channel_id = ? AND is_active = 1 AND status = 1", channelID).
+		Preload("ProviderTemplate").
+		Preload("ProviderTemplate.ProviderAccount").
 		Order("priority ASC, weight DESC").
 		Find(&bindings).Error
 	if err != nil {

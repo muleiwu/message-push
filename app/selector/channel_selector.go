@@ -22,7 +22,6 @@ type ChannelNode struct {
 
 	// 新字段
 	ChannelTemplateBinding *model.ChannelTemplateBinding // 通道模板绑定配置
-	TemplateBinding        *model.TemplateBinding        // 模板绑定
 }
 
 // ChannelSelector 通道选择器
@@ -108,13 +107,12 @@ func (s *ChannelSelector) getChannelNodes(ctx context.Context, channelID uint, m
 	// 构建节点列表
 	var nodes []*ChannelNode
 	for _, ctb := range channelBindings {
-		if ctb.TemplateBinding == nil || ctb.TemplateBinding.ProviderTemplate == nil {
+		if ctb.ProviderTemplate == nil {
 			s.logger.Warn(fmt.Sprintf("incomplete channel template binding id=%d", ctb.ID))
 			continue
 		}
 
-		providerTemplate := ctb.TemplateBinding.ProviderTemplate
-		providerID := providerTemplate.ProviderID
+		providerID := ctb.ProviderID
 
 		// 查找对应的 ProviderChannel
 		providerChannels, err := s.providerChannelDAO.GetByProviderID(providerID)
@@ -128,7 +126,6 @@ func (s *ChannelSelector) getChannelNodes(ctx context.Context, channelID uint, m
 
 		node := &ChannelNode{
 			ChannelTemplateBinding: ctb,
-			TemplateBinding:        ctb.TemplateBinding,
 			Channel:                providerChannel,
 			CurrentWeight:          0,
 			EffectiveWeight:        ctb.Weight,

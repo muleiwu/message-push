@@ -12,17 +12,17 @@ import (
 
 // AdminChannelService 通道管理服务
 type AdminChannelService struct {
-	bindingDAO         *dao.ChannelTemplateBindingDAO
-	templateBindingDAO *dao.TemplateBindingDAO
-	messageTemplateDAO *dao.MessageTemplateDAO
+	bindingDAO          *dao.ChannelTemplateBindingDAO
+	messageTemplateDAO  *dao.MessageTemplateDAO
+	providerTemplateDAO *dao.ProviderTemplateDAO
 }
 
 // NewAdminChannelService 创建通道管理服务实例
 func NewAdminChannelService() *AdminChannelService {
 	return &AdminChannelService{
-		bindingDAO:         dao.NewChannelTemplateBindingDAO(),
-		templateBindingDAO: dao.NewTemplateBindingDAO(),
-		messageTemplateDAO: dao.NewMessageTemplateDAO(),
+		bindingDAO:          dao.NewChannelTemplateBindingDAO(),
+		messageTemplateDAO:  dao.NewMessageTemplateDAO(),
+		providerTemplateDAO: dao.NewProviderTemplateDAO(),
 	}
 }
 
@@ -55,54 +55,9 @@ func (s *AdminChannelService) CreateChannel(req *dto.CreateChannelRequest) (*dto
 		Status:            status,
 	}
 
-	// 开启事务
-	tx := db.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	// 创建通道
-	if err := tx.Create(channel).Error; err != nil {
-		tx.Rollback()
+	// 创建通道（不再自动创建绑定，由用户手动配置）
+	if err := db.Create(channel).Error; err != nil {
 		logger.Error("创建通道失败")
-		return nil, err
-	}
-
-	// 查询该系统模板的所有模板绑定
-	templateBindings, err := s.templateBindingDAO.GetByMessageTemplateID(req.MessageTemplateID)
-	if err != nil {
-		tx.Rollback()
-		logger.Error("查询模板绑定失败")
-		return nil, fmt.Errorf("failed to get template bindings: %w", err)
-	}
-
-	// 为每个模板绑定创建默认的通道模板绑定配置
-	if len(templateBindings) > 0 {
-		channelBindings := make([]*model.ChannelTemplateBinding, 0, len(templateBindings))
-		for _, tb := range templateBindings {
-			channelBindings = append(channelBindings, &model.ChannelTemplateBinding{
-				ChannelID:            channel.ID,
-				TemplateBindingID:    tb.ID,
-				Weight:               10, // 默认权重
-				Priority:             tb.Priority,
-				IsActive:             tb.Status,
-				AutoDisableOnFail:    false,
-				AutoDisableThreshold: 5,
-			})
-		}
-
-		if err := tx.Create(&channelBindings).Error; err != nil {
-			tx.Rollback()
-			logger.Error("创建通道绑定配置失败")
-			return nil, fmt.Errorf("failed to create channel bindings: %w", err)
-		}
-	}
-
-	// 提交事务
-	if err := tx.Commit().Error; err != nil {
-		logger.Error("提交事务失败")
 		return nil, err
 	}
 
@@ -271,27 +226,29 @@ func (s *AdminChannelService) GetChannelBindings(channelID uint) ([]*dto.Channel
 
 	items := make([]*dto.ChannelBindingResponse, 0, len(bindings))
 	for _, b := range bindings {
+		// 获取参数映射
+		paramMapping, _ := b.GetParamMapping()
+
 		item := &dto.ChannelBindingResponse{
 			ID:                   b.ID,
-			TemplateBindingID:    b.TemplateBindingID,
+			ProviderTemplateID:   b.ProviderTemplateID,
+			ProviderID:           b.ProviderID,
+			ParamMapping:         paramMapping,
 			Weight:               b.Weight,
 			Priority:             b.Priority,
+			Status:               b.Status,
 			IsActive:             b.IsActive,
 			AutoDisableOnFail:    b.AutoDisableOnFail,
 			AutoDisableThreshold: b.AutoDisableThreshold,
 			CreatedAt:            b.CreatedAt.Format(time.RFC3339),
 		}
 
-		if b.TemplateBinding != nil {
-			if b.TemplateBinding.ProviderTemplate != nil {
-				item.ProviderTemplateID = b.TemplateBinding.ProviderTemplate.ID
-				item.ProviderTemplateName = b.TemplateBinding.ProviderTemplate.TemplateName
-				item.ProviderID = b.TemplateBinding.ProviderTemplate.ProviderID
+		if b.ProviderTemplate != nil {
+			item.ProviderTemplateName = b.ProviderTemplate.TemplateName
 
-				if b.TemplateBinding.ProviderTemplate.ProviderAccount != nil {
-					item.ProviderName = b.TemplateBinding.ProviderTemplate.ProviderAccount.AccountName
-					item.ProviderType = b.TemplateBinding.ProviderTemplate.ProviderAccount.ProviderType
-				}
+			if b.ProviderTemplate.ProviderAccount != nil {
+				item.ProviderName = b.ProviderTemplate.ProviderAccount.AccountName
+				item.ProviderType = b.ProviderTemplate.ProviderAccount.ProviderType
 			}
 		}
 
@@ -304,18 +261,27 @@ func (s *AdminChannelService) GetChannelBindings(channelID uint) ([]*dto.Channel
 // UpdateChannelBinding 更新通道绑定配置
 func (s *AdminChannelService) UpdateChannelBinding(bindingID uint, req *dto.UpdateChannelBindingRequest) error {
 	// 检查绑定是否存在
-	_, err := s.bindingDAO.GetByID(bindingID)
+	binding, err := s.bindingDAO.GetByID(bindingID)
 	if err != nil {
 		return fmt.Errorf("binding not found: %w", err)
 	}
 
 	updates := make(map[string]interface{})
 
+	if req.ParamMapping != nil {
+		if err := binding.SetParamMapping(req.ParamMapping); err != nil {
+			return fmt.Errorf("failed to set param mapping: %w", err)
+		}
+		updates["param_mapping"] = binding.ParamMapping
+	}
 	if req.Weight > 0 {
 		updates["weight"] = req.Weight
 	}
 	if req.Priority >= 0 {
 		updates["priority"] = req.Priority
+	}
+	if req.Status >= 0 {
+		updates["status"] = req.Status
 	}
 	if req.IsActive >= 0 {
 		updates["is_active"] = req.IsActive
@@ -330,6 +296,18 @@ func (s *AdminChannelService) UpdateChannelBinding(bindingID uint, req *dto.Upda
 	}
 
 	return s.bindingDAO.Update(bindingID, updates)
+}
+
+// DeleteChannelBinding 删除通道绑定配置
+func (s *AdminChannelService) DeleteChannelBinding(bindingID uint) error {
+	// 检查绑定是否存在
+	_, err := s.bindingDAO.GetByID(bindingID)
+	if err != nil {
+		return fmt.Errorf("binding not found: %w", err)
+	}
+
+	// 删除绑定
+	return s.bindingDAO.Delete(bindingID)
 }
 
 // GetActiveChannels 获取活跃通道列表
@@ -351,6 +329,42 @@ func (s *AdminChannelService) GetActiveChannels() ([]*dto.ActiveItem, error) {
 	return items, nil
 }
 
+// GetChannelBinding 获取单个通道绑定配置
+func (s *AdminChannelService) GetChannelBinding(bindingID uint) (*dto.ChannelBindingResponse, error) {
+	binding, err := s.bindingDAO.GetByID(bindingID)
+	if err != nil {
+		return nil, fmt.Errorf("binding not found: %w", err)
+	}
+
+	// 获取参数映射
+	paramMapping, _ := binding.GetParamMapping()
+
+	item := &dto.ChannelBindingResponse{
+		ID:                   binding.ID,
+		ProviderTemplateID:   binding.ProviderTemplateID,
+		ProviderID:           binding.ProviderID,
+		ParamMapping:         paramMapping,
+		Weight:               binding.Weight,
+		Priority:             binding.Priority,
+		Status:               binding.Status,
+		IsActive:             binding.IsActive,
+		AutoDisableOnFail:    binding.AutoDisableOnFail,
+		AutoDisableThreshold: binding.AutoDisableThreshold,
+		CreatedAt:            binding.CreatedAt.Format(time.RFC3339),
+	}
+
+	if binding.ProviderTemplate != nil {
+		item.ProviderTemplateName = binding.ProviderTemplate.TemplateName
+
+		if binding.ProviderTemplate.ProviderAccount != nil {
+			item.ProviderName = binding.ProviderTemplate.ProviderAccount.AccountName
+			item.ProviderType = binding.ProviderTemplate.ProviderAccount.ProviderType
+		}
+	}
+
+	return item, nil
+}
+
 // CreateChannelBinding 创建通道绑定配置
 func (s *AdminChannelService) CreateChannelBinding(channelID uint, req *dto.CreateChannelBindingRequest) (*dto.ChannelBindingResponse, error) {
 	logger := helper.GetHelper().GetLogger()
@@ -358,19 +372,27 @@ func (s *AdminChannelService) CreateChannelBinding(channelID uint, req *dto.Crea
 
 	// 验证通道是否存在
 	var channel model.Channel
-	if err := db.First(&channel, channelID).Error; err != nil {
+	if err := db.Preload("MessageTemplate").First(&channel, channelID).Error; err != nil {
 		return nil, fmt.Errorf("channel not found: %w", err)
 	}
 
-	// 验证模板绑定是否存在
-	templateBinding, err := s.templateBindingDAO.GetByID(req.TemplateBindingID)
+	// 验证供应商模板是否存在
+	providerTemplate, err := s.providerTemplateDAO.GetByID(req.ProviderTemplateID)
 	if err != nil {
-		return nil, fmt.Errorf("template binding not found: %w", err)
+		return nil, fmt.Errorf("provider template not found: %w", err)
 	}
 
-	// 验证模板绑定是否属于该通道的系统模板
-	if templateBinding.MessageTemplateID != channel.MessageTemplateID {
-		return nil, fmt.Errorf("template binding does not belong to channel's message template")
+	// 验证供应商账号是否存在且匹配
+	if providerTemplate.ProviderID != req.ProviderID {
+		return nil, fmt.Errorf("provider template does not belong to the specified provider account")
+	}
+
+	// 验证供应商类型是否与通道类型匹配
+	if providerTemplate.ProviderAccount != nil {
+		if providerTemplate.ProviderAccount.ProviderType != channel.Type {
+			return nil, fmt.Errorf("provider type '%s' does not match channel type '%s'",
+				providerTemplate.ProviderAccount.ProviderType, channel.Type)
+		}
 	}
 
 	// 检查是否已经存在相同的绑定
@@ -379,8 +401,8 @@ func (s *AdminChannelService) CreateChannelBinding(channelID uint, req *dto.Crea
 		return nil, fmt.Errorf("failed to check existing bindings: %w", err)
 	}
 	for _, b := range existingBindings {
-		if b.TemplateBindingID == req.TemplateBindingID {
-			return nil, fmt.Errorf("binding already exists for this template binding")
+		if b.ProviderTemplateID == req.ProviderTemplateID {
+			return nil, fmt.Errorf("binding already exists for this provider template")
 		}
 	}
 
@@ -392,6 +414,10 @@ func (s *AdminChannelService) CreateChannelBinding(channelID uint, req *dto.Crea
 	priority := req.Priority
 	if priority == 0 {
 		priority = 100
+	}
+	status := req.Status
+	if status == 0 {
+		status = 1
 	}
 	isActive := req.IsActive
 	if isActive == 0 {
@@ -405,12 +431,21 @@ func (s *AdminChannelService) CreateChannelBinding(channelID uint, req *dto.Crea
 	// 创建通道绑定配置
 	binding := &model.ChannelTemplateBinding{
 		ChannelID:            channelID,
-		TemplateBindingID:    req.TemplateBindingID,
+		ProviderTemplateID:   req.ProviderTemplateID,
+		ProviderID:           req.ProviderID,
 		Weight:               weight,
 		Priority:             priority,
+		Status:               status,
 		IsActive:             isActive,
 		AutoDisableOnFail:    req.AutoDisableOnFail,
 		AutoDisableThreshold: autoDisableThreshold,
+	}
+
+	// 设置参数映射
+	if req.ParamMapping != nil {
+		if err := binding.SetParamMapping(req.ParamMapping); err != nil {
+			return nil, fmt.Errorf("failed to set param mapping: %w", err)
+		}
 	}
 
 	if err := db.Create(binding).Error; err != nil {
@@ -419,32 +454,34 @@ func (s *AdminChannelService) CreateChannelBinding(channelID uint, req *dto.Crea
 	}
 
 	// 预加载关联数据
-	if err := db.Preload("TemplateBinding.ProviderTemplate.ProviderAccount").First(binding, binding.ID).Error; err != nil {
+	if err := db.Preload("ProviderTemplate.ProviderAccount").First(binding, binding.ID).Error; err != nil {
 		return nil, fmt.Errorf("failed to load binding details: %w", err)
 	}
+
+	// 获取参数映射
+	paramMapping, _ := binding.GetParamMapping()
 
 	// 构建响应
 	response := &dto.ChannelBindingResponse{
 		ID:                   binding.ID,
-		TemplateBindingID:    binding.TemplateBindingID,
+		ProviderTemplateID:   binding.ProviderTemplateID,
+		ProviderID:           binding.ProviderID,
+		ParamMapping:         paramMapping,
 		Weight:               binding.Weight,
 		Priority:             binding.Priority,
+		Status:               binding.Status,
 		IsActive:             binding.IsActive,
 		AutoDisableOnFail:    binding.AutoDisableOnFail,
 		AutoDisableThreshold: binding.AutoDisableThreshold,
 		CreatedAt:            binding.CreatedAt.Format(time.RFC3339),
 	}
 
-	if binding.TemplateBinding != nil {
-		if binding.TemplateBinding.ProviderTemplate != nil {
-			response.ProviderTemplateID = binding.TemplateBinding.ProviderTemplate.ID
-			response.ProviderTemplateName = binding.TemplateBinding.ProviderTemplate.TemplateName
-			response.ProviderID = binding.TemplateBinding.ProviderTemplate.ProviderID
+	if binding.ProviderTemplate != nil {
+		response.ProviderTemplateName = binding.ProviderTemplate.TemplateName
 
-			if binding.TemplateBinding.ProviderTemplate.ProviderAccount != nil {
-				response.ProviderName = binding.TemplateBinding.ProviderTemplate.ProviderAccount.AccountName
-				response.ProviderType = binding.TemplateBinding.ProviderTemplate.ProviderAccount.ProviderType
-			}
+		if binding.ProviderTemplate.ProviderAccount != nil {
+			response.ProviderName = binding.ProviderTemplate.ProviderAccount.AccountName
+			response.ProviderType = binding.ProviderTemplate.ProviderAccount.ProviderType
 		}
 	}
 
@@ -452,8 +489,8 @@ func (s *AdminChannelService) CreateChannelBinding(channelID uint, req *dto.Crea
 	return response, nil
 }
 
-// GetAvailableTemplateBindings 获取通道可用的模板绑定列表（排除已添加的）
-func (s *AdminChannelService) GetAvailableTemplateBindings(channelID uint) ([]*dto.AvailableTemplateBindingResponse, error) {
+// GetAvailableTemplateBindings 获取通道可用的供应商模板列表（排除已添加的）
+func (s *AdminChannelService) GetAvailableTemplateBindings(channelID uint) ([]*dto.AvailableProviderTemplateResponse, error) {
 	db := helper.GetHelper().GetDatabase()
 
 	// 验证通道是否存在
@@ -462,51 +499,52 @@ func (s *AdminChannelService) GetAvailableTemplateBindings(channelID uint) ([]*d
 		return nil, fmt.Errorf("channel not found: %w", err)
 	}
 
-	// 获取该通道系统模板的所有模板绑定
-	allBindings, err := s.templateBindingDAO.GetByMessageTemplateID(channel.MessageTemplateID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get template bindings: %w", err)
-	}
-
 	// 获取该通道已添加的绑定
 	existingBindings, err := s.bindingDAO.GetByChannelID(channelID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get existing bindings: %w", err)
 	}
 
-	// 构建已存在的模板绑定ID集合
+	// 构建已存在的供应商模板ID集合
 	existingMap := make(map[uint]bool)
 	for _, b := range existingBindings {
-		existingMap[b.TemplateBindingID] = true
+		existingMap[b.ProviderTemplateID] = true
 	}
 
-	// 过滤出可用的模板绑定
-	items := make([]*dto.AvailableTemplateBindingResponse, 0)
-	for _, tb := range allBindings {
-		if existingMap[tb.ID] {
-			continue // 跳过已添加的绑定
+	// 获取所有匹配通道类型的供应商模板
+	var allTemplates []*model.ProviderTemplate
+	if err := db.Joins("JOIN provider_accounts ON provider_accounts.id = provider_templates.provider_id").
+		Where("provider_accounts.provider_type = ? AND provider_accounts.status = 1 AND provider_templates.status = 1", channel.Type).
+		Preload("ProviderAccount").
+		Find(&allTemplates).Error; err != nil {
+		return nil, fmt.Errorf("failed to get provider templates: %w", err)
+	}
+
+	// 过滤出可用的供应商模板
+	items := make([]*dto.AvailableProviderTemplateResponse, 0)
+	for _, pt := range allTemplates {
+		if existingMap[pt.ID] {
+			continue // 跳过已添加的
 		}
 
-		// 预加载关联数据
-		if err := db.Preload("ProviderTemplate.ProviderAccount").First(tb, tb.ID).Error; err != nil {
-			continue
+		// 解析变量列表
+		variables, _ := pt.GetVariables()
+
+		item := &dto.AvailableProviderTemplateResponse{
+			ID:              pt.ID,
+			TemplateCode:    pt.TemplateCode,
+			TemplateName:    pt.TemplateName,
+			TemplateContent: pt.TemplateContent,
+			Variables:       variables,
+			ProviderID:      pt.ProviderID,
+			Status:          pt.Status,
 		}
 
-		item := &dto.AvailableTemplateBindingResponse{
-			ID:       tb.ID,
-			Priority: tb.Priority,
-			Status:   tb.Status,
-		}
-
-		if tb.ProviderTemplate != nil {
-			item.ProviderTemplateID = tb.ProviderTemplate.ID
-			item.ProviderTemplateName = tb.ProviderTemplate.TemplateName
-			item.ProviderID = tb.ProviderTemplate.ProviderID
-
-			if tb.ProviderTemplate.ProviderAccount != nil {
-				item.ProviderName = tb.ProviderTemplate.ProviderAccount.AccountName
-				item.ProviderType = tb.ProviderTemplate.ProviderAccount.ProviderType
-			}
+		if pt.ProviderAccount != nil {
+			item.ProviderAccountCode = pt.ProviderAccount.AccountCode
+			item.ProviderAccountName = pt.ProviderAccount.AccountName
+			item.ProviderCode = pt.ProviderAccount.ProviderCode
+			item.ProviderType = pt.ProviderAccount.ProviderType
 		}
 
 		items = append(items, item)

@@ -14,7 +14,6 @@ import (
 type TemplateService struct {
 	messageTemplateDAO  *dao.MessageTemplateDAO
 	providerTemplateDAO *dao.ProviderTemplateDAO
-	templateBindingDAO  *dao.TemplateBindingDAO
 	providerAccountDAO  *dao.ProviderAccountDAO
 }
 
@@ -23,7 +22,6 @@ func NewTemplateService() *TemplateService {
 	return &TemplateService{
 		messageTemplateDAO:  dao.NewMessageTemplateDAO(),
 		providerTemplateDAO: dao.NewProviderTemplateDAO(),
-		templateBindingDAO:  dao.NewTemplateBindingDAO(),
 		providerAccountDAO:  dao.NewProviderAccountDAO(),
 	}
 }
@@ -284,154 +282,6 @@ func (s *TemplateService) ListProviderTemplates(req *dto.ProviderTemplateListReq
 	}, nil
 }
 
-// ========== 模板绑定管理 ==========
-
-// CreateTemplateBinding 创建模板绑定
-func (s *TemplateService) CreateTemplateBinding(req *dto.CreateTemplateBindingRequest) (*dto.TemplateBindingResponse, error) {
-	// 检查系统模板是否存在
-	_, err := s.messageTemplateDAO.GetByID(req.MessageTemplateID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("message template not found")
-		}
-		return nil, fmt.Errorf("failed to get message template: %w", err)
-	}
-
-	// 检查供应商模板是否存在
-	providerTemplate, err := s.providerTemplateDAO.GetByID(req.ProviderTemplateID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("provider template not found")
-		}
-		return nil, fmt.Errorf("failed to get provider template: %w", err)
-	}
-
-	// 验证供应商ID是否匹配
-	if providerTemplate.ProviderID != req.ProviderID {
-		return nil, errors.New("provider_id does not match with provider_template")
-	}
-
-	// 检查绑定是否已存在
-	exists, err := s.templateBindingDAO.ExistsByTemplates(req.MessageTemplateID, req.ProviderTemplateID, 0)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check binding: %w", err)
-	}
-	if exists {
-		return nil, errors.New("template binding already exists")
-	}
-
-	// 创建绑定
-	binding := &model.TemplateBinding{
-		MessageTemplateID:  req.MessageTemplateID,
-		ProviderTemplateID: req.ProviderTemplateID,
-		ProviderID:         req.ProviderID,
-		Status:             1,
-		Priority:           100,
-	}
-
-	if req.Status != nil {
-		binding.Status = *req.Status
-	}
-	if req.Priority != nil {
-		binding.Priority = *req.Priority
-	}
-	if req.ParamMapping != nil {
-		if err := binding.SetParamMapping(req.ParamMapping); err != nil {
-			return nil, fmt.Errorf("failed to set param mapping: %w", err)
-		}
-	}
-
-	if err := s.templateBindingDAO.Create(binding); err != nil {
-		return nil, fmt.Errorf("failed to create template binding: %w", err)
-	}
-
-	// 重新加载以获取关联数据
-	binding, err = s.templateBindingDAO.GetByID(binding.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	return s.buildTemplateBindingResponse(binding)
-}
-
-// UpdateTemplateBinding 更新模板绑定
-func (s *TemplateService) UpdateTemplateBinding(id uint, req *dto.UpdateTemplateBindingRequest) (*dto.TemplateBindingResponse, error) {
-	// 获取现有绑定
-	binding, err := s.templateBindingDAO.GetByID(id)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("template binding not found")
-		}
-		return nil, fmt.Errorf("failed to get template binding: %w", err)
-	}
-
-	// 更新字段
-	if req.Status != nil {
-		binding.Status = *req.Status
-	}
-	if req.Priority != nil {
-		binding.Priority = *req.Priority
-	}
-	if req.ParamMapping != nil {
-		if err := binding.SetParamMapping(req.ParamMapping); err != nil {
-			return nil, fmt.Errorf("failed to set param mapping: %w", err)
-		}
-	}
-
-	if err := s.templateBindingDAO.Update(binding); err != nil {
-		return nil, fmt.Errorf("failed to update template binding: %w", err)
-	}
-
-	return s.buildTemplateBindingResponse(binding)
-}
-
-// GetTemplateBinding 获取模板绑定
-func (s *TemplateService) GetTemplateBinding(id uint) (*dto.TemplateBindingResponse, error) {
-	binding, err := s.templateBindingDAO.GetByID(id)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("template binding not found")
-		}
-		return nil, fmt.Errorf("failed to get template binding: %w", err)
-	}
-
-	return s.buildTemplateBindingResponse(binding)
-}
-
-// DeleteTemplateBinding 删除模板绑定
-func (s *TemplateService) DeleteTemplateBinding(id uint) error {
-	return s.templateBindingDAO.Delete(id)
-}
-
-// ListTemplateBindings 查询模板绑定列表
-func (s *TemplateService) ListTemplateBindings(req *dto.TemplateBindingListRequest) (*dto.TemplateBindingListResponse, error) {
-	bindings, total, err := s.templateBindingDAO.List(req.MessageTemplateID, req.ProviderID, req.Status, req.Page, req.PageSize)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list template bindings: %w", err)
-	}
-
-	list := make([]*dto.TemplateBindingResponse, 0, len(bindings))
-	for _, binding := range bindings {
-		resp, err := s.buildTemplateBindingResponse(binding)
-		if err != nil {
-			continue
-		}
-		list = append(list, resp)
-	}
-
-	return &dto.TemplateBindingListResponse{
-		Items: list,
-		Total: total,
-		Page:  req.Page,
-		Size:  req.PageSize,
-	}, nil
-}
-
-// GetActiveBindingByTemplateAndProvider 根据系统模板代码和供应商获取启用的绑定关系
-func (s *TemplateService) GetActiveBindingByTemplateAndProvider(templateCode string, providerID uint) (*model.TemplateBinding, error) {
-	return s.templateBindingDAO.GetActiveBindingByTemplateCodeAndProvider(templateCode, providerID)
-}
-
 // ========== 辅助方法 ==========
 
 // buildMessageTemplateResponse 构建系统模板响应
@@ -482,55 +332,6 @@ func (s *TemplateService) buildProviderTemplateResponse(template *model.Provider
 			AccountName:  template.ProviderAccount.AccountName,
 			ProviderCode: template.ProviderAccount.ProviderCode,
 			ProviderType: template.ProviderAccount.ProviderType,
-		}
-	}
-
-	return resp, nil
-}
-
-// buildTemplateBindingResponse 构建模板绑定响应
-func (s *TemplateService) buildTemplateBindingResponse(binding *model.TemplateBinding) (*dto.TemplateBindingResponse, error) {
-	paramMapping, err := binding.GetParamMapping()
-	if err != nil {
-		paramMapping = map[string]string{}
-	}
-
-	resp := &dto.TemplateBindingResponse{
-		ID:                 binding.ID,
-		MessageTemplateID:  binding.MessageTemplateID,
-		ProviderTemplateID: binding.ProviderTemplateID,
-		ProviderID:         binding.ProviderID,
-		ParamMapping:       paramMapping,
-		Status:             binding.Status,
-		Priority:           binding.Priority,
-		CreatedAt:          binding.CreatedAt,
-		UpdatedAt:          binding.UpdatedAt,
-	}
-
-	if binding.MessageTemplate != nil {
-		resp.MessageTemplate = &dto.SimpleMessageTemplateInfo{
-			ID:           binding.MessageTemplate.ID,
-			TemplateCode: binding.MessageTemplate.TemplateCode,
-			TemplateName: binding.MessageTemplate.TemplateName,
-			MessageType:  binding.MessageTemplate.MessageType,
-		}
-	}
-
-	if binding.ProviderTemplate != nil {
-		resp.ProviderTemplate = &dto.SimpleProviderTemplateInfo{
-			ID:           binding.ProviderTemplate.ID,
-			TemplateCode: binding.ProviderTemplate.TemplateCode,
-			TemplateName: binding.ProviderTemplate.TemplateName,
-		}
-	}
-
-	if binding.ProviderAccount != nil {
-		resp.ProviderAccount = &dto.SimpleProviderResponse{
-			ID:           binding.ProviderAccount.ID,
-			AccountCode:  binding.ProviderAccount.AccountCode,
-			AccountName:  binding.ProviderAccount.AccountName,
-			ProviderCode: binding.ProviderAccount.ProviderCode,
-			ProviderType: binding.ProviderAccount.ProviderType,
 		}
 	}
 

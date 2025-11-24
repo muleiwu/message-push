@@ -27,8 +27,7 @@ func (receiver Migration) Get() []any {
 		// 模板管理
 		&model.MessageTemplate{},
 		&model.ProviderTemplate{},
-		&model.TemplateBinding{},
-		&model.ChannelTemplateBinding{}, // 新的通道模板绑定配置表
+		&model.ChannelTemplateBinding{}, // 通道模板绑定配置表（已集成模板绑定功能）
 
 		// 健康检查和配额统计
 		&model.ChannelHealthHistory{},

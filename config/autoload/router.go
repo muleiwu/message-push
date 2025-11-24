@@ -114,7 +114,9 @@ func (receiver Router) InitConfig(helper envInterface.HelperInterface) map[strin
 					channels.GET("/:id/available-bindings", deps.WrapHandler(admin.ChannelController{}.GetAvailableTemplateBindings)) // 先注册具体路径
 					channels.GET("/:id/bindings", deps.WrapHandler(admin.ChannelController{}.GetChannelBindings))
 					channels.POST("/:id/bindings", deps.WrapHandler(admin.ChannelController{}.CreateChannelBinding))
+					channels.GET("/:id/bindings/:bindingId", deps.WrapHandler(admin.ChannelController{}.GetChannelBinding))
 					channels.PUT("/:id/bindings/:bindingId", deps.WrapHandler(admin.ChannelController{}.UpdateChannelBinding))
+					channels.DELETE("/:id/bindings/:bindingId", deps.WrapHandler(admin.ChannelController{}.DeleteChannelBinding))
 				}
 
 				// 统计查询
@@ -151,16 +153,6 @@ func (receiver Router) InitConfig(helper envInterface.HelperInterface) map[strin
 					providerTemplates.GET("/:id", deps.WrapHandler(admin.TemplateController{}.GetProviderTemplate))
 					providerTemplates.PUT("/:id", deps.WrapHandler(admin.TemplateController{}.UpdateProviderTemplate))
 					providerTemplates.DELETE("/:id", deps.WrapHandler(admin.TemplateController{}.DeleteProviderTemplate))
-				}
-
-				// 模板绑定管理
-				templateBindings := adminGroup.Group("/template-bindings")
-				{
-					templateBindings.GET("", deps.WrapHandler(admin.TemplateController{}.ListTemplateBindings))
-					templateBindings.POST("", deps.WrapHandler(admin.TemplateController{}.CreateTemplateBinding))
-					templateBindings.GET("/:id", deps.WrapHandler(admin.TemplateController{}.GetTemplateBinding))
-					templateBindings.PUT("/:id", deps.WrapHandler(admin.TemplateController{}.UpdateTemplateBinding))
-					templateBindings.DELETE("/:id", deps.WrapHandler(admin.TemplateController{}.DeleteTemplateBinding))
 				}
 			}
 
