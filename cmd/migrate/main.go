@@ -56,6 +56,11 @@ func main() {
 func migrateUp(db *gorm.DB) {
 	log.Println("Running migrations...")
 
+	// 在 AutoMigrate 之前执行预迁移清理
+	if err := preMigrationCleanup(db); err != nil {
+		log.Fatalf("Failed to run pre-migration cleanup: %v", err)
+	}
+
 	// 使用统一的模型列表
 	models := autoload.Migration{}.Get()
 
@@ -65,7 +70,149 @@ func migrateUp(db *gorm.DB) {
 		}
 	}
 
+	// 执行自定义迁移
+	if err := customMigrations(db); err != nil {
+		log.Fatalf("Failed to run custom migrations: %v", err)
+	}
+
 	log.Println("Migrations completed successfully!")
+}
+
+// preMigrationCleanup 在 AutoMigrate 之前执行清理工作
+func preMigrationCleanup(db *gorm.DB) error {
+	log.Println("Running pre-migration cleanup...")
+
+	// 修复 channel_template_bindings 表的旧字段和无效数据
+	if err := fixChannelTemplateBindingsPreMigration(db); err != nil {
+		return fmt.Errorf("failed to fix channel_template_bindings: %w", err)
+	}
+
+	log.Println("Pre-migration cleanup completed!")
+	return nil
+}
+
+// customMigrations 执行自定义迁移逻辑
+func customMigrations(db *gorm.DB) error {
+	log.Println("Running custom migrations...")
+
+	log.Println("Custom migrations completed!")
+	return nil
+}
+
+// fixChannelTemplateBindingsPreMigration 在 AutoMigrate 前修复 channel_template_bindings 表
+func fixChannelTemplateBindingsPreMigration(db *gorm.DB) error {
+	// 检查表是否存在
+	if !db.Migrator().HasTable("channel_template_bindings") {
+		log.Println("Table channel_template_bindings does not exist, skipping...")
+		return nil
+	}
+
+	log.Println("Fixing channel_template_bindings table...")
+
+	// 步骤 1: 删除旧的 template_binding_id 外键约束（如果存在）
+	if db.Migrator().HasColumn(&model.ChannelTemplateBinding{}, "template_binding_id") {
+		log.Println("Found template_binding_id column, removing foreign key constraint...")
+
+		var constraintName string
+		err := db.Raw(`
+			SELECT CONSTRAINT_NAME 
+			FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+			WHERE TABLE_SCHEMA = DATABASE()
+			  AND TABLE_NAME = 'channel_template_bindings'
+			  AND COLUMN_NAME = 'template_binding_id'
+			  AND REFERENCED_TABLE_NAME IS NOT NULL
+			LIMIT 1
+		`).Scan(&constraintName).Error
+
+		if err == nil && constraintName != "" {
+			log.Printf("Dropping foreign key constraint: %s", constraintName)
+			if err := db.Exec(fmt.Sprintf("ALTER TABLE channel_template_bindings DROP FOREIGN KEY %s", constraintName)).Error; err != nil {
+				return fmt.Errorf("failed to drop foreign key: %w", err)
+			}
+		}
+
+		// 删除旧字段
+		log.Println("Dropping template_binding_id column...")
+		if err := db.Migrator().DropColumn(&model.ChannelTemplateBinding{}, "template_binding_id"); err != nil {
+			return fmt.Errorf("failed to drop column: %w", err)
+		}
+	}
+
+	// 步骤 2: 临时删除可能存在的外键约束，以便清理无效数据
+	log.Println("Temporarily dropping foreign key constraints...")
+	foreignKeys := []string{
+		"fk_channel_template_bindings_channel",
+		"fk_channel_template_bindings_provider_template",
+		"fk_channel_template_bindings_provider_account",
+	}
+
+	for _, fk := range foreignKeys {
+		// 检查外键是否存在
+		var count int64
+		db.Raw(`
+			SELECT COUNT(*) 
+			FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS 
+			WHERE TABLE_SCHEMA = DATABASE()
+			  AND TABLE_NAME = 'channel_template_bindings'
+			  AND CONSTRAINT_NAME = ?
+			  AND CONSTRAINT_TYPE = 'FOREIGN KEY'
+		`, fk).Scan(&count)
+
+		if count > 0 {
+			log.Printf("Dropping foreign key: %s", fk)
+			if err := db.Exec(fmt.Sprintf("ALTER TABLE channel_template_bindings DROP FOREIGN KEY %s", fk)).Error; err != nil {
+				log.Printf("Warning: Failed to drop foreign key %s: %v", fk, err)
+			}
+		}
+	}
+
+	// 步骤 3: 清理无效数据
+	log.Println("Cleaning invalid data...")
+
+	// 删除引用不存在的 provider_template_id 的记录
+	result := db.Exec(`
+		DELETE ctb FROM channel_template_bindings ctb
+		LEFT JOIN provider_templates pt ON ctb.provider_template_id = pt.id
+		WHERE ctb.provider_template_id IS NOT NULL 
+		  AND pt.id IS NULL
+	`)
+	if result.Error != nil {
+		return fmt.Errorf("failed to clean invalid provider_template_id references: %w", result.Error)
+	}
+	if result.RowsAffected > 0 {
+		log.Printf("Deleted %d records with invalid provider_template_id", result.RowsAffected)
+	}
+
+	// 删除引用不存在的 provider_id 的记录
+	result = db.Exec(`
+		DELETE ctb FROM channel_template_bindings ctb
+		LEFT JOIN provider_accounts pa ON ctb.provider_id = pa.id
+		WHERE ctb.provider_id IS NOT NULL 
+		  AND pa.id IS NULL
+	`)
+	if result.Error != nil {
+		return fmt.Errorf("failed to clean invalid provider_id references: %w", result.Error)
+	}
+	if result.RowsAffected > 0 {
+		log.Printf("Deleted %d records with invalid provider_id", result.RowsAffected)
+	}
+
+	// 删除引用不存在的 channel_id 的记录
+	result = db.Exec(`
+		DELETE ctb FROM channel_template_bindings ctb
+		LEFT JOIN channels c ON ctb.channel_id = c.id
+		WHERE ctb.channel_id IS NOT NULL 
+		  AND c.id IS NULL
+	`)
+	if result.Error != nil {
+		return fmt.Errorf("failed to clean invalid channel_id references: %w", result.Error)
+	}
+	if result.RowsAffected > 0 {
+		log.Printf("Deleted %d records with invalid channel_id", result.RowsAffected)
+	}
+
+	log.Println("Successfully fixed channel_template_bindings table")
+	return nil
 }
 
 // migrateDown 回滚迁移
