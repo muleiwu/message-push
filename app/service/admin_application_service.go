@@ -66,14 +66,16 @@ func (s *AdminApplicationService) CreateApplication(req *dto.CreateApplicationRe
 		return nil, fmt.Errorf("IP白名单格式错误: %w", err)
 	}
 
-	dailyQuota := req.DailyQuota
-	if dailyQuota == 0 {
-		dailyQuota = 10000 // 默认每日配额
+	// 处理配额：nil 使用默认值，0 表示不限制
+	dailyQuota := 10000 // 默认每日配额
+	if req.DailyQuota != nil {
+		dailyQuota = *req.DailyQuota
 	}
 
-	rateLimit := req.RateLimit
-	if rateLimit == 0 {
-		rateLimit = 100 // 默认QPS限制
+	// 处理限流：nil 使用默认值，0 表示不限制
+	rateLimit := 100 // 默认QPS限制
+	if req.RateLimit != nil {
+		rateLimit = *req.RateLimit
 	}
 
 	app := &model.Application{
@@ -202,11 +204,12 @@ func (s *AdminApplicationService) UpdateApplication(id uint, req *dto.UpdateAppl
 	if req.Status > 0 {
 		updates["status"] = int8(req.Status)
 	}
-	if req.DailyQuota > 0 {
-		updates["daily_quota"] = req.DailyQuota
+	// 使用指针判断：nil 表示不更新，非 nil 表示更新（包括 0）
+	if req.DailyQuota != nil {
+		updates["daily_quota"] = *req.DailyQuota
 	}
-	if req.RateLimit > 0 {
-		updates["rate_limit"] = req.RateLimit
+	if req.RateLimit != nil {
+		updates["rate_limit"] = *req.RateLimit
 	}
 	if req.WebhookURL != "" {
 		updates["webhook_url"] = req.WebhookURL

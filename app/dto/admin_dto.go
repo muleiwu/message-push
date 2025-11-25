@@ -4,10 +4,10 @@ package dto
 type CreateApplicationRequest struct {
 	Name        string `json:"name" binding:"required,min=2,max=50"`
 	Description string `json:"description" binding:"max=200"`
-	Status      int    `json:"status" binding:"omitempty,oneof=1 2"` // 1:启用 2:禁用
-	DailyQuota  int    `json:"daily_quota" binding:"omitempty,min=0"`
-	RateLimit   int    `json:"rate_limit" binding:"omitempty,min=0"`
-	IPWhitelist string `json:"ip_whitelist"` // IP白名单，换行分隔，支持IP和CIDR子网格式
+	Status      int    `json:"status" binding:"omitempty,oneof=1 2"`  // 1:启用 2:禁用
+	DailyQuota  *int   `json:"daily_quota" binding:"omitempty,min=0"` // 使用指针，nil使用默认值，0表示不限制
+	RateLimit   *int   `json:"rate_limit" binding:"omitempty,min=0"`  // 使用指针，nil使用默认值，0表示不限制
+	IPWhitelist string `json:"ip_whitelist"`                          // IP白名单，换行分隔，支持IP和CIDR子网格式
 	WebhookURL  string `json:"webhook_url" binding:"omitempty,url"`
 }
 
@@ -16,9 +16,9 @@ type UpdateApplicationRequest struct {
 	Name        string `json:"name" binding:"omitempty,min=2,max=50"`
 	Description string `json:"description" binding:"omitempty,max=200"`
 	Status      int    `json:"status" binding:"omitempty,oneof=1 2"`
-	DailyQuota  int    `json:"daily_quota" binding:"omitempty,min=0"`
-	RateLimit   int    `json:"rate_limit" binding:"omitempty,min=0"`
-	IPWhitelist string `json:"ip_whitelist"` // IP白名单，换行分隔，支持IP和CIDR子网格式
+	DailyQuota  *int   `json:"daily_quota" binding:"omitempty,min=0"` // 使用指针，nil表示不更新，0表示不限制
+	RateLimit   *int   `json:"rate_limit" binding:"omitempty,min=0"`  // 使用指针，nil表示不更新，0表示不限制
+	IPWhitelist string `json:"ip_whitelist"`                          // IP白名单，换行分隔，支持IP和CIDR子网格式
 	WebhookURL  string `json:"webhook_url" binding:"omitempty"`
 }
 
