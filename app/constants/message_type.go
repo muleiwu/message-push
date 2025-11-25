@@ -38,3 +38,10 @@ func IsValidProviderCode(code string) bool {
 		return false
 	}
 }
+
+// 回调状态常量
+const (
+	CallbackStatusDelivered = "delivered" // 已送达
+	CallbackStatusFailed    = "failed"    // 发送失败
+	CallbackStatusRejected  = "rejected"  // 被拒绝
+)

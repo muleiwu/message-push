@@ -334,29 +334,19 @@ func (s *AdminProviderAccountService) TestProviderAccount(id uint, req *dto.Test
 		task.Content = req.Message
 	}
 
-	// 为了兼容旧的Sender接口，需要构造一个临时的Provider对象
-	tempProvider := &model.Provider{
-		ID:           account.ID,
-		ProviderCode: account.AccountCode,
-		ProviderName: account.AccountName,
-		ProviderType: account.ProviderType,
-		Config:       account.Config,
-		Status:       account.Status,
-	}
-
 	sendReq := &sender.SendRequest{
-		Task:      task,
-		Provider:  tempProvider,
-		Signature: nil, // 测试时不加载签名，由服务商返回错误
+		Task:            task,
+		ProviderAccount: account,
+		Signature:       nil, // 测试时不加载签名，由服务商返回错误
 		ProviderChannel: &model.ProviderChannel{
 			ProviderID: account.ID,
 			Config:     account.Config,
 		},
 	}
 
-	// 3. 获取发送器
+	// 3. 获取发送器（使用服务商代码）
 	factory := sender.NewFactory()
-	msgSender, err := factory.GetSender(account.ProviderType)
+	msgSender, err := factory.GetSender(account.ProviderCode)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get sender: %w", err)
 	}

@@ -81,21 +81,11 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 		return err
 	}
 
-	// 转换为旧的Provider结构（为了兼容现有Sender接口）
-	provider := &model.Provider{
-		ID:           providerAccount.ID,
-		ProviderCode: providerAccount.AccountCode,
-		ProviderName: providerAccount.AccountName,
-		ProviderType: providerAccount.ProviderType,
-		Config:       providerAccount.Config,
-		Status:       providerAccount.Status,
-	}
-
 	// 尝试使用新的模板系统处理模板和参数
 	h.processTemplateBinding(task, node)
 
-	// 获取发送器
-	messageSender, err := h.senderFactory.GetSender(task.MessageType)
+	// 获取发送器（按服务商代码获取）
+	messageSender, err := h.senderFactory.GetSender(providerAccount.ProviderCode)
 	if err != nil {
 		h.logger.Error(fmt.Sprintf("failed to get sender task_id=%s: %v", taskID, err))
 		h.handleFailure(task, err.Error())
@@ -106,7 +96,7 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 	sendReq := &sender.SendRequest{
 		Task:            task,
 		ProviderChannel: node.Channel,
-		Provider:        provider,
+		ProviderAccount: providerAccount,
 		Relation:        node.Relation,
 		Signature:       nil, // 签名由通道配置或API调用指定，这里不自动加载
 	}

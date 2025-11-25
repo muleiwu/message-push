@@ -58,9 +58,9 @@ func NewAliyunSMSSender() *AliyunSMSSender {
 	return &AliyunSMSSender{}
 }
 
-// GetType 获取发送器类型
-func (s *AliyunSMSSender) GetType() string {
-	return constants.MessageTypeSMS
+// GetProviderCode 获取服务商代码
+func (s *AliyunSMSSender) GetProviderCode() string {
+	return constants.ProviderAliyunSMS
 }
 
 // Send 发送短信
@@ -71,7 +71,7 @@ func (s *AliyunSMSSender) Send(ctx context.Context, req *SendRequest) (*SendResp
 		AccessKeySecret string `json:"access_key_secret"`
 	}
 
-	if err := json.Unmarshal([]byte(req.Provider.Config), &config); err != nil {
+	if err := json.Unmarshal([]byte(req.ProviderAccount.Config), &config); err != nil {
 		return nil, fmt.Errorf("invalid provider config: %w", err)
 	}
 
@@ -151,7 +151,7 @@ func (s *AliyunSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest) 
 		AccessKeySecret string `json:"access_key_secret"`
 	}
 
-	if err := json.Unmarshal([]byte(req.Provider.Config), &config); err != nil {
+	if err := json.Unmarshal([]byte(req.ProviderAccount.Config), &config); err != nil {
 		return nil, fmt.Errorf("invalid provider config: %w", err)
 	}
 
@@ -195,11 +195,6 @@ func (s *AliyunSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest) 
 
 // ==================== CallbackHandler 接口实现 ====================
 
-// GetProviderCode 获取服务商代码
-func (s *AliyunSMSSender) GetProviderCode() string {
-	return constants.ProviderAliyunSMS
-}
-
 // SupportsCallback 是否支持回调
 func (s *AliyunSMSSender) SupportsCallback() bool {
 	return true
@@ -228,9 +223,9 @@ func (s *AliyunSMSSender) HandleCallback(ctx context.Context, req *CallbackReque
 
 	results := make([]*CallbackResult, 0, len(reports))
 	for _, report := range reports {
-		status := "delivered"
+		status := constants.CallbackStatusDelivered
 		if !report.Success {
-			status = "failed"
+			status = constants.CallbackStatusFailed
 		}
 
 		reportTime, _ := time.ParseInLocation("2006-01-02 15:04:05", report.ReportTime, time.Local)

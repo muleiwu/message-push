@@ -67,12 +67,12 @@ func NewWeChatWorkSender() *WeChatWorkSender {
 	return &WeChatWorkSender{}
 }
 
-func (s *WeChatWorkSender) GetType() string {
-	return constants.MessageTypeWeChatWork
+func (s *WeChatWorkSender) GetProviderCode() string {
+	return constants.ProviderWeChatWork
 }
 
 func (s *WeChatWorkSender) Send(ctx context.Context, req *SendRequest) (*SendResponse, error) {
-	config, err := req.Provider.GetConfig()
+	config, err := req.ProviderAccount.GetConfig()
 	if err != nil {
 		return nil, fmt.Errorf("invalid provider config: %w", err)
 	}
@@ -216,7 +216,7 @@ func (s *WeChatWorkSender) BatchSend(ctx context.Context, req *BatchSendRequest)
 		return &BatchSendResponse{Results: []*SendResponse{}}, nil
 	}
 
-	config, err := req.Provider.GetConfig()
+	config, err := req.ProviderAccount.GetConfig()
 	if err != nil {
 		return nil, fmt.Errorf("invalid provider config: %w", err)
 	}
@@ -335,11 +335,6 @@ func (s *WeChatWorkSender) BatchSend(ctx context.Context, req *BatchSendRequest)
 
 // ==================== CallbackHandler 接口实现 ====================
 
-// GetProviderCode 获取服务商代码
-func (s *WeChatWorkSender) GetProviderCode() string {
-	return constants.ProviderWeChatWork
-}
-
 // SupportsCallback 是否支持回调
 func (s *WeChatWorkSender) SupportsCallback() bool {
 	return true
@@ -362,9 +357,9 @@ func (s *WeChatWorkSender) HandleCallback(ctx context.Context, req *CallbackRequ
 		return nil, fmt.Errorf("invalid callback data: %w", err)
 	}
 
-	status := "delivered"
+	status := constants.CallbackStatusDelivered
 	if callbackData.Status != "SEND_OK" {
-		status = "failed"
+		status = constants.CallbackStatusFailed
 	}
 
 	reportTime := time.Unix(callbackData.CreateTime, 0)

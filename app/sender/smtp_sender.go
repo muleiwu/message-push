@@ -83,9 +83,9 @@ func NewSMTPSender() *SMTPSender {
 	return &SMTPSender{}
 }
 
-// GetType 获取发送器类型
-func (s *SMTPSender) GetType() string {
-	return constants.MessageTypeEmail
+// GetProviderCode 获取服务商代码
+func (s *SMTPSender) GetProviderCode() string {
+	return constants.ProviderSMTP
 }
 
 // Send 发送邮件
@@ -99,7 +99,7 @@ func (s *SMTPSender) Send(ctx context.Context, req *SendRequest) (*SendResponse,
 		From     string `json:"from"`
 	}
 
-	if err := json.Unmarshal([]byte(req.Provider.Config), &config); err != nil {
+	if err := json.Unmarshal([]byte(req.ProviderAccount.Config), &config); err != nil {
 		return nil, fmt.Errorf("invalid provider config: %w", err)
 	}
 
@@ -165,7 +165,7 @@ func (s *SMTPSender) BatchSend(ctx context.Context, req *BatchSendRequest) (*Bat
 		From     string `json:"from"`
 	}
 
-	if err := json.Unmarshal([]byte(req.Provider.Config), &config); err != nil {
+	if err := json.Unmarshal([]byte(req.ProviderAccount.Config), &config); err != nil {
 		return nil, fmt.Errorf("invalid provider config: %w", err)
 	}
 
@@ -216,11 +216,6 @@ func (s *SMTPSender) BatchSend(ctx context.Context, req *BatchSendRequest) (*Bat
 
 // ==================== CallbackHandler 接口实现 ====================
 
-// GetProviderCode 获取服务商代码
-func (s *SMTPSender) GetProviderCode() string {
-	return constants.ProviderSMTP
-}
-
 // SupportsCallback 是否支持回调
 func (s *SMTPSender) SupportsCallback() bool {
 	// SMTP 通常通过退信（bounce）来通知发送失败
@@ -249,7 +244,7 @@ func (s *SMTPSender) HandleCallback(ctx context.Context, req *CallbackRequest) (
 		if strings.Contains(bodyStr, "Delivery Status Notification") ||
 			strings.Contains(bodyStr, "Undelivered Mail") {
 			return []*CallbackResult{{
-				Status:       "failed",
+				Status:       constants.CallbackStatusFailed,
 				ErrorMessage: "Email delivery failed (bounce detected)",
 				ReportTime:   time.Now(),
 			}}, nil
@@ -257,11 +252,11 @@ func (s *SMTPSender) HandleCallback(ctx context.Context, req *CallbackRequest) (
 		return nil, fmt.Errorf("invalid callback data: %w", err)
 	}
 
-	status := "delivered"
+	status := constants.CallbackStatusDelivered
 	if bounceReport.Status == "bounced" || bounceReport.Status == "failed" {
-		status = "failed"
+		status = constants.CallbackStatusFailed
 	} else if bounceReport.Status == "complained" {
-		status = "rejected"
+		status = constants.CallbackStatusRejected
 	}
 
 	reportTime, _ := time.Parse(time.RFC3339, bounceReport.Timestamp)

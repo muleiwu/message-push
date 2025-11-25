@@ -248,9 +248,20 @@ func (s *AdminProviderService) TestProvider(id uint, req *dto.TestProviderReques
 		task.Content = req.Message
 	}
 
+	// 将 Provider 转换为 ProviderAccount 以适配新接口
+	providerAccount := &model.ProviderAccount{
+		ID:           provider.ID,
+		AccountCode:  provider.ProviderCode,
+		AccountName:  provider.ProviderName,
+		ProviderCode: provider.ProviderCode,
+		ProviderType: provider.ProviderType,
+		Config:       provider.Config,
+		Status:       provider.Status,
+	}
+
 	sendReq := &sender.SendRequest{
-		Task:     task,
-		Provider: &provider,
+		Task:            task,
+		ProviderAccount: providerAccount,
 		ProviderChannel: &model.ProviderChannel{
 			// 构造一个临时的ProviderChannel
 			ProviderID: provider.ID,
@@ -258,11 +269,9 @@ func (s *AdminProviderService) TestProvider(id uint, req *dto.TestProviderReques
 		},
 	}
 
-	// 3. 获取发送器
+	// 3. 获取发送器（使用服务商代码）
 	factory := sender.NewFactory()
-	// factory.GetSenderByProvider 可能需要 providerCode，但这里我们可能需要根据 providerType 获取
-	// 这里尝试直接根据 Type 获取
-	msgSender, err := factory.GetSender(provider.ProviderType)
+	msgSender, err := factory.GetSender(provider.ProviderCode)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get sender: %w", err)
 	}

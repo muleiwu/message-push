@@ -77,13 +77,13 @@ func NewTencentSMSSender() *TencentSMSSender {
 	return &TencentSMSSender{}
 }
 
-func (s *TencentSMSSender) GetType() string {
-	return constants.MessageTypeSMS
+func (s *TencentSMSSender) GetProviderCode() string {
+	return constants.ProviderTencentSMS
 }
 
 func (s *TencentSMSSender) Send(ctx context.Context, req *SendRequest) (*SendResponse, error) {
 	// 1. 获取配置
-	config, err := req.Provider.GetConfig()
+	config, err := req.ProviderAccount.GetConfig()
 	if err != nil {
 		return nil, fmt.Errorf("invalid provider config: %w", err)
 	}
@@ -198,7 +198,7 @@ func (s *TencentSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest)
 	}
 
 	// 1. 获取配置
-	config, err := req.Provider.GetConfig()
+	config, err := req.ProviderAccount.GetConfig()
 	if err != nil {
 		return nil, fmt.Errorf("invalid provider config: %w", err)
 	}
@@ -302,11 +302,6 @@ func (s *TencentSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest)
 
 // ==================== CallbackHandler 接口实现 ====================
 
-// GetProviderCode 获取服务商代码
-func (s *TencentSMSSender) GetProviderCode() string {
-	return constants.ProviderTencentSMS
-}
-
 // SupportsCallback 是否支持回调
 func (s *TencentSMSSender) SupportsCallback() bool {
 	return true
@@ -333,9 +328,9 @@ func (s *TencentSMSSender) HandleCallback(ctx context.Context, req *CallbackRequ
 
 	results := make([]*CallbackResult, 0, len(reports))
 	for _, report := range reports {
-		status := "delivered"
+		status := constants.CallbackStatusDelivered
 		if report.ReportStatus != "SUCCESS" {
-			status = "failed"
+			status = constants.CallbackStatusFailed
 		}
 
 		reportTime, _ := time.ParseInLocation("2006-01-02 15:04:05", report.UserReceiveTime, time.Local)

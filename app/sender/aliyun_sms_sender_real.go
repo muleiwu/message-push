@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"cnb.cool/mliev/push/message-push/app/constants"
 	openapi "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	dysmsapi "github.com/alibabacloud-go/dysmsapi-20170525/v3/client"
 	util "github.com/alibabacloud-go/tea-utils/v2/service"
@@ -54,7 +55,7 @@ func NewAliyunSMSSenderReal(config map[string]interface{}) (Sender, error) {
 	openAPIConfig := &openapi.Config{
 		AccessKeyId:     tea.String(smsConfig.AccessKeyID),
 		AccessKeySecret: tea.String(smsConfig.AccessKeySecret),
-		Endpoint:        tea.String(fmt.Sprintf("dysmsapi.aliyuncs.com")),
+		Endpoint:        tea.String("dysmsapi.aliyuncs.com"),
 	}
 
 	client, err := dysmsapi.NewClient(openAPIConfig)
@@ -91,10 +92,10 @@ func (s *AliyunSMSSenderReal) Send(ctx context.Context, request *SendRequest) (*
 	}
 
 	signName := s.signName
-	// 从 Provider config 中获取签名（如果有）
-	if request.Provider != nil && request.Provider.Config != "" {
+	// 从 ProviderAccount config 中获取签名（如果有）
+	if request.ProviderAccount != nil && request.ProviderAccount.Config != "" {
 		var config AliyunSMSConfig
-		if err := json.Unmarshal([]byte(request.Provider.Config), &config); err == nil {
+		if err := json.Unmarshal([]byte(request.ProviderAccount.Config), &config); err == nil {
 			if config.SignName != "" {
 				signName = config.SignName
 			}
@@ -143,9 +144,9 @@ func (s *AliyunSMSSenderReal) Send(ctx context.Context, request *SendRequest) (*
 	}, nil
 }
 
-// GetType 获取发送器类型
-func (s *AliyunSMSSenderReal) GetType() string {
-	return "aliyun_sms"
+// GetProviderCode 获取服务商代码
+func (s *AliyunSMSSenderReal) GetProviderCode() string {
+	return constants.ProviderAliyunSMS
 }
 
 // Validate 验证配置

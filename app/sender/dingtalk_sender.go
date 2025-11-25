@@ -67,12 +67,12 @@ func NewDingTalkSender() *DingTalkSender {
 	return &DingTalkSender{}
 }
 
-func (s *DingTalkSender) GetType() string {
-	return constants.MessageTypeDingTalk
+func (s *DingTalkSender) GetProviderCode() string {
+	return constants.ProviderDingTalk
 }
 
 func (s *DingTalkSender) Send(ctx context.Context, req *SendRequest) (*SendResponse, error) {
-	config, err := req.Provider.GetConfig()
+	config, err := req.ProviderAccount.GetConfig()
 	if err != nil {
 		return nil, fmt.Errorf("invalid provider config: %w", err)
 	}
@@ -208,7 +208,7 @@ func (s *DingTalkSender) BatchSend(ctx context.Context, req *BatchSendRequest) (
 		return &BatchSendResponse{Results: []*SendResponse{}}, nil
 	}
 
-	config, err := req.Provider.GetConfig()
+	config, err := req.ProviderAccount.GetConfig()
 	if err != nil {
 		return nil, fmt.Errorf("invalid provider config: %w", err)
 	}
@@ -304,11 +304,6 @@ func (s *DingTalkSender) BatchSend(ctx context.Context, req *BatchSendRequest) (
 
 // ==================== CallbackHandler 接口实现 ====================
 
-// GetProviderCode 获取服务商代码
-func (s *DingTalkSender) GetProviderCode() string {
-	return constants.ProviderDingTalk
-}
-
 // SupportsCallback 是否支持回调
 func (s *DingTalkSender) SupportsCallback() bool {
 	return true
@@ -334,9 +329,9 @@ func (s *DingTalkSender) HandleCallback(ctx context.Context, req *CallbackReques
 	}
 
 	// 钉钉的消息状态：0-未读, 1-已读, 2-已使用
-	status := "delivered"
+	status := constants.CallbackStatusDelivered
 	if callbackData.ErrCode != 0 {
-		status = "failed"
+		status = constants.CallbackStatusFailed
 	}
 
 	reportTime := time.Unix(callbackData.Timestamp/1000, 0)

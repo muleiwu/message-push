@@ -2,21 +2,17 @@ package sender
 
 import (
 	"fmt"
-
-	"cnb.cool/mliev/push/message-push/app/constants"
 )
 
 // Factory 发送器工厂
 type Factory struct {
-	senders           map[string]Sender
-	sendersByProvider map[string]Sender // 按服务商代码索引
+	senders map[string]Sender // key: providerCode
 }
 
 // NewFactory 创建工厂
 func NewFactory() *Factory {
 	factory := &Factory{
-		senders:           make(map[string]Sender),
-		sendersByProvider: make(map[string]Sender),
+		senders: make(map[string]Sender),
 	}
 
 	// 注册所有发送器
@@ -31,70 +27,21 @@ func NewFactory() *Factory {
 
 // Register 注册发送器
 func (f *Factory) Register(sender Sender) {
-	f.senders[sender.GetType()] = sender
-
-	// 如果 sender 实现了 CallbackHandler 接口，按服务商代码索引
-	if handler, ok := sender.(CallbackHandler); ok {
-		f.sendersByProvider[handler.GetProviderCode()] = sender
-	}
+	f.senders[sender.GetProviderCode()] = sender
 }
 
-// GetSender 根据消息类型获取发送器
-func (f *Factory) GetSender(messageType string) (Sender, error) {
-	sender, exists := f.senders[messageType]
+// GetSender 根据服务商代码获取发送器
+func (f *Factory) GetSender(providerCode string) (Sender, error) {
+	sender, exists := f.senders[providerCode]
 	if !exists {
-		return nil, fmt.Errorf("unsupported message type: %s", messageType)
+		return nil, fmt.Errorf("unknown provider: %s", providerCode)
 	}
 	return sender, nil
 }
 
-// GetSenderByProvider 根据服务商代码获取发送器
-func (f *Factory) GetSenderByProvider(providerCode string) (Sender, error) {
-	// 先从按服务商代码索引的 map 中查找
-	if sender, exists := f.sendersByProvider[providerCode]; exists {
-		return sender, nil
-	}
-
-	// 兼容旧逻辑：服务商代码映射到消息类型
-	var messageType string
-	switch providerCode {
-	case constants.ProviderAliyunSMS, constants.ProviderTencentSMS:
-		messageType = constants.MessageTypeSMS
-	case constants.ProviderSMTP:
-		messageType = constants.MessageTypeEmail
-	case constants.ProviderWeChatWork:
-		messageType = constants.MessageTypeWeChatWork
-	case constants.ProviderDingTalk:
-		messageType = constants.MessageTypeDingTalk
-	default:
-		return nil, fmt.Errorf("unknown provider code: %s", providerCode)
-	}
-
-	return f.GetSender(messageType)
-}
-
-// GetBatchSender 根据消息类型获取批量发送器
-func (f *Factory) GetBatchSender(messageType string) (BatchSender, error) {
-	sender, err := f.GetSender(messageType)
-	if err != nil {
-		return nil, err
-	}
-
-	batchSender, ok := sender.(BatchSender)
-	if !ok {
-		return nil, fmt.Errorf("sender for message type %s does not support batch send", messageType)
-	}
-
-	if !batchSender.SupportsBatchSend() {
-		return nil, fmt.Errorf("sender for message type %s has batch send disabled", messageType)
-	}
-
-	return batchSender, nil
-}
-
-// GetBatchSenderByProvider 根据服务商代码获取批量发送器
-func (f *Factory) GetBatchSenderByProvider(providerCode string) (BatchSender, error) {
-	sender, err := f.GetSenderByProvider(providerCode)
+// GetBatchSender 根据服务商代码获取批量发送器
+func (f *Factory) GetBatchSender(providerCode string) (BatchSender, error) {
+	sender, err := f.GetSender(providerCode)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +60,7 @@ func (f *Factory) GetBatchSenderByProvider(providerCode string) (BatchSender, er
 
 // GetCallbackHandler 根据服务商代码获取回调处理器
 func (f *Factory) GetCallbackHandler(providerCode string) (CallbackHandler, error) {
-	sender, exists := f.sendersByProvider[providerCode]
+	sender, exists := f.senders[providerCode]
 	if !exists {
 		return nil, fmt.Errorf("unknown provider code: %s", providerCode)
 	}
@@ -133,7 +80,7 @@ func (f *Factory) GetCallbackHandler(providerCode string) (CallbackHandler, erro
 // GetAllCallbackHandlers 获取所有支持回调的处理器
 func (f *Factory) GetAllCallbackHandlers() []CallbackHandler {
 	var handlers []CallbackHandler
-	for _, sender := range f.sendersByProvider {
+	for _, sender := range f.senders {
 		if handler, ok := sender.(CallbackHandler); ok && handler.SupportsCallback() {
 			handlers = append(handlers, handler)
 		}
