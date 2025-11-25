@@ -19,15 +19,9 @@ func (ctrl MessageController) Send(c *gin.Context, helper interfaces.HelperInter
 		return
 	}
 
-	// 从上下文获取认证信息
+	// 从上下文获取认证信息（已由中间件验证）
 	appID, _ := c.Get("app_id")
 	req.AppID = appID.(string)
-
-	signature, _ := c.Get("signature")
-	req.Signature = signature.(string)
-
-	timestamp, _ := c.Get("timestamp")
-	req.Timestamp = timestamp.(int64)
 
 	resp, err := messageService.Send(c.Request.Context(), &req)
 	if err != nil {
@@ -47,15 +41,9 @@ func (ctrl MessageController) BatchSend(c *gin.Context, helper interfaces.Helper
 		return
 	}
 
-	// 从上下文获取认证信息
+	// 从上下文获取认证信息（已由中间件验证）
 	appID, _ := c.Get("app_id")
 	req.AppID = appID.(string)
-
-	signature, _ := c.Get("signature")
-	req.Signature = signature.(string)
-
-	timestamp, _ := c.Get("timestamp")
-	req.Timestamp = timestamp.(int64)
 
 	resp, err := messageService.BatchSend(c.Request.Context(), &req)
 	if err != nil {

@@ -1,25 +1,31 @@
 package middleware
 
 import (
+	"bytes"
+	"encoding/json"
+	"io"
 	"strconv"
 
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/controller"
 	"cnb.cool/mliev/push/message-push/app/dao"
+	"cnb.cool/mliev/push/message-push/app/helper"
 	"github.com/gin-gonic/gin"
 )
 
 // AuthMiddleware 认证中间件
 func AuthMiddleware() gin.HandlerFunc {
 	appDao := dao.NewApplicationDAO()
+	signatureHelper := helper.NewSignatureHelper()
 
 	return func(c *gin.Context) {
 		// 从Header获取AppID和签名信息
 		appID := c.GetHeader("X-App-Id")
 		signature := c.GetHeader("X-Signature")
 		timestampStr := c.GetHeader("X-Timestamp")
+		nonce := c.GetHeader("X-Nonce")
 
-		if appID == "" || signature == "" || timestampStr == "" {
+		if appID == "" || signature == "" || timestampStr == "" || nonce == "" {
 			controller.FailWithCode(c, constants.CodeUnauthorized)
 			c.Abort()
 			return
@@ -48,11 +54,48 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
+		// 解密 app secret
+		appSecret, err := helper.DecryptAppSecret(app.AppSecret)
+		if err != nil {
+			controller.FailWithCode(c, constants.CodeUnauthorized)
+			c.Abort()
+			return
+		}
+
+		// 读取请求体用于签名验证
+		var bodyParams map[string]interface{}
+		if c.Request.Body != nil {
+			bodyBytes, err := io.ReadAll(c.Request.Body)
+			if err != nil {
+				controller.FailWithCode(c, constants.CodeUnauthorized)
+				c.Abort()
+				return
+			}
+			// 将 body 放回，以便后续 handler 可以读取
+			c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+			// 解析 body 为 map
+			if len(bodyBytes) > 0 {
+				if err := json.Unmarshal(bodyBytes, &bodyParams); err != nil {
+					controller.FailWithMessage(c, "invalid request body")
+					c.Abort()
+					return
+				}
+			}
+		}
+
+		// 验证签名
+		method := c.Request.Method
+		path := c.Request.URL.Path
+		if !signatureHelper.VerifySignature(appSecret, method, path, bodyParams, timestamp, nonce, signature) {
+			controller.FailWithCode(c, constants.CodeInvalidSignature)
+			c.Abort()
+			return
+		}
+
 		// 将应用信息存入上下文
 		c.Set("app_id", app.AppID)
 		c.Set("app_db_id", app.ID)
-		c.Set("signature", signature)
-		c.Set("timestamp", timestamp)
 
 		c.Next()
 	}
