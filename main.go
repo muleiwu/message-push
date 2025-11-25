@@ -6,10 +6,10 @@ import (
 	"cnb.cool/mliev/push/message-push/cmd"
 )
 
-//go:embed templates/**
+//go:embed templates
 var templateFS embed.FS
 
-//go:embed static/**
+//go:embed static
 var staticFs embed.FS
 
 func main() {
