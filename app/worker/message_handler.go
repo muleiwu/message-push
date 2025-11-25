@@ -172,6 +172,7 @@ func (h *MessageHandler) selectChannel(ctx context.Context, task *model.PushTask
 // handleSuccess 处理成功
 func (h *MessageHandler) handleSuccess(task *model.PushTask, providerChannel *model.ProviderChannel, providerID string) {
 	task.Status = constants.TaskStatusSuccess
+	task.ProviderMsgID = providerID // 保存服务商消息ID，用于回调匹配
 	h.taskDao.Update(task)
 
 	// 记录日志

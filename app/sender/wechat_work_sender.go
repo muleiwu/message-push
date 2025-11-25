@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"cnb.cool/mliev/push/message-push/app/constants"
@@ -148,12 +149,14 @@ func (s *WeChatWorkSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 			Success:      false,
 			ErrorCode:    fmt.Sprintf("%d", respData.ErrCode),
 			ErrorMessage: respData.ErrMsg,
+			TaskID:       req.Task.TaskID,
 		}, nil
 	}
 
 	return &SendResponse{
 		Success:    true,
 		ProviderID: respData.MsgID,
+		TaskID:     req.Task.TaskID,
 	}, nil
 }
 
@@ -194,4 +197,182 @@ func (s *WeChatWorkSender) getAccessToken(ctx context.Context, corpID, secret st
 	redisClient.Set(ctx, key, data.AccessToken, time.Duration(data.ExpiresIn-200)*time.Second)
 
 	return data.AccessToken, nil
+}
+
+// ==================== BatchSender 接口实现 ====================
+
+// SupportsBatchSend 是否支持批量发送
+func (s *WeChatWorkSender) SupportsBatchSend() bool {
+	return true
+}
+
+// BatchSend 批量发送企业微信消息（企业微信支持 touser 用 | 分隔多个用户）
+func (s *WeChatWorkSender) BatchSend(ctx context.Context, req *BatchSendRequest) (*BatchSendResponse, error) {
+	if len(req.Tasks) == 0 {
+		return &BatchSendResponse{Results: []*SendResponse{}}, nil
+	}
+
+	config, err := req.Provider.GetConfig()
+	if err != nil {
+		return nil, fmt.Errorf("invalid provider config: %w", err)
+	}
+
+	corpID, _ := config["corp_id"].(string)
+	agentSecret, _ := config["agent_secret"].(string)
+	agentID, _ := config["agent_id"].(string)
+
+	if corpID == "" || agentSecret == "" || agentID == "" {
+		return nil, fmt.Errorf("missing wechat work config: corp_id, agent_secret or agent_id")
+	}
+
+	// 获取 Access Token
+	token, err := s.getAccessToken(ctx, corpID, agentSecret)
+	if err != nil {
+		return nil, err
+	}
+
+	// 收集所有用户ID（用 | 分隔）
+	var userIDs []string
+	for _, task := range req.Tasks {
+		if task.Receiver != "" {
+			userIDs = append(userIDs, task.Receiver)
+		}
+	}
+	toUser := strings.Join(userIDs, "|")
+
+	// 构造消息（批量发送时使用第一个任务的内容）
+	firstTask := req.Tasks[0]
+	msgType := "text"
+	if firstTask.MessageType == "markdown" {
+		msgType = "markdown"
+	}
+
+	content := firstTask.Content
+	if content == "" {
+		content = firstTask.Title
+	}
+
+	payload := map[string]interface{}{
+		"touser":  toUser,
+		"msgtype": msgType,
+		"agentid": agentID,
+		"text": map[string]string{
+			"content": content,
+		},
+		"safe": 0,
+	}
+
+	if msgType == "markdown" {
+		payload["markdown"] = map[string]string{
+			"content": content,
+		}
+		delete(payload, "text")
+	}
+
+	body, _ := json.Marshal(payload)
+
+	// 发送请求
+	apiURL := fmt.Sprintf("https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token=%s", token)
+	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	var respData struct {
+		ErrCode      int    `json:"errcode"`
+		ErrMsg       string `json:"errmsg"`
+		MsgID        string `json:"msgid"`
+		InvalidUser  string `json:"invaliduser"`
+		InvalidParty string `json:"invalidparty"`
+		InvalidTag   string `json:"invalidtag"`
+	}
+
+	if err := json.Unmarshal(respBody, &respData); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %v", err)
+	}
+
+	// 构造结果
+	results := make([]*SendResponse, len(req.Tasks))
+	invalidUsers := make(map[string]bool)
+	if respData.InvalidUser != "" {
+		for _, u := range strings.Split(respData.InvalidUser, "|") {
+			invalidUsers[u] = true
+		}
+	}
+
+	for i, task := range req.Tasks {
+		if respData.ErrCode != 0 {
+			results[i] = &SendResponse{
+				Success:      false,
+				ErrorCode:    fmt.Sprintf("%d", respData.ErrCode),
+				ErrorMessage: respData.ErrMsg,
+				TaskID:       task.TaskID,
+			}
+		} else if invalidUsers[task.Receiver] {
+			results[i] = &SendResponse{
+				Success:      false,
+				ErrorCode:    "invalid_user",
+				ErrorMessage: "用户ID无效",
+				TaskID:       task.TaskID,
+			}
+		} else {
+			results[i] = &SendResponse{
+				Success:    true,
+				ProviderID: respData.MsgID,
+				TaskID:     task.TaskID,
+			}
+		}
+	}
+
+	return &BatchSendResponse{Results: results}, nil
+}
+
+// ==================== CallbackHandler 接口实现 ====================
+
+// GetProviderCode 获取服务商代码
+func (s *WeChatWorkSender) GetProviderCode() string {
+	return constants.ProviderWeChatWork
+}
+
+// SupportsCallback 是否支持回调
+func (s *WeChatWorkSender) SupportsCallback() bool {
+	return true
+}
+
+// HandleCallback 处理企业微信回调
+// 企业微信消息发送状态回调格式（需要在企业微信后台配置回调URL）
+func (s *WeChatWorkSender) HandleCallback(ctx context.Context, req *CallbackRequest) ([]*CallbackResult, error) {
+	// 企业微信回调数据格式
+	var callbackData struct {
+		MsgID      string `json:"msgid"`
+		Status     string `json:"status"` // SEND_OK, SEND_FAIL
+		UserID     string `json:"userid"`
+		ErrCode    int    `json:"errcode"`
+		ErrMsg     string `json:"errmsg"`
+		CreateTime int64  `json:"create_time"`
+	}
+
+	if err := json.Unmarshal(req.RawBody, &callbackData); err != nil {
+		return nil, fmt.Errorf("invalid callback data: %w", err)
+	}
+
+	status := "delivered"
+	if callbackData.Status != "SEND_OK" {
+		status = "failed"
+	}
+
+	reportTime := time.Unix(callbackData.CreateTime, 0)
+	if callbackData.CreateTime == 0 {
+		reportTime = time.Now()
+	}
+
+	return []*CallbackResult{{
+		ProviderID:   callbackData.MsgID,
+		Status:       status,
+		ErrorCode:    fmt.Sprintf("%d", callbackData.ErrCode),
+		ErrorMessage: callbackData.ErrMsg,
+		ReportTime:   reportTime,
+	}}, nil
 }

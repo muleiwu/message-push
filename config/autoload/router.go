@@ -35,6 +35,16 @@ func (receiver Router) InitConfig(helper envInterface.HelperInterface) map[strin
 				install.POST("/submit", deps.WrapHandler(controller.InstallController{}.SubmitInstall))
 			}
 
+			// Callback API - 服务商回调（不需要认证，供服务商调用）
+			callback := router.Group("/api/callback")
+			{
+				// 动态路由，支持所有服务商
+				callback.POST("/:provider", deps.WrapHandler(controller.CallbackController{}.Handle))
+				callback.GET("/:provider", deps.WrapHandler(controller.CallbackController{}.Handle))
+				// 获取支持回调的服务商列表
+				callback.GET("", deps.WrapHandler(controller.CallbackController{}.GetSupportedProviders))
+			}
+
 			// API v1 - 需要认证、限流、配额检查
 			v1 := router.Group("/api/v1")
 			v1.Use(middleware.AuthMiddleware())

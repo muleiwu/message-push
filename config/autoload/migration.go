@@ -37,6 +37,9 @@ func (receiver Migration) Get() []any {
 
 		// 管理员模块
 		&model.AdminUser{},
+
+		// Webhook 配置
+		&model.WebhookConfig{},
 	}
 }
 

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"time"
 
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/registry"
@@ -122,5 +124,128 @@ func (s *AliyunSMSSender) Send(ctx context.Context, req *SendRequest) (*SendResp
 	return &SendResponse{
 		Success:    true,
 		ProviderID: fmt.Sprintf("mock_aliyun_%s_%s", signName, req.Task.TaskID),
+		TaskID:     req.Task.TaskID,
 	}, nil
+}
+
+// ==================== BatchSender 接口实现 ====================
+
+// SupportsBatchSend 是否支持批量发送
+func (s *AliyunSMSSender) SupportsBatchSend() bool {
+	return true
+}
+
+// BatchSend 批量发送短信（阿里云支持最多1000个号码）
+func (s *AliyunSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest) (*BatchSendResponse, error) {
+	if len(req.Tasks) == 0 {
+		return &BatchSendResponse{Results: []*SendResponse{}}, nil
+	}
+
+	// 解析服务商配置
+	var config struct {
+		AccessKeyID     string `json:"access_key_id"`
+		AccessKeySecret string `json:"access_key_secret"`
+	}
+
+	if err := json.Unmarshal([]byte(req.Provider.Config), &config); err != nil {
+		return nil, fmt.Errorf("invalid provider config: %w", err)
+	}
+
+	// 从请求中获取签名
+	signName := ""
+	if req.Signature != nil {
+		signName = req.Signature.SignatureCode
+	}
+
+	// 收集所有手机号
+	var phoneNumbers []string
+	for _, task := range req.Tasks {
+		phoneNumbers = append(phoneNumbers, task.Receiver)
+	}
+
+	// TODO: 实际调用阿里云批量发送SDK
+	// import "github.com/aliyun/alibaba-cloud-sdk-go/services/dysmsapi"
+	//
+	// client, err := dysmsapi.NewClientWithAccessKey("cn-hangzhou", config.AccessKeyID, config.AccessKeySecret)
+	// request := dysmsapi.CreateSendBatchSmsRequest()
+	// request.PhoneNumberJson = phoneNumbersJSON
+	// request.SignNameJson = signNamesJSON
+	// request.TemplateCode = templateCode
+	// request.TemplateParamJson = templateParamsJSON
+	// response, err := client.SendBatchSms(request)
+
+	// 模拟批量发送（开发阶段）
+	results := make([]*SendResponse, len(req.Tasks))
+	batchID := fmt.Sprintf("mock_aliyun_batch_%s_%d", signName, time.Now().UnixNano())
+
+	for i, task := range req.Tasks {
+		results[i] = &SendResponse{
+			Success:    true,
+			ProviderID: fmt.Sprintf("%s_%d", batchID, i),
+			TaskID:     task.TaskID,
+		}
+	}
+
+	return &BatchSendResponse{Results: results}, nil
+}
+
+// ==================== CallbackHandler 接口实现 ====================
+
+// GetProviderCode 获取服务商代码
+func (s *AliyunSMSSender) GetProviderCode() string {
+	return constants.ProviderAliyunSMS
+}
+
+// SupportsCallback 是否支持回调
+func (s *AliyunSMSSender) SupportsCallback() bool {
+	return true
+}
+
+// HandleCallback 处理阿里云短信回调
+// 阿里云短信状态报告格式：
+// [{"phone_number":"1381111****","send_time":"2017-01-01 00:00:00","report_time":"2017-01-01 00:00:00","success":true,"err_code":"DELIVRD","err_msg":"用户接收成功","sms_size":"1","biz_id":"12345^67890","out_id":""}]
+func (s *AliyunSMSSender) HandleCallback(ctx context.Context, req *CallbackRequest) ([]*CallbackResult, error) {
+	// 解析回调数据
+	var reports []struct {
+		PhoneNumber string `json:"phone_number"`
+		SendTime    string `json:"send_time"`
+		ReportTime  string `json:"report_time"`
+		Success     bool   `json:"success"`
+		ErrCode     string `json:"err_code"`
+		ErrMsg      string `json:"err_msg"`
+		SmsSize     string `json:"sms_size"`
+		BizId       string `json:"biz_id"`
+		OutId       string `json:"out_id"`
+	}
+
+	if err := json.Unmarshal(req.RawBody, &reports); err != nil {
+		return nil, fmt.Errorf("invalid callback data: %w", err)
+	}
+
+	results := make([]*CallbackResult, 0, len(reports))
+	for _, report := range reports {
+		status := "delivered"
+		if !report.Success {
+			status = "failed"
+		}
+
+		reportTime, _ := time.ParseInLocation("2006-01-02 15:04:05", report.ReportTime, time.Local)
+
+		// BizId 格式可能是 "bizId^taskId" 或纯 bizId
+		providerID := report.BizId
+		if strings.Contains(report.BizId, "^") {
+			parts := strings.Split(report.BizId, "^")
+			providerID = parts[0]
+		}
+
+		results = append(results, &CallbackResult{
+			ProviderID:   providerID,
+			Status:       status,
+			ErrorCode:    report.ErrCode,
+			ErrorMessage: report.ErrMsg,
+			ReportTime:   reportTime,
+		})
+	}
+
+	return results, nil
 }

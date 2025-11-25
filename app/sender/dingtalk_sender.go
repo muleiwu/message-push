@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"cnb.cool/mliev/push/message-push/app/constants"
@@ -140,12 +141,14 @@ func (s *DingTalkSender) Send(ctx context.Context, req *SendRequest) (*SendRespo
 			Success:      false,
 			ErrorCode:    fmt.Sprintf("%d", respData.ErrCode),
 			ErrorMessage: respData.ErrMsg,
+			TaskID:       req.Task.TaskID,
 		}, nil
 	}
 
 	return &SendResponse{
 		Success:    true,
 		ProviderID: fmt.Sprintf("%d", respData.TaskID),
+		TaskID:     req.Task.TaskID,
 	}, nil
 }
 
@@ -186,4 +189,162 @@ func (s *DingTalkSender) getAccessToken(ctx context.Context, appKey, appSecret s
 	redisClient.Set(ctx, key, data.AccessToken, time.Duration(data.ExpiresIn-200)*time.Second)
 
 	return data.AccessToken, nil
+}
+
+// ==================== BatchSender 接口实现 ====================
+
+// SupportsBatchSend 是否支持批量发送
+func (s *DingTalkSender) SupportsBatchSend() bool {
+	return true
+}
+
+// BatchSend 批量发送钉钉消息（钉钉支持 userid_list 用逗号分隔多个用户）
+func (s *DingTalkSender) BatchSend(ctx context.Context, req *BatchSendRequest) (*BatchSendResponse, error) {
+	if len(req.Tasks) == 0 {
+		return &BatchSendResponse{Results: []*SendResponse{}}, nil
+	}
+
+	config, err := req.Provider.GetConfig()
+	if err != nil {
+		return nil, fmt.Errorf("invalid provider config: %w", err)
+	}
+
+	appKey, _ := config["app_key"].(string)
+	appSecret, _ := config["app_secret"].(string)
+	agentID, _ := config["agent_id"].(string)
+
+	if appKey == "" || appSecret == "" || agentID == "" {
+		return nil, fmt.Errorf("missing dingtalk config: app_key, app_secret or agent_id")
+	}
+
+	// 获取 Access Token
+	token, err := s.getAccessToken(ctx, appKey, appSecret)
+	if err != nil {
+		return nil, err
+	}
+
+	// 收集所有用户ID（用逗号分隔）
+	var userIDs []string
+	for _, task := range req.Tasks {
+		if task.Receiver != "" {
+			userIDs = append(userIDs, task.Receiver)
+		}
+	}
+	userIDList := strings.Join(userIDs, ",")
+
+	// 构造消息（批量发送时使用第一个任务的内容）
+	firstTask := req.Tasks[0]
+	msgType := "text"
+
+	content := firstTask.Content
+	if content == "" {
+		content = firstTask.Title
+	}
+
+	payload := map[string]interface{}{
+		"agent_id":    agentID,
+		"userid_list": userIDList,
+		"msg": map[string]interface{}{
+			"msgtype": msgType,
+			"text": map[string]string{
+				"content": content,
+			},
+		},
+	}
+
+	body, _ := json.Marshal(payload)
+
+	// 发送请求
+	apiURL := fmt.Sprintf("https://oapi.dingtalk.com/topapi/message/corpconversation/asyncsend_v2?access_token=%s", token)
+	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	var respData struct {
+		ErrCode   int64  `json:"errcode"`
+		ErrMsg    string `json:"errmsg"`
+		TaskID    int64  `json:"task_id"`
+		RequestID string `json:"request_id"`
+	}
+
+	if err := json.Unmarshal(respBody, &respData); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %v", err)
+	}
+
+	// 构造结果
+	results := make([]*SendResponse, len(req.Tasks))
+	providerID := fmt.Sprintf("%d", respData.TaskID)
+
+	for i, task := range req.Tasks {
+		if respData.ErrCode != 0 {
+			results[i] = &SendResponse{
+				Success:      false,
+				ErrorCode:    fmt.Sprintf("%d", respData.ErrCode),
+				ErrorMessage: respData.ErrMsg,
+				TaskID:       task.TaskID,
+			}
+		} else {
+			results[i] = &SendResponse{
+				Success:    true,
+				ProviderID: providerID,
+				TaskID:     task.TaskID,
+			}
+		}
+	}
+
+	return &BatchSendResponse{Results: results}, nil
+}
+
+// ==================== CallbackHandler 接口实现 ====================
+
+// GetProviderCode 获取服务商代码
+func (s *DingTalkSender) GetProviderCode() string {
+	return constants.ProviderDingTalk
+}
+
+// SupportsCallback 是否支持回调
+func (s *DingTalkSender) SupportsCallback() bool {
+	return true
+}
+
+// HandleCallback 处理钉钉回调
+// 钉钉工作通知消息发送结果回调
+func (s *DingTalkSender) HandleCallback(ctx context.Context, req *CallbackRequest) ([]*CallbackResult, error) {
+	// 钉钉回调数据格式（需要在钉钉开放平台配置回调URL）
+	var callbackData struct {
+		EventType string `json:"EventType"` // bpms_task_change, check_url, etc.
+		TaskID    int64  `json:"task_id"`
+		CorpID    string `json:"corpid"`
+		UserID    string `json:"userid"`
+		Status    string `json:"status"` // 0:未读, 1:已读, 2:已使用
+		ErrCode   int    `json:"errcode"`
+		ErrMsg    string `json:"errmsg"`
+		Timestamp int64  `json:"timestamp"`
+	}
+
+	if err := json.Unmarshal(req.RawBody, &callbackData); err != nil {
+		return nil, fmt.Errorf("invalid callback data: %w", err)
+	}
+
+	// 钉钉的消息状态：0-未读, 1-已读, 2-已使用
+	status := "delivered"
+	if callbackData.ErrCode != 0 {
+		status = "failed"
+	}
+
+	reportTime := time.Unix(callbackData.Timestamp/1000, 0)
+	if callbackData.Timestamp == 0 {
+		reportTime = time.Now()
+	}
+
+	return []*CallbackResult{{
+		ProviderID:   fmt.Sprintf("%d", callbackData.TaskID),
+		Status:       status,
+		ErrorCode:    fmt.Sprintf("%d", callbackData.ErrCode),
+		ErrorMessage: callbackData.ErrMsg,
+		ReportTime:   reportTime,
+	}}, nil
 }
