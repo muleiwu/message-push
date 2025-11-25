@@ -11,8 +11,7 @@ import (
 type AdminLogService struct {
 	logDAO             *dao.PushLogDAO
 	appDAO             *dao.ApplicationDAO
-	providerChannelDAO *dao.ProviderChannelDAO
-	providerDAO        *dao.ProviderDAO
+	providerAccountDAO *dao.ProviderAccountDAO
 }
 
 // NewAdminLogService 创建服务
@@ -20,8 +19,7 @@ func NewAdminLogService() *AdminLogService {
 	return &AdminLogService{
 		logDAO:             dao.NewPushLogDAO(),
 		appDAO:             dao.NewApplicationDAO(),
-		providerChannelDAO: dao.NewProviderChannelDAO(),
-		providerDAO:        dao.NewProviderDAO(),
+		providerAccountDAO: dao.NewProviderAccountDAO(),
 	}
 }
 
@@ -51,22 +49,16 @@ func (s *AdminLogService) GetLogList(req *dto.LogListRequest) (*dto.LogListRespo
 			appMap[log.AppID] = appName
 		}
 
-		// 获取服务商名称
-		providerName, ok := providerMap[log.ProviderChannelID]
+		// 获取服务商账号名称
+		providerName, ok := providerMap[log.ProviderAccountID]
 		if !ok {
-			pc, err := s.providerChannelDAO.GetByID(log.ProviderChannelID)
-			if err == nil && pc != nil {
-				// 关联服务商表
-				provider, err := s.providerDAO.GetByID(pc.ProviderID)
-				if err == nil && provider != nil {
-					providerName = provider.ProviderName
-				} else {
-					providerName = "未知服务商"
-				}
+			account, err := s.providerAccountDAO.GetByID(log.ProviderAccountID)
+			if err == nil && account != nil {
+				providerName = account.AccountName
 			} else {
-				providerName = "未知通道"
+				providerName = "未知服务商"
 			}
-			providerMap[log.ProviderChannelID] = providerName
+			providerMap[log.ProviderAccountID] = providerName
 		}
 
 		items = append(items, &dto.LogItem{
@@ -74,7 +66,7 @@ func (s *AdminLogService) GetLogList(req *dto.LogListRequest) (*dto.LogListRespo
 			TaskID:            log.TaskID,
 			AppID:             log.AppID,
 			AppName:           appName,
-			ProviderChannelID: log.ProviderChannelID,
+			ProviderAccountID: log.ProviderAccountID,
 			ProviderName:      providerName,
 			RequestData:       log.RequestData,
 			ResponseData:      log.ResponseData,
@@ -108,12 +100,9 @@ func (s *AdminLogService) GetLog(id uint) (*dto.LogItem, error) {
 	}
 
 	providerName := ""
-	pc, err := s.providerChannelDAO.GetByID(log.ProviderChannelID)
-	if err == nil && pc != nil {
-		provider, err := s.providerDAO.GetByID(pc.ProviderID)
-		if err == nil && provider != nil {
-			providerName = provider.ProviderName
-		}
+	account, err := s.providerAccountDAO.GetByID(log.ProviderAccountID)
+	if err == nil && account != nil {
+		providerName = account.AccountName
 	}
 
 	return &dto.LogItem{
@@ -121,7 +110,7 @@ func (s *AdminLogService) GetLog(id uint) (*dto.LogItem, error) {
 		TaskID:            log.TaskID,
 		AppID:             log.AppID,
 		AppName:           appName,
-		ProviderChannelID: log.ProviderChannelID,
+		ProviderAccountID: log.ProviderAccountID,
 		ProviderName:      providerName,
 		RequestData:       log.RequestData,
 		ResponseData:      log.ResponseData,

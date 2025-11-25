@@ -26,7 +26,7 @@ type LogItem struct {
 	TaskID            string `json:"task_id"`
 	AppID             string `json:"app_id"`
 	AppName           string `json:"app_name"`
-	ProviderChannelID uint   `json:"provider_channel_id"`
+	ProviderAccountID uint   `json:"provider_account_id"`
 	ProviderName      string `json:"provider_name"`
 	RequestData       string `json:"request_data"`
 	ResponseData      string `json:"response_data"`

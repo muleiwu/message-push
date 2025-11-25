@@ -14,12 +14,19 @@ const (
 	MaxBatchSizeAliyunSMS  = 1000 // 阿里云短信批量上限
 )
 
+// ==================== 默认通道配置 ====================
+
+const (
+	DefaultMaxRetry      = 3  // 默认最大重试次数
+	DefaultRetryInterval = 2  // 默认重试间隔（秒）
+	DefaultTimeout       = 10 // 默认超时时间（秒）
+)
+
 // ==================== 发送相关 ====================
 
 // SendRequest 发送请求
 type SendRequest struct {
 	Task            *model.PushTask
-	ProviderChannel *model.ProviderChannel
 	ProviderAccount *model.ProviderAccount         // 服务商账号配置
 	Relation        *model.ChannelProviderRelation // 关联配置（签名/模板等）
 	Signature       *model.ProviderSignature       // 签名配置（用于SMS类型）
@@ -50,7 +57,6 @@ type Sender interface {
 // 注意：不同服务商有不同的批量限制，具体参见 MaxBatchSize* 常量
 type BatchSendRequest struct {
 	Tasks           []*model.PushTask
-	ProviderChannel *model.ProviderChannel
 	ProviderAccount *model.ProviderAccount
 	Relation        *model.ChannelProviderRelation
 	Signature       *model.ProviderSignature

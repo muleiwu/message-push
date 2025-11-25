@@ -15,20 +15,20 @@ import (
 type ChannelNode struct {
 	// 保留旧字段以兼容现有代码
 	Relation        *model.ChannelProviderRelation
-	Channel         *model.ProviderChannel
 	Provider        *model.Provider
 	CurrentWeight   int // 当前权重
 	EffectiveWeight int // 有效权重
 
 	// 新字段
 	ChannelTemplateBinding *model.ChannelTemplateBinding // 通道模板绑定配置
+	ProviderAccount        *model.ProviderAccount        // 服务商账号配置
 }
 
 // ChannelSelector 通道选择器
 type ChannelSelector struct {
 	logger                    gsr.Logger
 	channelTemplateBindingDao *dao.ChannelTemplateBindingDAO
-	providerChannelDAO        *dao.ProviderChannelDAO
+	providerAccountDAO        *dao.ProviderAccountDAO
 	// 保留旧的DAO以兼容
 	relationDao *dao.ChannelProviderRelationDAO
 	providerDAO *dao.ProviderDAO
@@ -42,7 +42,7 @@ func NewChannelSelector() *ChannelSelector {
 	return &ChannelSelector{
 		logger:                    h.GetLogger(),
 		channelTemplateBindingDao: dao.NewChannelTemplateBindingDAO(),
-		providerChannelDAO:        dao.NewProviderChannelDAO(),
+		providerAccountDAO:        dao.NewProviderAccountDAO(),
 		relationDao:               dao.NewChannelProviderRelationDAO(),
 		providerDAO:               dao.NewProviderDAO(),
 		cache:                     make(map[string][]*ChannelNode),
@@ -110,21 +110,21 @@ func (s *ChannelSelector) getChannelNodes(ctx context.Context, channelID uint, m
 			continue
 		}
 
-		providerID := ctb.ProviderID
-
-		// 查找对应的 ProviderChannel
-		providerChannels, err := s.providerChannelDAO.GetByProviderID(providerID)
-		if err != nil || len(providerChannels) == 0 {
-			// 如果不存在，跳过
-			s.logger.Warn(fmt.Sprintf("no provider channel found for provider_id=%d", providerID))
-			continue
+		// 直接使用预加载的 ProviderAccount
+		providerAccount := ctb.ProviderTemplate.ProviderAccount
+		if providerAccount == nil {
+			// 如果预加载失败，尝试手动查询
+			var err error
+			providerAccount, err = s.providerAccountDAO.GetByID(ctb.ProviderID)
+			if err != nil {
+				s.logger.Warn(fmt.Sprintf("failed to get provider account id=%d: %v", ctb.ProviderID, err))
+				continue
+			}
 		}
-		// 使用第一个可用的 ProviderChannel
-		providerChannel := providerChannels[0]
 
 		node := &ChannelNode{
 			ChannelTemplateBinding: ctb,
-			Channel:                providerChannel,
+			ProviderAccount:        providerAccount,
 			CurrentWeight:          0,
 			EffectiveWeight:        ctb.Weight,
 			// 构造兼容的Relation（用于旧代码）
@@ -144,47 +144,11 @@ func (s *ChannelSelector) getChannelNodes(ctx context.Context, channelID uint, m
 	return s.filterAvailableNodes(nodes), nil
 }
 
-// getChannelNodesLegacy 使用旧的ChannelProviderRelation获取通道节点（向后兼容）
+// getChannelNodesLegacy 使用旧的ChannelProviderRelation获取通道节点（已废弃）
+// 旧系统依赖已废弃的 provider_channels 表，建议迁移到新的 ChannelTemplateBinding 系统
 func (s *ChannelSelector) getChannelNodesLegacy(ctx context.Context, channelID uint, messageType string) ([]*ChannelNode, error) {
-	// 加载通道关联关系
-	relations, err := s.relationDao.GetByChannelIDAndType(channelID, messageType)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get channel relations: %w", err)
-	}
-
-	if len(relations) == 0 {
-		return nil, fmt.Errorf("no relations found for channel_id=%d type=%s", channelID, messageType)
-	}
-
-	// 构建节点列表
-	var nodes []*ChannelNode
-	for _, rel := range relations {
-		// 获取服务商通道
-		providerChannel, err := s.providerChannelDAO.GetByID(rel.ProviderChannelID)
-		if err != nil {
-			s.logger.Warn(fmt.Sprintf("failed to get provider channel id=%d err=%v", rel.ProviderChannelID, err))
-			continue
-		}
-
-		// 获取服务商信息
-		provider, err := s.providerDAO.GetByID(providerChannel.ProviderID)
-		if err != nil {
-			s.logger.Warn(fmt.Sprintf("failed to get provider id=%d err=%v", providerChannel.ProviderID, err))
-			continue
-		}
-
-		node := &ChannelNode{
-			Relation:        rel,
-			Channel:         providerChannel,
-			Provider:        provider,
-			CurrentWeight:   0,
-			EffectiveWeight: rel.Weight,
-		}
-
-		nodes = append(nodes, node)
-	}
-
-	return nodes, nil
+	s.logger.Warn(fmt.Sprintf("legacy channel relations system is deprecated, please migrate to ChannelTemplateBinding for channel_id=%d", channelID))
+	return nil, fmt.Errorf("no channel template bindings configured for channel_id=%d type=%s, legacy system is deprecated", channelID, messageType)
 }
 
 // filterAvailableNodes 过滤可用节点
@@ -270,12 +234,12 @@ func (s *ChannelSelector) smoothWeightedRoundRobin(nodes []*ChannelNode) *Channe
 }
 
 // ReportSuccess 报告成功
-func (s *ChannelSelector) ReportSuccess(providerID, channelID uint) {
+func (s *ChannelSelector) ReportSuccess(providerAccountID uint) {
 	// TODO: record success to circuit breaker and auto-enable if disabled
 }
 
 // ReportFailure 报告失败
-func (s *ChannelSelector) ReportFailure(providerID, channelID uint) {
+func (s *ChannelSelector) ReportFailure(providerAccountID uint) {
 	// TODO: record failure to circuit breaker and auto-disable based on threshold
 }
 

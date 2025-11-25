@@ -262,11 +262,6 @@ func (s *AdminProviderService) TestProvider(id uint, req *dto.TestProviderReques
 	sendReq := &sender.SendRequest{
 		Task:            task,
 		ProviderAccount: providerAccount,
-		ProviderChannel: &model.ProviderChannel{
-			// 构造一个临时的ProviderChannel
-			ProviderID: provider.ID,
-			Config:     provider.Config,
-		},
 	}
 
 	// 3. 获取发送器（使用服务商代码）

@@ -9,7 +9,7 @@ type PushLog struct {
 	ID                uint      `gorm:"primaryKey;autoIncrement" json:"id"`
 	TaskID            string    `gorm:"type:varchar(36);not null;index:idx_task_id;comment:任务ID" json:"task_id"`
 	AppID             string    `gorm:"type:varchar(32);not null;index:idx_app_id_created;comment:应用ID" json:"app_id"`
-	ProviderChannelID uint      `gorm:"type:bigint unsigned;not null;index:idx_provider_channel;comment:服务商通道ID" json:"provider_channel_id"`
+	ProviderAccountID uint      `gorm:"type:bigint unsigned;not null;index:idx_provider_account;comment:服务商账号ID" json:"provider_account_id"`
 	RequestData       string    `gorm:"type:json;comment:请求数据" json:"request_data"`
 	ResponseData      string    `gorm:"type:json;comment:响应数据" json:"response_data"`
 	Status            string    `gorm:"type:varchar(20);not null;index:idx_status_created;comment:状态：success, failed" json:"status"`

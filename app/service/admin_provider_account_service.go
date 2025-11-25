@@ -348,10 +348,6 @@ func (s *AdminProviderAccountService) TestProviderAccount(id uint, req *dto.Test
 		Task:            task,
 		ProviderAccount: account,
 		Signature:       nil, // 测试时不加载签名，由服务商返回错误
-		ProviderChannel: &model.ProviderChannel{
-			ProviderID: account.ID,
-			Config:     account.Config,
-		},
 	}
 
 	// 3. 获取发送器（使用服务商代码）

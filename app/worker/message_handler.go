@@ -20,29 +20,25 @@ import (
 
 // MessageHandler 消息处理器
 type MessageHandler struct {
-	logger             gsr.Logger
-	taskDao            *dao.PushTaskDAO
-	providerChannelDao *dao.ProviderChannelDAO
-	providerAccountDao *dao.ProviderAccountDAO
-	logDao             *dao.PushLogDAO
-	selector           *selector.ChannelSelector
-	senderFactory      *sender.Factory
-	retryHelper        *helper.RetryHelper
-	templateHelper     *helper.TemplateHelper
+	logger         gsr.Logger
+	taskDao        *dao.PushTaskDAO
+	logDao         *dao.PushLogDAO
+	selector       *selector.ChannelSelector
+	senderFactory  *sender.Factory
+	retryHelper    *helper.RetryHelper
+	templateHelper *helper.TemplateHelper
 }
 
 // NewMessageHandler 创建消息处理器
 func NewMessageHandler() *MessageHandler {
 	return &MessageHandler{
-		logger:             internalHelper.GetHelper().GetLogger(),
-		taskDao:            dao.NewPushTaskDAO(),
-		providerChannelDao: dao.NewProviderChannelDAO(),
-		providerAccountDao: dao.NewProviderAccountDAO(),
-		logDao:             dao.NewPushLogDAO(),
-		selector:           selector.NewChannelSelector(),
-		senderFactory:      sender.NewFactory(),
-		retryHelper:        helper.NewRetryHelper(),
-		templateHelper:     helper.NewTemplateHelper(),
+		logger:         internalHelper.GetHelper().GetLogger(),
+		taskDao:        dao.NewPushTaskDAO(),
+		logDao:         dao.NewPushLogDAO(),
+		selector:       selector.NewChannelSelector(),
+		senderFactory:  sender.NewFactory(),
+		retryHelper:    helper.NewRetryHelper(),
+		templateHelper: helper.NewTemplateHelper(),
 	}
 }
 
@@ -69,17 +65,22 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 	node, err := h.selectChannel(ctx, task)
 	if err != nil {
 		h.logger.Error(fmt.Sprintf("failed to select channel task_id=%s: %v", taskID, err))
-		h.handleFailure(task, err.Error())
+		h.handleFailure(task, 0, err.Error())
 		return err
 	}
 
-	// 获取服务商账号信息
-	providerAccount, err := h.providerAccountDao.GetByID(node.Channel.ProviderID)
-	if err != nil {
+	// 从节点直接获取服务商账号信息
+	providerAccount := node.ProviderAccount
+	if providerAccount == nil {
+		err := fmt.Errorf("provider account not found in channel node")
 		h.logger.Error(fmt.Sprintf("failed to get provider account task_id=%s: %v", taskID, err))
-		h.handleFailure(task, err.Error())
+		h.handleFailure(task, 0, err.Error())
 		return err
 	}
+
+	// 更新任务的服务商账号ID
+	task.ProviderAccountID = &providerAccount.ID
+	h.taskDao.Update(task)
 
 	// 尝试使用新的模板系统处理模板和参数
 	h.processTemplateBinding(task, node)
@@ -88,14 +89,13 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 	messageSender, err := h.senderFactory.GetSender(providerAccount.ProviderCode)
 	if err != nil {
 		h.logger.Error(fmt.Sprintf("failed to get sender task_id=%s: %v", taskID, err))
-		h.handleFailure(task, err.Error())
+		h.handleFailure(task, providerAccount.ID, err.Error())
 		return err
 	}
 
 	// 发送消息（不自动加载签名，由通道配置或API调用指定）
 	sendReq := &sender.SendRequest{
 		Task:            task,
-		ProviderChannel: node.Channel,
 		ProviderAccount: providerAccount,
 		Relation:        node.Relation,
 		Signature:       nil, // 签名由通道配置或API调用指定，这里不自动加载
@@ -104,15 +104,15 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 	resp, err := messageSender.Send(ctx, sendReq)
 	if err != nil {
 		h.logger.Error(fmt.Sprintf("sender error task_id=%s: %v", taskID, err))
-		h.handleSendError(task, node.Channel, err.Error())
+		h.handleSendError(task, providerAccount.ID, err.Error())
 		return err
 	}
 
 	// 处理发送结果
 	if resp.Success {
-		h.handleSuccess(task, node.Channel, resp.ProviderID)
+		h.handleSuccess(task, providerAccount.ID, resp.ProviderID)
 	} else {
-		h.handleSendError(task, node.Channel, resp.ErrorMessage)
+		h.handleSendError(task, providerAccount.ID, resp.ErrorMessage)
 	}
 
 	return nil
@@ -120,27 +120,6 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 
 // selectChannel 选择发送通道
 func (h *MessageHandler) selectChannel(ctx context.Context, task *model.PushTask) (*selector.ChannelNode, error) {
-	// 如果任务已指定服务商通道，直接使用 (需要反查 Relation，这里简化处理：如果是指定通道，可能没有Relation配置)
-	// 这种情况通常是测试或手动指定。如果必须Relation，则无法直接指定ProviderChannelID。
-	// 假设必须走Selector流程，或者任务中携带了必要信息。
-	// 暂时不支持直接指定ProviderChannelID bypass Selector logic completely regarding Relation.
-	// 或者我们可以查一下Relation。
-	// 为了兼容，如果指定了ProviderChannelID，我们构造一个Dummy Node
-	if task.ProviderChannelID != nil {
-		pc, err := h.providerChannelDao.GetByID(*task.ProviderChannelID)
-		if err != nil {
-			return nil, err
-		}
-		// 尝试找Relation，如果找不到就用空Relation
-		// 这里省略复杂逻辑，假设指定通道时不需要Relation特定配置（签名等可能在Provider或Task中）
-		return &selector.ChannelNode{
-			Channel:  pc,
-			Relation: &model.ChannelProviderRelation{
-				// 默认值
-			},
-		}, nil
-	}
-
 	// 使用选择器选择通道
 	channelID, err := parseUint(task.ChannelID)
 	if err != nil {
@@ -152,15 +131,11 @@ func (h *MessageHandler) selectChannel(ctx context.Context, task *model.PushTask
 		return nil, err
 	}
 
-	// 更新任务的服务商通道ID
-	task.ProviderChannelID = &node.Channel.ID
-	h.taskDao.Update(task)
-
 	return node, nil
 }
 
 // handleSuccess 处理成功
-func (h *MessageHandler) handleSuccess(task *model.PushTask, providerChannel *model.ProviderChannel, providerID string) {
+func (h *MessageHandler) handleSuccess(task *model.PushTask, providerAccountID uint, providerID string) {
 	task.Status = constants.TaskStatusSuccess
 	task.ProviderMsgID = providerID // 保存服务商消息ID，用于回调匹配
 	h.taskDao.Update(task)
@@ -169,21 +144,21 @@ func (h *MessageHandler) handleSuccess(task *model.PushTask, providerChannel *mo
 	h.logDao.Create(&model.PushLog{
 		TaskID:            task.TaskID,
 		AppID:             task.AppID,
-		ProviderChannelID: providerChannel.ID,
+		ProviderAccountID: providerAccountID,
 		Status:            "success",
 		ResponseData:      fmt.Sprintf("{\"provider_id\":\"%s\"}", providerID),
 	})
 
 	// 通知选择器成功
-	h.selector.ReportSuccess(providerChannel.ProviderID, providerChannel.ID)
+	h.selector.ReportSuccess(providerAccountID)
 
 	h.logger.Info(fmt.Sprintf("message sent successfully task_id=%s provider_id=%s", task.TaskID, providerID))
 }
 
 // handleSendError 处理发送错误
-func (h *MessageHandler) handleSendError(task *model.PushTask, providerChannel *model.ProviderChannel, errorMsg string) {
+func (h *MessageHandler) handleSendError(task *model.PushTask, providerAccountID uint, errorMsg string) {
 	// 通知选择器失败
-	h.selector.ReportFailure(providerChannel.ProviderID, providerChannel.ID)
+	h.selector.ReportFailure(providerAccountID)
 
 	// 判断是否需要重试
 	shouldRetry, delay := h.retryHelper.ShouldRetry(errorMsg, task.RetryCount, task.MaxRetry)
@@ -201,21 +176,21 @@ func (h *MessageHandler) handleSendError(task *model.PushTask, providerChannel *
 
 		h.logger.Info(fmt.Sprintf("message will retry task_id=%s retry_count=%d delay=%v", task.TaskID, task.RetryCount, delay))
 	} else {
-		h.handleFailure(task, errorMsg)
+		h.handleFailure(task, providerAccountID, errorMsg)
 	}
 }
 
 // handleFailure 处理失败
-func (h *MessageHandler) handleFailure(task *model.PushTask, errorMsg string) {
+func (h *MessageHandler) handleFailure(task *model.PushTask, providerAccountID uint, errorMsg string) {
 	task.Status = constants.TaskStatusFailed
 	h.taskDao.Update(task)
 
 	// 记录日志
-	if task.ProviderChannelID != nil {
+	if providerAccountID > 0 {
 		h.logDao.Create(&model.PushLog{
 			TaskID:            task.TaskID,
 			AppID:             task.AppID,
-			ProviderChannelID: *task.ProviderChannelID,
+			ProviderAccountID: providerAccountID,
 			Status:            "failed",
 			ErrorMessage:      errorMsg,
 		})

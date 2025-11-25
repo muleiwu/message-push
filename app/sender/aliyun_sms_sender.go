@@ -91,15 +91,11 @@ func (s *AliyunSMSSender) Send(ctx context.Context, req *SendRequest) (*SendResp
 		signName = req.Signature.SignatureCode
 	}
 
-	// 解析通道配置（模板ID等）
-	var channelConfig struct {
-		TemplateCode string `json:"template_code"`
-	}
-	if req.ProviderChannel.Config != "" {
-		json.Unmarshal([]byte(req.ProviderChannel.Config), &channelConfig)
-	}
+	// 模板代码从任务中获取（已在 message_handler 中通过 ChannelTemplateBinding 设置）
+	templateCode := req.Task.TemplateCode
 
 	// TODO: 实际调用阿里云SDK
+	_ = templateCode // 占位，避免未使用变量警告
 	// import "github.com/aliyun/alibaba-cloud-sdk-go/services/dysmsapi"
 	//
 	// client, err := dysmsapi.NewClientWithAccessKey("cn-hangzhou", config.AccessKeyID, config.AccessKeySecret)
