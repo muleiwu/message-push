@@ -155,6 +155,10 @@ type AvailableProviderResponse struct {
 	Type         string                `json:"type"`
 	Description  string                `json:"description"`
 	ConfigFields []ConfigFieldResponse `json:"config_fields"`
+	// 能力声明
+	SupportsSend      bool `json:"supports_send"`
+	SupportsBatchSend bool `json:"supports_batch_send"`
+	SupportsCallback  bool `json:"supports_callback"`
 }
 
 // ConfigFieldResponse 配置字段响应

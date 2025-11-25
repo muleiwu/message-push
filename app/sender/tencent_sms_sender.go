@@ -63,6 +63,10 @@ func init() {
 				DefaultValue: "ap-guangzhou",
 			},
 		},
+		// 能力声明
+		SupportsSend:      true,
+		SupportsBatchSend: true,
+		SupportsCallback:  true,
 	})
 }
 

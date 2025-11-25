@@ -52,11 +52,14 @@ func (s *AdminProviderAccountService) GetAvailableProviders(providerType string)
 		}
 
 		result = append(result, &dto.AvailableProviderResponse{
-			Code:         p.Code,
-			Name:         p.Name,
-			Type:         p.Type,
-			Description:  p.Description,
-			ConfigFields: configFields,
+			Code:              p.Code,
+			Name:              p.Name,
+			Type:              p.Type,
+			Description:       p.Description,
+			ConfigFields:      configFields,
+			SupportsSend:      p.SupportsSend,
+			SupportsBatchSend: p.SupportsBatchSend,
+			SupportsCallback:  p.SupportsCallback,
 		})
 	}
 

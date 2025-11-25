@@ -42,6 +42,10 @@ func init() {
 				HelpLink:       "https://help.aliyun.com/document_detail/53045.html",
 			},
 		},
+		// 能力声明
+		SupportsSend:      true,
+		SupportsBatchSend: true,
+		SupportsCallback:  true,
 	})
 }
 

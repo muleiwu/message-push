@@ -12,6 +12,11 @@ type ProviderMeta struct {
 	Type         string        `json:"type"`          // 消息类型：sms, email, wechat_work, dingtalk, webhook, push
 	Description  string        `json:"description"`   // 服务商描述
 	ConfigFields []ConfigField `json:"config_fields"` // 配置参数定义
+
+	// 能力声明
+	SupportsSend      bool `json:"supports_send"`       // 是否支持单条发送
+	SupportsBatchSend bool `json:"supports_batch_send"` // 是否支持批量发送
+	SupportsCallback  bool `json:"supports_callback"`   // 是否支持回调
 }
 
 // ProviderRegistry 服务商注册表

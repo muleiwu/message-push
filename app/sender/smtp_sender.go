@@ -67,6 +67,10 @@ func init() {
 				Placeholder: "请输入发件人地址",
 			},
 		},
+		// 能力声明
+		SupportsSend:      true,
+		SupportsBatchSend: true,
+		SupportsCallback:  true,
 	})
 }
 

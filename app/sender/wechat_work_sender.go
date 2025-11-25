@@ -53,6 +53,10 @@ func init() {
 				Placeholder: "请输入应用ID",
 			},
 		},
+		// 能力声明
+		SupportsSend:      true,
+		SupportsBatchSend: true,
+		SupportsCallback:  true,
 	})
 }
 
