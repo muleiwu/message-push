@@ -161,7 +161,7 @@ POST /api/v1/messages
 
 ### 2. 批量发送消息
 
-批量发送消息给多个接收者。
+批量发送消息给多个接收者（所有接收者共用相同的模板参数）。
 
 **请求**
 
@@ -174,9 +174,9 @@ POST /api/v1/messages/batch
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `channel_id` | int | 是 | 通道 ID（通道绑定了消息类型和模板） |
-| `receivers` | array | 是 | 接收者列表 |
-| `receivers[].receiver` | string | 是 | 接收者地址 |
-| `receivers[].params` | object | 否 | 该接收者的模板参数 |
+| `receivers` | string[] | 是 | 接收者列表（手机号/邮箱/用户ID数组） |
+| `template_params` | object | 否 | 模板参数（所有接收者共用） |
+| `scheduled_at` | string | 否 | 定时发送时间（ISO 8601 格式） |
 
 **请求示例**
 
@@ -184,19 +184,14 @@ POST /api/v1/messages/batch
 {
   "channel_id": 1,
   "receivers": [
-    {
-      "receiver": "13800138000",
-      "params": {"code": "111111"}
-    },
-    {
-      "receiver": "13800138001",
-      "params": {"code": "222222"}
-    },
-    {
-      "receiver": "13800138002",
-      "params": {"code": "333333"}
-    }
-  ]
+    "13800138000",
+    "13800138001",
+    "13800138002"
+  ],
+  "template_params": {
+    "content": "系统将于今晚22:00进行维护",
+    "duration": "2小时"
+  }
 }
 ```
 
@@ -363,11 +358,12 @@ class MessagePushClient:
         }
         return self._request("POST", "/api/v1/messages", data)
 
-    def send_batch(self, channel_id, receivers):
+    def send_batch(self, channel_id, receivers, params=None):
         """批量发送消息"""
         data = {
             "channel_id": channel_id,
-            "receivers": receivers
+            "receivers": receivers,
+            "template_params": params or {}
         }
         return self._request("POST", "/api/v1/messages/batch", data)
 
@@ -878,10 +874,11 @@ class MessagePushClient {
     /**
      * 批量发送消息
      */
-    async sendBatch(channelId, receivers) {
+    async sendBatch(channelId, receivers, params = {}) {
         const data = {
             channel_id: channelId,
             receivers: receivers,
+            template_params: params,
         };
         return this.request('POST', '/api/v1/messages/batch', data);
     }
@@ -1036,11 +1033,12 @@ class MessagePushClient
     /**
      * 批量发送消息
      */
-    public function sendBatch(int $channelId, array $receivers): array
+    public function sendBatch(int $channelId, array $receivers, array $params = []): array
     {
         $data = [
             'channel_id' => $channelId,
             'receivers' => $receivers,
+            'template_params' => $params,
         ];
         return $this->request('POST', '/api/v1/messages/batch', $data);
     }
@@ -1175,6 +1173,6 @@ try {
 
 ---
 
-**文档版本**: v1.1.0  
+**文档版本**: v1.2.0  
 **更新日期**: 2025-11-25
 
