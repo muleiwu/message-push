@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/service"
 	"cnb.cool/mliev/push/message-push/internal/interfaces"
 	"github.com/gin-gonic/gin"
@@ -13,7 +14,7 @@ type MessageController struct {
 // Send 发送消息
 func (ctrl MessageController) Send(c *gin.Context, helper interfaces.HelperInterface) {
 	messageService := service.NewMessageService()
-	var req service.SendRequest
+	var req dto.SendRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		FailWithMessage(c, "invalid request: "+err.Error())
 		return
@@ -35,7 +36,7 @@ func (ctrl MessageController) Send(c *gin.Context, helper interfaces.HelperInter
 // BatchSend 批量发送消息
 func (ctrl MessageController) BatchSend(c *gin.Context, helper interfaces.HelperInterface) {
 	messageService := service.NewMessageService()
-	var req service.BatchSendRequest
+	var req dto.BatchSendRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		FailWithMessage(c, "invalid request: "+err.Error())
 		return

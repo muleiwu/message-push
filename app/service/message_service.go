@@ -7,6 +7,7 @@ import (
 
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dao"
+	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/app/queue"
@@ -41,24 +42,8 @@ func NewMessageService() *MessageService {
 	}
 }
 
-// SendRequest 发送请求参数
-type SendRequest struct {
-	AppID          string                 `json:"app_id"`
-	ChannelID      uint                   `json:"channel_id" binding:"required"`
-	Receiver       string                 `json:"receiver" binding:"required"`
-	TemplateParams map[string]interface{} `json:"template_params"`
-	ScheduledAt    *time.Time             `json:"scheduled_at"`
-}
-
-// SendResponse 发送响应
-type SendResponse struct {
-	TaskID    string    `json:"task_id"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
 // Send 发送消息
-func (s *MessageService) Send(ctx context.Context, req *SendRequest) (*SendResponse, error) {
+func (s *MessageService) Send(ctx context.Context, req *dto.SendRequest) (*dto.SendResponse, error) {
 	// 1. 验证通道（获取 MessageTemplateID 和 Type）
 	var channel model.Channel
 	db := internalHelper.GetHelper().GetDatabase()
@@ -122,31 +107,15 @@ func (s *MessageService) Send(ctx context.Context, req *SendRequest) (*SendRespo
 		return nil, fmt.Errorf("failed to push to queue: %w", err)
 	}
 
-	return &SendResponse{
+	return &dto.SendResponse{
 		TaskID:    taskID,
 		Status:    constants.TaskStatusPending,
 		CreatedAt: task.CreatedAt,
 	}, nil
 }
 
-// BatchSendRequest 批量发送请求
-type BatchSendRequest struct {
-	AppID     string                   `json:"app_id"`
-	ChannelID uint                     `json:"channel_id" binding:"required"`
-	Receivers []map[string]interface{} `json:"receivers" binding:"required"` // [{receiver, params}, ...]
-}
-
-// BatchSendResponse 批量发送响应
-type BatchSendResponse struct {
-	BatchID      string    `json:"batch_id"`
-	TotalCount   int       `json:"total_count"`
-	SuccessCount int       `json:"success_count"`
-	FailedCount  int       `json:"failed_count"`
-	CreatedAt    time.Time `json:"created_at"`
-}
-
 // BatchSend 批量发送消息
-func (s *MessageService) BatchSend(ctx context.Context, req *BatchSendRequest) (*BatchSendResponse, error) {
+func (s *MessageService) BatchSend(ctx context.Context, req *dto.BatchSendRequest) (*dto.BatchSendResponse, error) {
 	// 1. 验证通道（获取 MessageTemplateID 和 Type）
 	var channel model.Channel
 	db := internalHelper.GetHelper().GetDatabase()
@@ -173,18 +142,15 @@ func (s *MessageService) BatchSend(ctx context.Context, req *BatchSendRequest) (
 	var tasks []*model.PushTask
 	successCount := 0
 
-	for _, item := range req.Receivers {
-		receiver, _ := item["receiver"].(string)
-		params, _ := item["params"].(map[string]interface{})
+	// 渲染模板内容（所有接收者共用相同的模板参数）
+	content, err := s.templateHelper.RenderSimple(messageTemplate.Content, req.TemplateParams)
+	if err != nil {
+		return nil, fmt.Errorf("failed to render template: %w", err)
+	}
+	templateParamsJSON, _ := s.templateHelper.RenderJSON(req.TemplateParams)
 
-		content, err := s.templateHelper.RenderSimple(messageTemplate.Content, params)
-		if err != nil {
-			s.logger.Error(fmt.Sprintf("failed to render template for receiver=%s: %v", receiver, err))
-			continue
-		}
-
+	for _, receiver := range req.Receivers {
 		taskID := uuid.New().String()
-		templateParamsJSON, _ := s.templateHelper.RenderJSON(params)
 		task := &model.PushTask{
 			TaskID:         taskID,
 			AppID:          req.AppID,
@@ -197,6 +163,7 @@ func (s *MessageService) BatchSend(ctx context.Context, req *BatchSendRequest) (
 			Status:         constants.TaskStatusPending,
 			RetryCount:     0,
 			MaxRetry:       3,
+			ScheduledAt:    req.ScheduledAt,
 		}
 
 		tasks = append(tasks, task)
@@ -216,7 +183,7 @@ func (s *MessageService) BatchSend(ctx context.Context, req *BatchSendRequest) (
 		s.logger.Error(fmt.Sprintf("failed to push batch to queue: %v", err))
 	}
 
-	return &BatchSendResponse{
+	return &dto.BatchSendResponse{
 		BatchID:      batchID,
 		TotalCount:   len(req.Receivers),
 		SuccessCount: successCount,
