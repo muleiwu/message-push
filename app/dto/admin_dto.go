@@ -33,13 +33,15 @@ type ApplicationListRequest struct {
 // ApplicationResponse 应用响应
 type ApplicationResponse struct {
 	ID          uint   `json:"id"`
-	Name        string `json:"name"`
+	AppName     string `json:"app_name"`
 	Description string `json:"description"`
-	AppKey      string `json:"app_key"`
+	AppID       string `json:"app_id"`
 	AppSecret   string `json:"app_secret,omitempty"` // 仅创建时返回明文
 	Status      int    `json:"status"`
-	DailyLimit  int    `json:"daily_limit"`
-	QPSLimit    int    `json:"qps_limit"`
+	DailyQuota  int    `json:"daily_quota"`
+	RateLimit   int    `json:"rate_limit"`
+	IPWhitelist string `json:"ip_whitelist"`
+	WebhookURL  string `json:"webhook_url"`
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at"`
 }
@@ -59,7 +61,7 @@ type RegenerateSecretRequest struct {
 
 // RegenerateSecretResponse 重新生成密钥响应
 type RegenerateSecretResponse struct {
-	AppKey    string `json:"app_key"`
+	AppID     string `json:"app_id"`
 	AppSecret string `json:"app_secret"`
 }
 

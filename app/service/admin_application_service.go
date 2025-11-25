@@ -96,13 +96,15 @@ func (s *AdminApplicationService) CreateApplication(req *dto.CreateApplicationRe
 
 	return &dto.ApplicationResponse{
 		ID:          app.ID,
-		Name:        app.AppName,
+		AppName:     app.AppName,
 		Description: req.Description,
-		AppKey:      appID,
+		AppID:       appID,
 		AppSecret:   appSecret, // 仅创建时返回明文
 		Status:      int(app.Status),
-		DailyLimit:  app.DailyQuota,
-		QPSLimit:    app.RateLimit,
+		DailyQuota:  app.DailyQuota,
+		RateLimit:   app.RateLimit,
+		IPWhitelist: app.IPWhitelist,
+		WebhookURL:  app.WebhookURL,
 		CreatedAt:   app.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:   app.UpdatedAt.Format(time.RFC3339),
 	}, nil
@@ -147,12 +149,14 @@ func (s *AdminApplicationService) GetApplicationList(req *dto.ApplicationListReq
 	for _, app := range apps {
 		items = append(items, &dto.ApplicationResponse{
 			ID:          app.ID,
-			Name:        app.AppName,
+			AppName:     app.AppName,
 			Description: "",
-			AppKey:      app.AppID,
+			AppID:       app.AppID,
 			Status:      int(app.Status),
-			DailyLimit:  app.DailyQuota,
-			QPSLimit:    app.RateLimit,
+			DailyQuota:  app.DailyQuota,
+			RateLimit:   app.RateLimit,
+			IPWhitelist: app.IPWhitelist,
+			WebhookURL:  app.WebhookURL,
 			CreatedAt:   app.CreatedAt.Format(time.RFC3339),
 			UpdatedAt:   app.UpdatedAt.Format(time.RFC3339),
 		})
@@ -175,12 +179,14 @@ func (s *AdminApplicationService) GetApplicationByID(id uint) (*dto.ApplicationR
 
 	return &dto.ApplicationResponse{
 		ID:          app.ID,
-		Name:        app.AppName,
+		AppName:     app.AppName,
 		Description: "",
-		AppKey:      app.AppID,
+		AppID:       app.AppID,
 		Status:      int(app.Status),
-		DailyLimit:  app.DailyQuota,
-		QPSLimit:    app.RateLimit,
+		DailyQuota:  app.DailyQuota,
+		RateLimit:   app.RateLimit,
+		IPWhitelist: app.IPWhitelist,
+		WebhookURL:  app.WebhookURL,
 		CreatedAt:   app.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:   app.UpdatedAt.Format(time.RFC3339),
 	}, nil
@@ -260,7 +266,7 @@ func (s *AdminApplicationService) RegenerateSecret(appID uint) (*dto.RegenerateS
 	logger.Info("应用密钥重新生成成功")
 
 	return &dto.RegenerateSecretResponse{
-		AppKey:    app.AppID,
+		AppID:     app.AppID,
 		AppSecret: appSecret,
 	}, nil
 }
