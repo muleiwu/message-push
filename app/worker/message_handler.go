@@ -20,25 +20,25 @@ import (
 
 // MessageHandler 消息处理器
 type MessageHandler struct {
-	logger         gsr.Logger
-	taskDao        *dao.PushTaskDAO
-	logDao         *dao.PushLogDAO
-	selector       *selector.ChannelSelector
-	senderFactory  *sender.Factory
-	retryHelper    *helper.RetryHelper
-	templateHelper *helper.TemplateHelper
+	logger              gsr.Logger
+	taskDao             *dao.PushTaskDAO
+	logDao              *dao.PushLogDAO
+	selector            *selector.ChannelSelector
+	senderFactory       *sender.Factory
+	retryHelper         *helper.RetryHelper
+	signatureMappingDao *dao.ChannelSignatureMappingDAO
 }
 
 // NewMessageHandler 创建消息处理器
 func NewMessageHandler() *MessageHandler {
 	return &MessageHandler{
-		logger:         internalHelper.GetHelper().GetLogger(),
-		taskDao:        dao.NewPushTaskDAO(),
-		logDao:         dao.NewPushLogDAO(),
-		selector:       selector.NewChannelSelector(),
-		senderFactory:  sender.NewFactory(),
-		retryHelper:    helper.NewRetryHelper(),
-		templateHelper: helper.NewTemplateHelper(),
+		logger:              internalHelper.GetHelper().GetLogger(),
+		taskDao:             dao.NewPushTaskDAO(),
+		logDao:              dao.NewPushLogDAO(),
+		selector:            selector.NewChannelSelector(),
+		senderFactory:       sender.NewFactory(),
+		retryHelper:         helper.NewRetryHelper(),
+		signatureMappingDao: dao.NewChannelSignatureMappingDAO(internalHelper.GetHelper().GetDatabase()),
 	}
 }
 
@@ -82,9 +82,6 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 	task.ProviderAccountID = &providerAccount.ID
 	h.taskDao.Update(task)
 
-	// 尝试使用新的模板系统处理模板和参数
-	h.processTemplateBinding(task, node)
-
 	// 获取发送器（按服务商代码获取）
 	messageSender, err := h.senderFactory.GetSender(providerAccount.ProviderCode)
 	if err != nil {
@@ -93,12 +90,24 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 		return err
 	}
 
-	// 发送消息（不自动加载签名，由通道配置或API调用指定）
+	// 查找签名映射
+	var providerSignature *model.ProviderSignature
+	if task.Signature != "" {
+		signatureMapping, err := h.signatureMappingDao.GetByChannelIDAndSignatureName(task.ChannelID, task.Signature)
+		if err != nil {
+			h.logger.Warn(fmt.Sprintf("signature mapping not found task_id=%s signature=%s: %v", taskID, task.Signature, err))
+		} else if signatureMapping != nil && signatureMapping.ProviderSignature != nil {
+			providerSignature = signatureMapping.ProviderSignature
+			h.logger.Info(fmt.Sprintf("signature resolved task_id=%s signature_name=%s signature_code=%s", taskID, task.Signature, providerSignature.SignatureCode))
+		}
+	}
+
+	// 发送消息
 	sendReq := &sender.SendRequest{
-		Task:            task,
-		ProviderAccount: providerAccount,
-		Relation:        node.Relation,
-		Signature:       nil, // 签名由通道配置或API调用指定，这里不自动加载
+		Task:                   task,
+		ProviderAccount:        providerAccount,
+		ChannelTemplateBinding: node.ChannelTemplateBinding,
+		Signature:              providerSignature,
 	}
 
 	resp, err := messageSender.Send(ctx, sendReq)
@@ -146,6 +155,7 @@ func (h *MessageHandler) handleSuccess(task *model.PushTask, providerAccountID u
 		AppID:             task.AppID,
 		ProviderAccountID: providerAccountID,
 		Status:            "success",
+		RequestData:       "{}",
 		ResponseData:      fmt.Sprintf("{\"provider_id\":\"%s\"}", providerID),
 	})
 
@@ -192,68 +202,13 @@ func (h *MessageHandler) handleFailure(task *model.PushTask, providerAccountID u
 			AppID:             task.AppID,
 			ProviderAccountID: providerAccountID,
 			Status:            "failed",
+			RequestData:       "{}",
+			ResponseData:      "{}",
 			ErrorMessage:      errorMsg,
 		})
 	}
 
 	h.logger.Error(fmt.Sprintf("message failed task_id=%s error=%s", task.TaskID, errorMsg))
-}
-
-// processTemplateBinding 处理模板绑定和参数映射（使用新的ChannelTemplateBinding）
-func (h *MessageHandler) processTemplateBinding(task *model.PushTask, node *selector.ChannelNode) {
-	// 如果任务没有模板代码，跳过
-	if task.TemplateCode == "" {
-		return
-	}
-
-	// 如果没有通道模板绑定配置，使用原有逻辑（向后兼容）
-	if node.ChannelTemplateBinding == nil {
-		h.logger.Info(fmt.Sprintf("no channel template binding found for task_id=%s, using legacy mode", task.TaskID))
-		return
-	}
-
-	binding := node.ChannelTemplateBinding
-
-	// 如果有供应商模板配置，使用供应商模板
-	if binding.ProviderTemplate != nil {
-		h.logger.Info(fmt.Sprintf("using channel template binding: provider_template=%s", binding.ProviderTemplate.TemplateCode))
-
-		// 更新任务的模板代码为供应商模板代码
-		task.TemplateCode = binding.ProviderTemplate.TemplateCode
-
-		// 解析原始参数
-		var originalParams map[string]interface{}
-		if task.TemplateParams != "" {
-			if err := json.Unmarshal([]byte(task.TemplateParams), &originalParams); err != nil {
-				h.logger.Error(fmt.Sprintf("failed to parse template params: %v", err))
-				return
-			}
-		} else {
-			originalParams = make(map[string]interface{})
-		}
-
-		// 获取参数映射
-		paramMapping, err := binding.GetParamMapping()
-		if err != nil {
-			h.logger.Error(fmt.Sprintf("failed to get param mapping: %v", err))
-			return
-		}
-
-		// 如果有参数映射，转换参数
-		if len(paramMapping) > 0 {
-			mappedParams := h.templateHelper.MapParams(originalParams, paramMapping)
-
-			// 更新任务的模板参数
-			if mappedJSON, err := json.Marshal(mappedParams); err == nil {
-				task.TemplateParams = string(mappedJSON)
-				h.logger.Info(fmt.Sprintf("params mapped from %v to %v", originalParams, mappedParams))
-			}
-		}
-
-		// 如果需要渲染内容（根据系统模板内容）
-		// 注意：binding 中没有直接关联 MessageTemplate，如果需要可以通过 Channel 获取
-		// 这里暂时跳过内容渲染，或者可以根据需要扩展
-	}
 }
 
 // parseUint 解析uint

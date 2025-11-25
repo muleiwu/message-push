@@ -143,13 +143,20 @@ func (ic InstallController) SubmitInstall(c *gin.Context, helper interfaces.Help
 	if err := testDB.AutoMigrate(
 		&model.AdminUser{},
 		&model.Application{},
-		&model.Provider{},
-		&model.ProviderChannel{},
+		&model.ProviderAccount{},
+		&model.ProviderSignature{},
 		&model.Channel{},
-		&model.ChannelProviderRelation{},
+		&model.MessageTemplate{},
+		&model.ProviderTemplate{},
+		&model.ChannelTemplateBinding{},
+		&model.ChannelSignatureMapping{},
 		&model.PushTask{},
 		&model.PushBatchTask{},
 		&model.PushLog{},
+		&model.ChannelHealthHistory{},
+		&model.AppQuotaStat{},
+		&model.ProviderQuotaStat{},
+		&model.WebhookConfig{},
 	); err != nil {
 		ic.Error(c, constants.CodeInternalError, "数据库迁移失败: "+err.Error())
 		return

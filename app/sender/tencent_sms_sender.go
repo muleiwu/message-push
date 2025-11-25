@@ -121,24 +121,21 @@ func (s *TencentSMSSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 	request.SmsSdkAppId = common.StringPtr(sdkAppId)
 
 	// 签名和模板
-	// 优先使用通道关联配置，其次使用请求中的签名
 	signName := ""
 	templateID := ""
 
-	if req.Relation != nil {
-		signName = req.Relation.SignatureCode
-		templateID = req.Relation.TemplateID
+	// 从 ChannelTemplateBinding 获取模板信息
+	if req.ChannelTemplateBinding != nil && req.ChannelTemplateBinding.ProviderTemplate != nil {
+		templateID = req.ChannelTemplateBinding.ProviderTemplate.TemplateCode
 	}
 
-	if signName == "" {
-		// 如果通道未配置，从请求中获取签名（可能为空）
-		if req.Signature != nil {
-			signName = req.Signature.SignatureCode
-		}
+	// 从 Signature 获取签名
+	if req.Signature != nil {
+		signName = req.Signature.SignatureCode
 	}
 
+	// 兜底：从任务获取模板代码
 	if templateID == "" {
-		// 如果通道未配置，尝试使用Task中的TemplateCode（假设Task的TemplateCode即为服务商TemplateID）
 		templateID = req.Task.TemplateCode
 	}
 
@@ -239,15 +236,17 @@ func (s *TencentSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest)
 	signName := ""
 	templateID := ""
 
-	if req.Relation != nil {
-		signName = req.Relation.SignatureCode
-		templateID = req.Relation.TemplateID
+	// 从 ChannelTemplateBinding 获取模板信息
+	if req.ChannelTemplateBinding != nil && req.ChannelTemplateBinding.ProviderTemplate != nil {
+		templateID = req.ChannelTemplateBinding.ProviderTemplate.TemplateCode
 	}
 
-	if signName == "" && req.Signature != nil {
+	// 从 Signature 获取签名
+	if req.Signature != nil {
 		signName = req.Signature.SignatureCode
 	}
 
+	// 兜底：从第一个任务获取模板代码
 	if templateID == "" && len(req.Tasks) > 0 {
 		templateID = req.Tasks[0].TemplateCode
 	}

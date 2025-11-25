@@ -13,15 +13,10 @@ import (
 
 // ChannelNode 通道节点（带权重）
 type ChannelNode struct {
-	// 保留旧字段以兼容现有代码
-	Relation        *model.ChannelProviderRelation
-	Provider        *model.Provider
-	CurrentWeight   int // 当前权重
-	EffectiveWeight int // 有效权重
-
-	// 新字段
 	ChannelTemplateBinding *model.ChannelTemplateBinding // 通道模板绑定配置
 	ProviderAccount        *model.ProviderAccount        // 服务商账号配置
+	CurrentWeight          int                           // 当前权重
+	EffectiveWeight        int                           // 有效权重
 }
 
 // ChannelSelector 通道选择器
@@ -29,11 +24,8 @@ type ChannelSelector struct {
 	logger                    gsr.Logger
 	channelTemplateBindingDao *dao.ChannelTemplateBindingDAO
 	providerAccountDAO        *dao.ProviderAccountDAO
-	// 保留旧的DAO以兼容
-	relationDao *dao.ChannelProviderRelationDAO
-	providerDAO *dao.ProviderDAO
-	cache       map[string][]*ChannelNode // 按业务通道ID缓存
-	mu          sync.RWMutex
+	cache                     map[string][]*ChannelNode // 按业务通道ID缓存
+	mu                        sync.RWMutex
 }
 
 // NewChannelSelector 创建通道选择器
@@ -43,8 +35,6 @@ func NewChannelSelector() *ChannelSelector {
 		logger:                    h.GetLogger(),
 		channelTemplateBindingDao: dao.NewChannelTemplateBindingDAO(),
 		providerAccountDAO:        dao.NewProviderAccountDAO(),
-		relationDao:               dao.NewChannelProviderRelationDAO(),
-		providerDAO:               dao.NewProviderDAO(),
 		cache:                     make(map[string][]*ChannelNode),
 	}
 }
@@ -97,9 +87,7 @@ func (s *ChannelSelector) getChannelNodes(ctx context.Context, channelID uint, m
 	}
 
 	if len(channelBindings) == 0 {
-		// 新系统没有配置，尝试使用旧系统（向后兼容）
-		s.logger.Info(fmt.Sprintf("no channel template bindings found, falling back to legacy relations for channel_id=%d", channelID))
-		return s.getChannelNodesLegacy(ctx, channelID, messageType)
+		return nil, fmt.Errorf("no channel template bindings configured for channel_id=%d", channelID)
 	}
 
 	// 构建节点列表
@@ -127,12 +115,6 @@ func (s *ChannelSelector) getChannelNodes(ctx context.Context, channelID uint, m
 			ProviderAccount:        providerAccount,
 			CurrentWeight:          0,
 			EffectiveWeight:        ctb.Weight,
-			// 构造兼容的Relation（用于旧代码）
-			Relation: &model.ChannelProviderRelation{
-				Priority: ctb.Priority,
-				Weight:   ctb.Weight,
-				IsActive: ctb.IsActive,
-			},
 		}
 
 		nodes = append(nodes, node)
@@ -144,27 +126,11 @@ func (s *ChannelSelector) getChannelNodes(ctx context.Context, channelID uint, m
 	return s.filterAvailableNodes(nodes), nil
 }
 
-// getChannelNodesLegacy 使用旧的ChannelProviderRelation获取通道节点（已废弃）
-// 旧系统依赖已废弃的 provider_channels 表，建议迁移到新的 ChannelTemplateBinding 系统
-func (s *ChannelSelector) getChannelNodesLegacy(ctx context.Context, channelID uint, messageType string) ([]*ChannelNode, error) {
-	s.logger.Warn(fmt.Sprintf("legacy channel relations system is deprecated, please migrate to ChannelTemplateBinding for channel_id=%d", channelID))
-	return nil, fmt.Errorf("no channel template bindings configured for channel_id=%d type=%s, legacy system is deprecated", channelID, messageType)
-}
-
 // filterAvailableNodes 过滤可用节点
 func (s *ChannelSelector) filterAvailableNodes(nodes []*ChannelNode) []*ChannelNode {
 	var available []*ChannelNode
 	for _, node := range nodes {
-		// 新系统：检查 ChannelTemplateBinding 状态
-		if node.ChannelTemplateBinding != nil {
-			if node.ChannelTemplateBinding.IsActive == 1 {
-				available = append(available, node)
-			}
-			continue
-		}
-
-		// 旧系统：检查 Relation 优先级
-		if node.Relation != nil && node.Relation.Priority > 0 {
+		if node.ChannelTemplateBinding != nil && node.ChannelTemplateBinding.IsActive == 1 {
 			available = append(available, node)
 		}
 	}
@@ -189,8 +155,6 @@ func (s *ChannelSelector) smoothWeightedRoundRobin(nodes []*ChannelNode) *Channe
 		priority := 100 // 默认优先级
 		if node.ChannelTemplateBinding != nil {
 			priority = node.ChannelTemplateBinding.Priority
-		} else if node.Relation != nil {
-			priority = node.Relation.Priority
 		}
 
 		if minPriority == -1 || priority < minPriority {

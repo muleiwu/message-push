@@ -67,13 +67,13 @@ func (s *AdminApplicationService) CreateApplication(req *dto.CreateApplicationRe
 	}
 
 	// 处理配额：nil 使用默认值，0 表示不限制
-	dailyQuota := 10000 // 默认每日配额
+	dailyQuota := 0 // 默认每日配额
 	if req.DailyQuota != nil {
 		dailyQuota = *req.DailyQuota
 	}
 
 	// 处理限流：nil 使用默认值，0 表示不限制
-	rateLimit := 100 // 默认QPS限制
+	rateLimit := 0 // 默认QPS限制
 	if req.RateLimit != nil {
 		rateLimit = *req.RateLimit
 	}

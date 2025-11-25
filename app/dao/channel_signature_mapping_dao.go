@@ -66,3 +66,16 @@ func (dao *ChannelSignatureMappingDAO) CheckDuplicateSignatureName(channelID uin
 	err := query.Count(&count).Error
 	return count > 0, err
 }
+
+// GetByChannelIDAndSignatureName 根据通道ID和签名名称获取映射
+func (dao *ChannelSignatureMappingDAO) GetByChannelIDAndSignatureName(channelID uint, signatureName string) (*model.ChannelSignatureMapping, error) {
+	var mapping model.ChannelSignatureMapping
+	err := dao.db.Preload("ProviderSignature").
+		Preload("ProviderAccount").
+		Where("channel_id = ? AND signature_name = ? AND status = 1", channelID, signatureName).
+		First(&mapping).Error
+	if err != nil {
+		return nil, err
+	}
+	return &mapping, nil
+}

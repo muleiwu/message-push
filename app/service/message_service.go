@@ -88,6 +88,7 @@ func (s *MessageService) Send(ctx context.Context, req *dto.SendRequest) (*dto.S
 		Content:        content,
 		TemplateCode:   "", // 将由 worker 更新为实际使用的供应商模板代码
 		TemplateParams: templateParamsJSON,
+		Signature:      req.SignatureName, // 用户自定义签名名称
 		Status:         constants.TaskStatusPending,
 		RetryCount:     0,
 		MaxRetry:       3,
@@ -160,6 +161,7 @@ func (s *MessageService) BatchSend(ctx context.Context, req *dto.BatchSendReques
 			Content:        content,
 			TemplateCode:   "", // 将由 worker 更新为实际使用的供应商模板代码
 			TemplateParams: templateParamsJSON,
+			Signature:      req.SignatureName, // 用户自定义签名名称
 			Status:         constants.TaskStatusPending,
 			RetryCount:     0,
 			MaxRetry:       3,

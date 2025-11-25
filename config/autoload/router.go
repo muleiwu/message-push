@@ -112,18 +112,6 @@ func (receiver Router) InitConfig(helper envInterface.HelperInterface) map[strin
 					signatures.DELETE("/:id", deps.WrapHandler(admin.ProviderSignatureController{}.DeleteSignature))
 				}
 
-				// 服务商管理（旧版，保持向后兼容）
-				providers := adminGroup.Group("/providers")
-				{
-					providers.GET("/active", deps.WrapHandler(admin.ProviderController{}.GetActiveProviders)) // 先注册 /active
-					providers.GET("", deps.WrapHandler(admin.ProviderController{}.GetProviderList))
-					providers.POST("", deps.WrapHandler(admin.ProviderController{}.CreateProvider))
-					providers.GET("/:id", deps.WrapHandler(admin.ProviderController{}.GetProvider))
-					providers.PUT("/:id", deps.WrapHandler(admin.ProviderController{}.UpdateProvider))
-					providers.DELETE("/:id", deps.WrapHandler(admin.ProviderController{}.DeleteProvider))
-					providers.POST("/:id/test", deps.WrapHandler(admin.ProviderController{}.TestProvider))
-				}
-
 				// 通道管理
 				channels := adminGroup.Group("/channels")
 				{

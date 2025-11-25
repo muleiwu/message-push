@@ -65,51 +65,6 @@ type RegenerateSecretResponse struct {
 	AppSecret string `json:"app_secret"`
 }
 
-// CreateProviderRequest 创建服务商请求（已废弃，使用CreateProviderAccountRequest）
-type CreateProviderRequest struct {
-	Name        string                 `json:"name" binding:"required,min=2,max=50"`
-	Type        string                 `json:"type" binding:"required,oneof=sms email wechat_work dingtalk webhook push"`
-	Description string                 `json:"description" binding:"max=200"`
-	Config      map[string]interface{} `json:"config" binding:"required"`
-	Status      int                    `json:"status" binding:"omitempty,oneof=1 2"`
-}
-
-// UpdateProviderRequest 更新服务商请求（已废弃，使用UpdateProviderAccountRequest）
-type UpdateProviderRequest struct {
-	Name        string                 `json:"name" binding:"omitempty,min=2,max=50"`
-	Description string                 `json:"description" binding:"omitempty,max=200"`
-	Config      map[string]interface{} `json:"config" binding:"omitempty"`
-	Status      int                    `json:"status" binding:"omitempty,oneof=1 2"`
-}
-
-// ProviderListRequest 服务商列表请求（已废弃，使用ProviderAccountListRequest）
-type ProviderListRequest struct {
-	Page     int    `form:"page" binding:"omitempty,min=1"`
-	PageSize int    `form:"page_size" binding:"omitempty,min=1,max=100"`
-	Type     string `form:"type" binding:"omitempty,oneof=sms email wechat_work dingtalk webhook push"`
-	Status   int    `form:"status" binding:"omitempty,oneof=1 2"`
-}
-
-// ProviderResponse 服务商响应（已废弃，使用ProviderAccountResponse）
-type ProviderResponse struct {
-	ID          uint                   `json:"id"`
-	Name        string                 `json:"name"`
-	Type        string                 `json:"type"`
-	Description string                 `json:"description"`
-	Config      map[string]interface{} `json:"config"`
-	Status      int                    `json:"status"`
-	CreatedAt   string                 `json:"created_at"`
-	UpdatedAt   string                 `json:"updated_at"`
-}
-
-// ProviderListResponse 服务商列表响应（已废弃，使用ProviderAccountListResponse）
-type ProviderListResponse struct {
-	Total int                 `json:"total"`
-	Page  int                 `json:"page"`
-	Size  int                 `json:"size"`
-	Items []*ProviderResponse `json:"items"`
-}
-
 // CreateProviderAccountRequest 创建服务商账号配置请求
 type CreateProviderAccountRequest struct {
 	Name         string                 `json:"name" binding:"required,min=2,max=50"`
@@ -295,14 +250,6 @@ type AvailableProviderTemplateResponse struct {
 	Status              int8     `json:"status"`
 }
 
-// BindProviderToChannelRequest 绑定服务商到通道（已废弃，保留兼容性）
-type BindProviderToChannelRequest struct {
-	ChannelID  uint `json:"channel_id" binding:"required"`
-	ProviderID uint `json:"provider_id" binding:"required"`
-	Priority   int  `json:"priority" binding:"omitempty,min=0,max=100"`
-	Weight     int  `json:"weight" binding:"omitempty,min=1,max=100"`
-}
-
 // StatisticsRequest 统计查询请求
 type StatisticsRequest struct {
 	StartDate string `form:"start_date" binding:"required"` // YYYY-MM-DD
@@ -329,25 +276,6 @@ type StatisticsResponse struct {
 		SuccessRate  string `json:"success_rate"`
 	} `json:"summary"`
 	Daily []*DailyStatistics `json:"daily"`
-}
-
-// ChannelProviderResponse 通道绑定的服务商响应（已废弃，保留兼容性）
-type ChannelProviderResponse struct {
-	ID           uint   `json:"id"`
-	ChannelID    uint   `json:"channel_id"`
-	ProviderID   uint   `json:"provider_id"`
-	ProviderName string `json:"provider_name"`
-	ProviderType string `json:"provider_type"`
-	Priority     int    `json:"priority"`
-	Weight       int    `json:"weight"`
-	Status       int    `json:"status"`
-	CreatedAt    string `json:"created_at"`
-}
-
-// UpdateRelationRequest 更新关联请求（已废弃，保留兼容性）
-type UpdateRelationRequest struct {
-	Priority int `json:"priority" binding:"min=0,max=100"`
-	Weight   int `json:"weight" binding:"min=1,max=100"`
 }
 
 // ActiveItem 活跃项（用于下拉列表）

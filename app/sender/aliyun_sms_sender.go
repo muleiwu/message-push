@@ -9,6 +9,10 @@ import (
 
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/registry"
+
+	openapi "github.com/alibabacloud-go/darabonba-openapi/v2/client"
+	dysmsapi "github.com/alibabacloud-go/dysmsapi-20170525/v3/client"
+	"github.com/alibabacloud-go/tea/tea"
 )
 
 func init() {
@@ -75,67 +79,104 @@ func (s *AliyunSMSSender) GetProviderCode() string {
 
 // Send 发送短信
 func (s *AliyunSMSSender) Send(ctx context.Context, req *SendRequest) (*SendResponse, error) {
-	// 解析服务商配置
-	var config struct {
-		AccessKeyID     string `json:"access_key_id"`
-		AccessKeySecret string `json:"access_key_secret"`
-	}
-
-	if err := json.Unmarshal([]byte(req.ProviderAccount.Config), &config); err != nil {
+	// 1. 获取配置
+	config, err := req.ProviderAccount.GetConfig()
+	if err != nil {
 		return nil, fmt.Errorf("invalid provider config: %w", err)
 	}
 
-	// 从请求中获取签名（可能为空）
+	accessKeyID, _ := config["access_key_id"].(string)
+	accessKeySecret, _ := config["access_key_secret"].(string)
+
+	if accessKeyID == "" || accessKeySecret == "" {
+		return nil, fmt.Errorf("missing aliyun sms config: access_key_id or access_key_secret")
+	}
+
+	// 2. 初始化客户端
+	client, err := s.createClient(accessKeyID, accessKeySecret)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create aliyun sms client: %w", err)
+	}
+
+	// 3. 构造请求
+	// 签名和模板
 	signName := ""
+	templateCode := ""
+
+	// 从 ChannelTemplateBinding 获取模板信息
+	if req.ChannelTemplateBinding != nil && req.ChannelTemplateBinding.ProviderTemplate != nil {
+		templateCode = req.ChannelTemplateBinding.ProviderTemplate.TemplateCode
+	}
+
+	// 从 Signature 获取签名
 	if req.Signature != nil {
 		signName = req.Signature.SignatureCode
 	}
 
-	// 模板代码从任务中获取（已在 message_handler 中通过 ChannelTemplateBinding 设置）
-	templateCode := req.Task.TemplateCode
+	// 兜底：从任务获取模板代码
+	if templateCode == "" {
+		templateCode = req.Task.TemplateCode
+	}
 
-	// TODO: 实际调用阿里云SDK
-	_ = templateCode // 占位，避免未使用变量警告
-	// import "github.com/aliyun/alibaba-cloud-sdk-go/services/dysmsapi"
-	//
-	// client, err := dysmsapi.NewClientWithAccessKey("cn-hangzhou", config.AccessKeyID, config.AccessKeySecret)
-	// if err != nil {
-	//     return nil, err
-	// }
-	//
-	// request := dysmsapi.CreateSendSmsRequest()
-	// request.PhoneNumbers = req.Task.Receiver
-	// request.SignName = signName
-	// request.TemplateCode = channelConfig.TemplateCode
-	// request.TemplateParam = req.Task.TemplateParams
-	//
-	// response, err := client.SendSms(request)
-	// if err != nil {
-	//     return &SendResponse{
-	//         Success:      false,
-	//         ErrorMessage: err.Error(),
-	//     }, nil
-	// }
-	//
-	// if response.Code != "OK" {
-	//     return &SendResponse{
-	//         Success:      false,
-	//         ErrorCode:    response.Code,
-	//         ErrorMessage: response.Message,
-	//     }, nil
-	// }
-	//
-	// return &SendResponse{
-	//     Success:    true,
-	//     ProviderID: response.BizId,
-	// }, nil
+	if templateCode == "" {
+		return nil, fmt.Errorf("missing template_code")
+	}
 
-	// 模拟发送（开发阶段）
+	// 构造阿里云短信发送请求
+	sendRequest := &dysmsapi.SendSmsRequest{
+		PhoneNumbers: tea.String(req.Task.Receiver),
+		SignName:     tea.String(signName),
+		TemplateCode: tea.String(templateCode),
+	}
+
+	// 模板参数（阿里云要求JSON对象格式）
+	if req.Task.TemplateParams != "" {
+		sendRequest.TemplateParam = tea.String(req.Task.TemplateParams)
+	}
+
+	// 4. 发送
+	response, err := client.SendSms(sendRequest)
+	if err != nil {
+		return &SendResponse{
+			Success:      false,
+			ErrorMessage: err.Error(),
+			TaskID:       req.Task.TaskID,
+		}, nil
+	}
+
+	// 5. 解析响应
+	if response.Body == nil {
+		return &SendResponse{
+			Success:      false,
+			ErrorMessage: "empty response from aliyun",
+			TaskID:       req.Task.TaskID,
+		}, nil
+	}
+
+	if tea.StringValue(response.Body.Code) == "OK" {
+		return &SendResponse{
+			Success:    true,
+			ProviderID: tea.StringValue(response.Body.BizId),
+			TaskID:     req.Task.TaskID,
+		}, nil
+	}
+
 	return &SendResponse{
-		Success:    true,
-		ProviderID: fmt.Sprintf("mock_aliyun_%s_%s", signName, req.Task.TaskID),
-		TaskID:     req.Task.TaskID,
+		Success:      false,
+		ErrorCode:    tea.StringValue(response.Body.Code),
+		ErrorMessage: tea.StringValue(response.Body.Message),
+		TaskID:       req.Task.TaskID,
 	}, nil
+}
+
+// createClient 创建阿里云短信客户端
+func (s *AliyunSMSSender) createClient(accessKeyID, accessKeySecret string) (*dysmsapi.Client, error) {
+	config := &openapi.Config{
+		AccessKeyId:     tea.String(accessKeyID),
+		AccessKeySecret: tea.String(accessKeySecret),
+		Endpoint:        tea.String("dysmsapi.aliyuncs.com"),
+	}
+	return dysmsapi.NewClient(config)
 }
 
 // ==================== BatchSender 接口实现 ====================
@@ -151,48 +192,134 @@ func (s *AliyunSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest) 
 		return &BatchSendResponse{Results: []*SendResponse{}}, nil
 	}
 
-	// 解析服务商配置
-	var config struct {
-		AccessKeyID     string `json:"access_key_id"`
-		AccessKeySecret string `json:"access_key_secret"`
-	}
-
-	if err := json.Unmarshal([]byte(req.ProviderAccount.Config), &config); err != nil {
+	// 1. 获取配置
+	config, err := req.ProviderAccount.GetConfig()
+	if err != nil {
 		return nil, fmt.Errorf("invalid provider config: %w", err)
 	}
 
-	// 从请求中获取签名
+	accessKeyID, _ := config["access_key_id"].(string)
+	accessKeySecret, _ := config["access_key_secret"].(string)
+
+	if accessKeyID == "" || accessKeySecret == "" {
+		return nil, fmt.Errorf("missing aliyun sms config: access_key_id or access_key_secret")
+	}
+
+	// 2. 初始化客户端
+	client, err := s.createClient(accessKeyID, accessKeySecret)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create aliyun sms client: %w", err)
+	}
+
+	// 3. 构造请求
+	// 签名和模板
 	signName := ""
+	templateCode := ""
+
+	// 从 ChannelTemplateBinding 获取模板信息
+	if req.ChannelTemplateBinding != nil && req.ChannelTemplateBinding.ProviderTemplate != nil {
+		templateCode = req.ChannelTemplateBinding.ProviderTemplate.TemplateCode
+	}
+
+	// 从 Signature 获取签名
 	if req.Signature != nil {
 		signName = req.Signature.SignatureCode
 	}
 
-	// 收集所有手机号
-	var phoneNumbers []string
-	for _, task := range req.Tasks {
-		phoneNumbers = append(phoneNumbers, task.Receiver)
+	// 兜底：从第一个任务获取模板代码
+	if templateCode == "" && len(req.Tasks) > 0 {
+		templateCode = req.Tasks[0].TemplateCode
 	}
 
-	// TODO: 实际调用阿里云批量发送SDK
-	// import "github.com/aliyun/alibaba-cloud-sdk-go/services/dysmsapi"
-	//
-	// client, err := dysmsapi.NewClientWithAccessKey("cn-hangzhou", config.AccessKeyID, config.AccessKeySecret)
-	// request := dysmsapi.CreateSendBatchSmsRequest()
-	// request.PhoneNumberJson = phoneNumbersJSON
-	// request.SignNameJson = signNamesJSON
-	// request.TemplateCode = templateCode
-	// request.TemplateParamJson = templateParamsJSON
-	// response, err := client.SendBatchSms(request)
+	if templateCode == "" {
+		return nil, fmt.Errorf("missing template_code")
+	}
 
-	// 模拟批量发送（开发阶段）
-	results := make([]*SendResponse, len(req.Tasks))
-	batchID := fmt.Sprintf("mock_aliyun_batch_%s_%d", signName, time.Now().UnixNano())
+	// 收集所有手机号、签名和模板参数
+	phoneNumbers := make([]string, len(req.Tasks))
+	signNames := make([]string, len(req.Tasks))
+	templateParams := make([]string, len(req.Tasks))
 
 	for i, task := range req.Tasks {
-		results[i] = &SendResponse{
-			Success:    true,
-			ProviderID: fmt.Sprintf("%s_%d", batchID, i),
-			TaskID:     task.TaskID,
+		phoneNumbers[i] = task.Receiver
+		signNames[i] = signName // 批量发送时，每个号码需要对应一个签名
+
+		// 模板参数：阿里云批量发送要求每个号码对应一个JSON对象
+		if task.TemplateParams != "" {
+			// 验证参数是否为有效JSON
+			var params map[string]interface{}
+			if err := json.Unmarshal([]byte(task.TemplateParams), &params); err == nil {
+				templateParams[i] = task.TemplateParams
+			} else {
+				templateParams[i] = "{}"
+			}
+		} else {
+			templateParams[i] = "{}"
+		}
+	}
+
+	// 序列化为JSON数组
+	phoneNumbersJSON, _ := json.Marshal(phoneNumbers)
+	signNamesJSON, _ := json.Marshal(signNames)
+	templateParamsJSON, _ := json.Marshal(templateParams)
+
+	// 构造批量发送请求
+	batchRequest := &dysmsapi.SendBatchSmsRequest{
+		PhoneNumberJson:   tea.String(string(phoneNumbersJSON)),
+		SignNameJson:      tea.String(string(signNamesJSON)),
+		TemplateCode:      tea.String(templateCode),
+		TemplateParamJson: tea.String(string(templateParamsJSON)),
+	}
+
+	// 4. 发送
+	response, err := client.SendBatchSms(batchRequest)
+	if err != nil {
+		// 如果批量发送失败，返回所有任务都失败的结果
+		results := make([]*SendResponse, len(req.Tasks))
+		for i, task := range req.Tasks {
+			results[i] = &SendResponse{
+				Success:      false,
+				ErrorMessage: err.Error(),
+				TaskID:       task.TaskID,
+			}
+		}
+		return &BatchSendResponse{Results: results}, nil
+	}
+
+	// 5. 解析响应
+	// 阿里云批量发送成功时返回一个统一的 BizId
+	if response.Body == nil {
+		results := make([]*SendResponse, len(req.Tasks))
+		for i, task := range req.Tasks {
+			results[i] = &SendResponse{
+				Success:      false,
+				ErrorMessage: "empty response from aliyun",
+				TaskID:       task.TaskID,
+			}
+		}
+		return &BatchSendResponse{Results: results}, nil
+	}
+
+	results := make([]*SendResponse, len(req.Tasks))
+	isSuccess := tea.StringValue(response.Body.Code) == "OK"
+	batchBizId := tea.StringValue(response.Body.BizId)
+	errorCode := tea.StringValue(response.Body.Code)
+	errorMessage := tea.StringValue(response.Body.Message)
+
+	for i, task := range req.Tasks {
+		if isSuccess {
+			results[i] = &SendResponse{
+				Success:    true,
+				ProviderID: fmt.Sprintf("%s_%d", batchBizId, i), // 为每条记录生成唯一标识
+				TaskID:     task.TaskID,
+			}
+		} else {
+			results[i] = &SendResponse{
+				Success:      false,
+				ErrorCode:    errorCode,
+				ErrorMessage: errorMessage,
+				TaskID:       task.TaskID,
+			}
 		}
 	}
 

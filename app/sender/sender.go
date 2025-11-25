@@ -26,10 +26,10 @@ const (
 
 // SendRequest 发送请求
 type SendRequest struct {
-	Task            *model.PushTask
-	ProviderAccount *model.ProviderAccount         // 服务商账号配置
-	Relation        *model.ChannelProviderRelation // 关联配置（签名/模板等）
-	Signature       *model.ProviderSignature       // 签名配置（用于SMS类型）
+	Task                   *model.PushTask
+	ProviderAccount        *model.ProviderAccount        // 服务商账号配置
+	ChannelTemplateBinding *model.ChannelTemplateBinding // 通道模板绑定配置
+	Signature              *model.ProviderSignature      // 签名配置（用于SMS类型）
 }
 
 // SendResponse 发送响应
@@ -56,10 +56,10 @@ type Sender interface {
 // BatchSendRequest 批量发送请求
 // 注意：不同服务商有不同的批量限制，具体参见 MaxBatchSize* 常量
 type BatchSendRequest struct {
-	Tasks           []*model.PushTask
-	ProviderAccount *model.ProviderAccount
-	Relation        *model.ChannelProviderRelation
-	Signature       *model.ProviderSignature
+	Tasks                  []*model.PushTask
+	ProviderAccount        *model.ProviderAccount
+	ChannelTemplateBinding *model.ChannelTemplateBinding
+	Signature              *model.ProviderSignature
 }
 
 // BatchSendResponse 批量发送响应
