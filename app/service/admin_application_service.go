@@ -60,13 +60,31 @@ func (s *AdminApplicationService) CreateApplication(req *dto.CreateApplicationRe
 		status = 1 // 默认启用
 	}
 
+	// 验证IP白名单格式
+	ipWhitelist, err := apphelper.ValidateIPWhitelist(req.IPWhitelist)
+	if err != nil {
+		return nil, fmt.Errorf("IP白名单格式错误: %w", err)
+	}
+
+	dailyQuota := req.DailyQuota
+	if dailyQuota == 0 {
+		dailyQuota = 10000 // 默认每日配额
+	}
+
+	rateLimit := req.RateLimit
+	if rateLimit == 0 {
+		rateLimit = 100 // 默认QPS限制
+	}
+
 	app := &model.Application{
-		AppID:      appID,
-		AppSecret:  encryptedSecret,
-		AppName:    req.Name,
-		Status:     status,
-		DailyQuota: 10000, // 默认每日配额
-		RateLimit:  100,   // 默认QPS限制
+		AppID:       appID,
+		AppSecret:   encryptedSecret,
+		AppName:     req.Name,
+		Status:      status,
+		DailyQuota:  dailyQuota,
+		RateLimit:   rateLimit,
+		IPWhitelist: ipWhitelist,
+		WebhookURL:  req.WebhookURL,
 	}
 
 	if err := dao.CreateApp(app); err != nil {
@@ -177,6 +195,24 @@ func (s *AdminApplicationService) UpdateApplication(id uint, req *dto.UpdateAppl
 	}
 	if req.Status > 0 {
 		updates["status"] = int8(req.Status)
+	}
+	if req.DailyQuota > 0 {
+		updates["daily_quota"] = req.DailyQuota
+	}
+	if req.RateLimit > 0 {
+		updates["rate_limit"] = req.RateLimit
+	}
+	if req.WebhookURL != "" {
+		updates["webhook_url"] = req.WebhookURL
+	}
+
+	// 处理IP白名单（允许清空）
+	if req.IPWhitelist != "" {
+		ipWhitelist, err := apphelper.ValidateIPWhitelist(req.IPWhitelist)
+		if err != nil {
+			return fmt.Errorf("IP白名单格式错误: %w", err)
+		}
+		updates["ip_whitelist"] = ipWhitelist
 	}
 
 	if len(updates) == 0 {
