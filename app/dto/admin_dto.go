@@ -159,6 +159,16 @@ type AvailableProviderResponse struct {
 	SupportsSend      bool `json:"supports_send"`
 	SupportsBatchSend bool `json:"supports_batch_send"`
 	SupportsCallback  bool `json:"supports_callback"`
+	// 扩展信息
+	Website    string   `json:"website"`
+	Icon       string   `json:"icon"`
+	DocsUrl    string   `json:"docs_url"`
+	ConsoleUrl string   `json:"console_url"`
+	PricingUrl string   `json:"pricing_url"`
+	SortOrder  int      `json:"sort_order"`
+	Tags       []string `json:"tags"`
+	Regions    []string `json:"regions"`
+	Deprecated bool     `json:"deprecated"`
 }
 
 // ConfigFieldResponse 配置字段响应

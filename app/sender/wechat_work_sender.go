@@ -57,6 +57,16 @@ func init() {
 		SupportsSend:      true,
 		SupportsBatchSend: true,
 		SupportsCallback:  true,
+		// 扩展信息
+		Website:    "https://work.weixin.qq.com/",
+		Icon:       "https://rescdn.qqmail.com/node/wework/images/independent/favicon/favicon_48h.png",
+		DocsUrl:    "https://developer.work.weixin.qq.com/document/path/90664",
+		ConsoleUrl: "https://work.weixin.qq.com/wework_admin/frame",
+		PricingUrl: "",
+		SortOrder:  30,
+		Tags:       []string{"企业", "即时通讯"},
+		Regions:    []string{"中国大陆"},
+		Deprecated: false,
 	})
 }
 

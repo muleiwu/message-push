@@ -57,6 +57,16 @@ func init() {
 		SupportsSend:      true,
 		SupportsBatchSend: true,
 		SupportsCallback:  true,
+		// 扩展信息
+		Website:    "https://www.dingtalk.com/",
+		Icon:       "https://www.dingtalk.com/favicon.ico",
+		DocsUrl:    "https://open.dingtalk.com/document/orgapp/asynchronous-sending-of-enterprise-session-messages",
+		ConsoleUrl: "https://open-dev.dingtalk.com/",
+		PricingUrl: "",
+		SortOrder:  40,
+		Tags:       []string{"企业", "即时通讯"},
+		Regions:    []string{"中国大陆"},
+		Deprecated: false,
 	})
 }
 

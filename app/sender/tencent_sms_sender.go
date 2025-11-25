@@ -67,6 +67,16 @@ func init() {
 		SupportsSend:      true,
 		SupportsBatchSend: true,
 		SupportsCallback:  true,
+		// 扩展信息
+		Website:    "https://cloud.tencent.com/product/sms",
+		Icon:       "https://cloudcache.tencent-cloud.com/qcloud/favicon.ico",
+		DocsUrl:    "https://cloud.tencent.com/document/product/382",
+		ConsoleUrl: "https://console.cloud.tencent.com/smsv2",
+		PricingUrl: "https://cloud.tencent.com/product/sms/pricing",
+		SortOrder:  20,
+		Tags:       []string{"国内", "国际", "推荐"},
+		Regions:    []string{"中国大陆", "国际"},
+		Deprecated: false,
 	})
 }
 

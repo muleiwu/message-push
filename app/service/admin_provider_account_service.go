@@ -60,6 +60,16 @@ func (s *AdminProviderAccountService) GetAvailableProviders(providerType string)
 			SupportsSend:      p.SupportsSend,
 			SupportsBatchSend: p.SupportsBatchSend,
 			SupportsCallback:  p.SupportsCallback,
+			// 扩展信息
+			Website:    p.Website,
+			Icon:       p.Icon,
+			DocsUrl:    p.DocsUrl,
+			ConsoleUrl: p.ConsoleUrl,
+			PricingUrl: p.PricingUrl,
+			SortOrder:  p.SortOrder,
+			Tags:       p.Tags,
+			Regions:    p.Regions,
+			Deprecated: p.Deprecated,
 		})
 	}
 

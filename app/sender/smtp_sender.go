@@ -71,6 +71,16 @@ func init() {
 		SupportsSend:      true,
 		SupportsBatchSend: true,
 		SupportsCallback:  true,
+		// 扩展信息
+		Website:    "",
+		Icon:       "",
+		DocsUrl:    "",
+		ConsoleUrl: "",
+		PricingUrl: "",
+		SortOrder:  100,
+		Tags:       []string{"通用", "邮件"},
+		Regions:    []string{"全球"},
+		Deprecated: false,
 	})
 }
 

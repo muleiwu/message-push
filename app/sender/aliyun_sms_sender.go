@@ -46,6 +46,16 @@ func init() {
 		SupportsSend:      true,
 		SupportsBatchSend: true,
 		SupportsCallback:  true,
+		// 扩展信息
+		Website:    "https://www.aliyun.com/product/sms",
+		Icon:       "https://www.aliyun.com/favicon.ico",
+		DocsUrl:    "https://help.aliyun.com/document_detail/419273.html",
+		ConsoleUrl: "https://dysms.console.aliyun.com/",
+		PricingUrl: "https://www.aliyun.com/price/product#/sms/detail",
+		SortOrder:  10,
+		Tags:       []string{"国内", "国际", "推荐"},
+		Regions:    []string{"中国大陆", "国际"},
+		Deprecated: false,
 	})
 }
 

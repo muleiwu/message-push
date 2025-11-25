@@ -17,6 +17,17 @@ type ProviderMeta struct {
 	SupportsSend      bool `json:"supports_send"`       // 是否支持单条发送
 	SupportsBatchSend bool `json:"supports_batch_send"` // 是否支持批量发送
 	SupportsCallback  bool `json:"supports_callback"`   // 是否支持回调
+
+	// 扩展信息
+	Website    string   `json:"website"`     // 官网地址
+	Icon       string   `json:"icon"`        // 服务商图标URL
+	DocsUrl    string   `json:"docs_url"`    // API文档链接
+	ConsoleUrl string   `json:"console_url"` // 管理控制台链接
+	PricingUrl string   `json:"pricing_url"` // 定价页面链接
+	SortOrder  int      `json:"sort_order"`  // 排序权重（数字越小越靠前）
+	Tags       []string `json:"tags"`        // 标签列表
+	Regions    []string `json:"regions"`     // 支持区域
+	Deprecated bool     `json:"deprecated"`  // 是否已弃用
 }
 
 // ProviderRegistry 服务商注册表
