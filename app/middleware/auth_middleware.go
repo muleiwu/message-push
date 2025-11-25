@@ -96,6 +96,8 @@ func AuthMiddleware() gin.HandlerFunc {
 		// 将应用信息存入上下文
 		c.Set("app_id", app.AppID)
 		c.Set("app_db_id", app.ID)
+		c.Set("daily_quota", app.DailyQuota)
+		c.Set("rate_limit", app.RateLimit)
 
 		c.Next()
 	}

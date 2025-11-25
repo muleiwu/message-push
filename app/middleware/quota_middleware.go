@@ -23,8 +23,20 @@ func QuotaMiddleware() gin.HandlerFunc {
 			return
 		}
 
+		// 获取应用的每日配额配置
+		dailyQuota, exists := c.Get("daily_quota")
+		if !exists {
+			dailyQuota = 10000 // 默认配额
+		}
+
+		// 0 表示不限制
+		if dailyQuota.(int) == 0 {
+			c.Next()
+			return
+		}
+
 		// 检查今日配额
-		allowed, err := checkQuota(context.Background(), redisClient, appDBID.(uint))
+		allowed, err := checkQuota(context.Background(), redisClient, appDBID.(uint), dailyQuota.(int))
 		if err != nil {
 			helper.GetHelper().GetLogger().Error(fmt.Sprintf("quota check error: %v", err))
 			c.Next()
@@ -42,7 +54,7 @@ func QuotaMiddleware() gin.HandlerFunc {
 }
 
 // checkQuota 检查配额
-func checkQuota(ctx context.Context, client *redis.Client, appID uint) (bool, error) {
+func checkQuota(ctx context.Context, client *redis.Client, appID uint, dailyLimit int) (bool, error) {
 	today := time.Now().Format("20060102")
 	key := fmt.Sprintf("quota:%d:%s", appID, today)
 
@@ -67,8 +79,6 @@ func checkQuota(ctx context.Context, client *redis.Client, appID uint) (bool, er
 		return 0
 	`)
 
-	// 默认每日配额10000
-	dailyLimit := 10000
 	// TTL设为48小时（考虑跨天情况）
 	ttl := 48 * 3600
 

@@ -87,10 +87,19 @@ func RateLimitByAppIDMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// 从配置或数据库获取该应用的QPS限制
-		qps := 100 // 默认100 QPS
+		// 从上下文获取该应用的QPS限制
+		rateLimit, exists := c.Get("rate_limit")
+		if !exists {
+			rateLimit = 100 // 默认100 QPS
+		}
+
+		// 0 表示不限制
+		if rateLimit.(int) == 0 {
+			c.Next()
+			return
+		}
 
 		// 执行限流检查
-		RateLimitMiddleware(qps)(c)
+		RateLimitMiddleware(rateLimit.(int))(c)
 	}
 }
