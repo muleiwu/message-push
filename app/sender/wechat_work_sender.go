@@ -59,7 +59,7 @@ func init() {
 		SupportsCallback:  true,
 		// 扩展信息
 		Website:    "https://work.weixin.qq.com/",
-		Icon:       "https://rescdn.qqmail.com/node/wework/images/independent/favicon/favicon_48h.png",
+		Icon:       "/image/logo/wechat_work.png",
 		DocsUrl:    "https://developer.work.weixin.qq.com/document/path/90664",
 		ConsoleUrl: "https://work.weixin.qq.com/wework_admin/frame",
 		PricingUrl: "",
