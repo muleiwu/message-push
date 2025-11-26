@@ -90,14 +90,13 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 		return err
 	}
 
-	// 查找签名映射
+	// 查找签名映射，直接获取供应商签名
 	var providerSignature *model.ProviderSignature
 	if task.Signature != "" {
-		signatureMapping, err := h.signatureMappingDao.GetByChannelIDAndSignatureName(task.ChannelID, task.Signature)
+		providerSignature, err = h.signatureMappingDao.GetByChannelIDAndSignatureName(task.ChannelID, task.Signature, providerAccount.ID)
 		if err != nil {
 			h.logger.Warn(fmt.Sprintf("signature mapping not found task_id=%s signature=%s: %v", taskID, task.Signature, err))
-		} else if signatureMapping != nil && signatureMapping.ProviderSignature != nil {
-			providerSignature = signatureMapping.ProviderSignature
+		} else if providerSignature != nil {
 			h.logger.Info(fmt.Sprintf("signature resolved task_id=%s signature_name=%s signature_code=%s", taskID, task.Signature, providerSignature.SignatureCode))
 		}
 	}
