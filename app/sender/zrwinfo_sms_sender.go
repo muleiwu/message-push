@@ -114,6 +114,11 @@ func (s *ZrwinfoSMSSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 		signName = req.Signature.SignatureCode
 	}
 
+	// 确保签名格式为【xxx】
+	if signName != "" && !strings.HasPrefix(signName, "【") {
+		signName = "【" + signName + "】"
+	}
+
 	// 兜底：从任务获取模板代码
 	if templateCode == "" {
 		templateCode = req.Task.TemplateCode
