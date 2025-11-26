@@ -93,6 +93,7 @@ func (s *MessageService) Send(ctx context.Context, req *dto.SendRequest) (*dto.S
 		RetryCount:     0,
 		MaxRetry:       3,
 		ScheduledAt:    req.ScheduledAt,
+		CreatedAt:      time.Now(),
 	}
 
 	// 保存任务到数据库
