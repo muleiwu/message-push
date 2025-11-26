@@ -19,6 +19,7 @@ func NewFactory() *Factory {
 	factory.Register(NewAliyunSMSSender())
 	factory.Register(NewSMTPSender())
 	factory.Register(NewTencentSMSSender())
+	factory.Register(NewZrwinfoSMSSender())
 	factory.Register(NewWeChatWorkSender())
 	factory.Register(NewDingTalkSender())
 

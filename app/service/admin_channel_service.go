@@ -647,13 +647,13 @@ func (s *AdminChannelService) CreateChannelSignatureMapping(channelID uint, req 
 		return nil, fmt.Errorf("provider signature does not belong to the specified provider account")
 	}
 
-	// 检查签名名称是否已存在
-	exists, err := s.signatureMappingDAO.CheckDuplicateSignatureName(channelID, req.SignatureName, nil)
+	// 检查签名名称+供应商是否已存在
+	exists, err := s.signatureMappingDAO.CheckDuplicateSignatureName(channelID, req.SignatureName, req.ProviderID, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check duplicate signature name: %w", err)
 	}
 	if exists {
-		return nil, fmt.Errorf("signature name '%s' already exists in this channel", req.SignatureName)
+		return nil, fmt.Errorf("signature name '%s' with this provider already exists in this channel", req.SignatureName)
 	}
 
 	// 设置默认值
@@ -718,12 +718,12 @@ func (s *AdminChannelService) UpdateChannelSignatureMapping(mappingID uint, req 
 
 	// 如果更新签名名称，检查是否重复
 	if req.SignatureName != "" && req.SignatureName != mapping.SignatureName {
-		exists, err := s.signatureMappingDAO.CheckDuplicateSignatureName(mapping.ChannelID, req.SignatureName, &mappingID)
+		exists, err := s.signatureMappingDAO.CheckDuplicateSignatureName(mapping.ChannelID, req.SignatureName, mapping.ProviderID, &mappingID)
 		if err != nil {
 			return fmt.Errorf("failed to check duplicate signature name: %w", err)
 		}
 		if exists {
-			return fmt.Errorf("signature name '%s' already exists in this channel", req.SignatureName)
+			return fmt.Errorf("signature name '%s' with this provider already exists in this channel", req.SignatureName)
 		}
 		mapping.SignatureName = req.SignatureName
 	}

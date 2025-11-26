@@ -53,10 +53,10 @@ func (dao *ChannelSignatureMappingDAO) Delete(id uint) error {
 	return dao.db.Delete(&model.ChannelSignatureMapping{}, id).Error
 }
 
-// CheckDuplicateSignatureName 检查同一通道下签名名称是否重复
-func (dao *ChannelSignatureMappingDAO) CheckDuplicateSignatureName(channelID uint, signatureName string, excludeID *uint) (bool, error) {
+// CheckDuplicateSignatureName 检查同一通道下签名名称+供应商是否重复
+func (dao *ChannelSignatureMappingDAO) CheckDuplicateSignatureName(channelID uint, signatureName string, providerID uint, excludeID *uint) (bool, error) {
 	query := dao.db.Model(&model.ChannelSignatureMapping{}).
-		Where("channel_id = ? AND signature_name = ?", channelID, signatureName)
+		Where("channel_id = ? AND signature_name = ? AND provider_id = ?", channelID, signatureName, providerID)
 
 	if excludeID != nil {
 		query = query.Where("id != ?", *excludeID)
