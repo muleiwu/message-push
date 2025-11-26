@@ -53,18 +53,37 @@ func (d *PushBatchTaskDAO) IncrementFailed(batchID string) error {
 }
 
 // List 获取批量任务列表
-func (d *PushBatchTaskDAO) List(page, pageSize int) ([]*model.PushBatchTask, int64, error) {
+func (d *PushBatchTaskDAO) List(page, pageSize int, filters map[string]interface{}) ([]*model.PushBatchTask, int64, error) {
 	var batches []*model.PushBatchTask
 	var total int64
 
+	offset := (page - 1) * pageSize
+	query := d.db.Model(&model.PushBatchTask{})
+
+	// 应用过滤条件
+	if appID, ok := filters["app_id"]; ok {
+		query = query.Where("app_id = ?", appID)
+	}
+	if status, ok := filters["status"]; ok {
+		query = query.Where("status = ?", status)
+	}
+	if batchID, ok := filters["batch_id"]; ok {
+		query = query.Where("batch_id LIKE ?", "%"+batchID.(string)+"%")
+	}
+	if startDate, ok := filters["start_date"]; ok {
+		query = query.Where("DATE(created_at) >= ?", startDate)
+	}
+	if endDate, ok := filters["end_date"]; ok {
+		query = query.Where("DATE(created_at) <= ?", endDate)
+	}
+
 	// 获取总数
-	if err := d.db.Model(&model.PushBatchTask{}).Count(&total).Error; err != nil {
+	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
 	// 分页查询
-	offset := (page - 1) * pageSize
-	err := d.db.Offset(offset).Limit(pageSize).
+	err := query.Offset(offset).Limit(pageSize).
 		Order("created_at DESC").
 		Find(&batches).Error
 
@@ -73,4 +92,14 @@ func (d *PushBatchTaskDAO) List(page, pageSize int) ([]*model.PushBatchTask, int
 	}
 
 	return batches, total, nil
+}
+
+// GetByID 根据ID获取批量任务
+func (d *PushBatchTaskDAO) GetByID(id uint) (*model.PushBatchTask, error) {
+	var batch model.PushBatchTask
+	err := d.db.Where("id = ?", id).First(&batch).Error
+	if err != nil {
+		return nil, err
+	}
+	return &batch, nil
 }

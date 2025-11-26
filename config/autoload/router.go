@@ -152,6 +152,21 @@ func (receiver Router) InitConfig(helper envInterface.HelperInterface) map[strin
 					logs.GET("/:id", deps.WrapHandler(admin.LogController{}.GetLog))
 				}
 
+				// 任务管理
+				pushTasks := adminGroup.Group("/push-tasks")
+				{
+					pushTasks.GET("", deps.WrapHandler(admin.TaskController{}.GetPushTaskList))
+					pushTasks.GET("/:id", deps.WrapHandler(admin.TaskController{}.GetPushTask))
+				}
+
+				// 批量任务管理
+				batchTasks := adminGroup.Group("/batch-tasks")
+				{
+					batchTasks.GET("", deps.WrapHandler(admin.TaskController{}.GetPushBatchTaskList))
+					batchTasks.GET("/:id", deps.WrapHandler(admin.TaskController{}.GetPushBatchTask))
+					batchTasks.GET("/:id/tasks", deps.WrapHandler(admin.TaskController{}.GetBatchTaskDetails))
+				}
+
 				// 模板管理
 				templates := adminGroup.Group("/templates")
 				{

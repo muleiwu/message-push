@@ -132,6 +132,21 @@ func (d *PushTaskDAO) List(page, pageSize int, filters map[string]interface{}) (
 	if status, ok := filters["status"]; ok {
 		query = query.Where("status = ?", status)
 	}
+	if messageType, ok := filters["message_type"]; ok {
+		query = query.Where("message_type = ?", messageType)
+	}
+	if taskID, ok := filters["task_id"]; ok {
+		query = query.Where("task_id LIKE ?", "%"+taskID.(string)+"%")
+	}
+	if batchID, ok := filters["batch_id"]; ok {
+		query = query.Where("batch_id = ?", batchID)
+	}
+	if startDate, ok := filters["start_date"]; ok {
+		query = query.Where("DATE(created_at) >= ?", startDate)
+	}
+	if endDate, ok := filters["end_date"]; ok {
+		query = query.Where("DATE(created_at) <= ?", endDate)
+	}
 
 	// 计算总数
 	if err := query.Count(&total).Error; err != nil {
