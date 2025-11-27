@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"bytes"
 	"io"
 	"strconv"
 
@@ -48,6 +49,9 @@ func (ctrl CallbackController) Handle(c *gin.Context, helper interfaces.HelperIn
 		c.JSON(200, gin.H{"code": 400, "message": "failed to read request body"})
 		return
 	}
+
+	// 重置 Body 以便后续解析表单数据（因为 Body 只能读取一次）
+	c.Request.Body = io.NopCloser(bytes.NewBuffer(rawBody))
 
 	// 解析表单数据（支持 application/x-www-form-urlencoded 和 multipart/form-data）
 	_ = c.Request.ParseMultipartForm(32 << 20) // 32MB
