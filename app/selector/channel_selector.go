@@ -16,12 +16,18 @@ import (
 
 // 缓存 key 前缀
 const (
-	cacheKeyPrefix  = "channel_selector:"
-	weightKeyPrefix = "channel_weight:"
+	cacheKeyPrefix        = "channel_selector:"
+	weightKeyPrefix       = "channel_weight:"
+	lastProviderKeyPrefix = "channel_last_provider:"
 )
 
-// 权重状态 TTL（24小时作为兜底，管理操作会主动清除）
-const weightTTL = 24 * time.Hour
+// 缓存 TTL
+const (
+	// 权重状态 TTL（24小时作为兜底，管理操作会主动清除）
+	weightTTL = 24 * time.Hour
+	// 上次供应商记录 TTL（5分钟内同一接收者切换供应商）
+	lastProviderTTL = 5 * time.Minute
+)
 
 // ChannelNode 通道节点（带权重）
 type ChannelNode struct {
@@ -59,7 +65,8 @@ func buildCacheKey(channelID uint, messageType string) string {
 }
 
 // Select 选择通道（平滑加权轮询，权重状态持久化到 Redis）
-func (s *ChannelSelector) Select(ctx context.Context, channelID uint, messageType string) (*ChannelNode, error) {
+// appID 和 receiver 用于 5 分钟内同一接收者切换供应商策略
+func (s *ChannelSelector) Select(ctx context.Context, channelID uint, messageType string, appID string, receiver string) (*ChannelNode, error) {
 	nodes, err := s.getChannelNodes(ctx, channelID, messageType)
 	if err != nil {
 		return nil, err
@@ -69,10 +76,18 @@ func (s *ChannelSelector) Select(ctx context.Context, channelID uint, messageTyp
 		return nil, fmt.Errorf("no available channel for channel_id=%d type=%s", channelID, messageType)
 	}
 
+	// 获取上次使用的供应商 ID（5 分钟内同一接收者切换供应商）
+	lastProviderID := s.getLastProviderID(ctx, appID, channelID, receiver)
+
 	// 使用平滑加权轮询选择（权重状态持久化到 Redis）
-	selected := s.smoothWeightedRoundRobin(ctx, channelID, nodes)
+	selected := s.smoothWeightedRoundRobin(ctx, channelID, nodes, lastProviderID)
 	if selected == nil {
 		return nil, fmt.Errorf("failed to select channel")
+	}
+
+	// 记录本次选择的供应商
+	if selected.ProviderAccount != nil {
+		s.recordLastProvider(ctx, appID, channelID, receiver, selected.ProviderAccount.ID)
 	}
 
 	return selected, nil
@@ -165,7 +180,8 @@ func (s *ChannelSelector) filterAvailableNodes(nodes []*ChannelNode) []*ChannelN
 }
 
 // smoothWeightedRoundRobin 平滑加权轮询算法（权重状态持久化到 Redis）
-func (s *ChannelSelector) smoothWeightedRoundRobin(ctx context.Context, channelID uint, nodes []*ChannelNode) *ChannelNode {
+// lastProviderID: 上次使用的供应商 ID，用于 5 分钟内同一接收者切换供应商
+func (s *ChannelSelector) smoothWeightedRoundRobin(ctx context.Context, channelID uint, nodes []*ChannelNode, lastProviderID uint) *ChannelNode {
 	if len(nodes) == 0 {
 		return nil
 	}
@@ -197,6 +213,26 @@ func (s *ChannelSelector) smoothWeightedRoundRobin(ctx context.Context, channelI
 		return nil
 	}
 
+	if len(candidates) == 1 {
+		return candidates[0]
+	}
+
+	// 5 分钟内同一接收者切换供应商：如果有上次使用的供应商记录且有其他可用供应商，排除上次的
+	if lastProviderID > 0 && len(candidates) > 1 {
+		var filteredCandidates []*ChannelNode
+		for _, node := range candidates {
+			if node.ProviderAccount != nil && node.ProviderAccount.ID != lastProviderID {
+				filteredCandidates = append(filteredCandidates, node)
+			}
+		}
+		// 只有当排除后还有候选时才使用过滤后的列表
+		if len(filteredCandidates) > 0 {
+			candidates = filteredCandidates
+			s.logger.Info(fmt.Sprintf("excluded last provider_id=%d, remaining candidates=%d", lastProviderID, len(candidates)))
+		}
+	}
+
+	// 如果过滤后只剩一个，直接返回
 	if len(candidates) == 1 {
 		return candidates[0]
 	}
@@ -270,6 +306,43 @@ func (s *ChannelSelector) saveWeightStates(ctx context.Context, channelID uint, 
 		if err := s.cache.Set(ctx, key, weightStr, weightTTL); err != nil {
 			s.logger.Warn(fmt.Sprintf("failed to save weight state key=%s: %v", key, err))
 		}
+	}
+}
+
+// buildLastProviderKey 构建上次供应商记录缓存 key
+func buildLastProviderKey(appID string, channelID uint, receiver string) string {
+	return fmt.Sprintf("%s%s:%d:%s", lastProviderKeyPrefix, appID, channelID, receiver)
+}
+
+// getLastProviderID 获取上次使用的供应商 ID
+// 用于 5 分钟内同一接收者切换供应商策略
+func (s *ChannelSelector) getLastProviderID(ctx context.Context, appID string, channelID uint, receiver string) uint {
+	if appID == "" || receiver == "" {
+		return 0
+	}
+
+	key := buildLastProviderKey(appID, channelID, receiver)
+	var providerIDStr string
+	err := s.cache.Get(ctx, key, &providerIDStr)
+	if err == nil && providerIDStr != "" {
+		if providerID, parseErr := strconv.ParseUint(providerIDStr, 10, 32); parseErr == nil {
+			return uint(providerID)
+		}
+	}
+	return 0
+}
+
+// recordLastProvider 记录本次选择的供应商
+// 用于 5 分钟内同一接收者切换供应商策略
+func (s *ChannelSelector) recordLastProvider(ctx context.Context, appID string, channelID uint, receiver string, providerID uint) {
+	if appID == "" || receiver == "" || providerID == 0 {
+		return
+	}
+
+	key := buildLastProviderKey(appID, channelID, receiver)
+	providerIDStr := strconv.FormatUint(uint64(providerID), 10)
+	if err := s.cache.Set(ctx, key, providerIDStr, lastProviderTTL); err != nil {
+		s.logger.Warn(fmt.Sprintf("failed to record last provider key=%s: %v", key, err))
 	}
 }
 

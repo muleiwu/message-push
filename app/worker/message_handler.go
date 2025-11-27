@@ -135,7 +135,8 @@ func (h *MessageHandler) selectChannel(ctx context.Context, task *model.PushTask
 		return nil, fmt.Errorf("invalid channel_id: %w", err)
 	}
 
-	node, err := h.selector.Select(ctx, channelID, task.MessageType)
+	// 传入 appID 和 receiver 用于 5 分钟内同一接收者切换供应商策略
+	node, err := h.selector.Select(ctx, channelID, task.MessageType, task.AppID, task.Receiver)
 	if err != nil {
 		return nil, err
 	}
