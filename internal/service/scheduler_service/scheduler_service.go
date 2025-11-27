@@ -9,11 +9,12 @@ import (
 
 // SchedulerService 调度服务
 type SchedulerService struct {
-	Helper      interfaces.HelperInterface
-	scanner     *scheduler.ScheduledTaskScanner
-	quotaSyncer *scheduler.QuotaSyncer
-	ctx         context.Context
-	cancel      context.CancelFunc
+	Helper            interfaces.HelperInterface
+	scanner           *scheduler.ScheduledTaskScanner
+	quotaSyncer       *scheduler.QuotaSyncer
+	smsTimeoutScanner *scheduler.SMSTimeoutScanner
+	ctx               context.Context
+	cancel            context.CancelFunc
 }
 
 // Run 启动服务
@@ -40,6 +41,12 @@ func (receiver *SchedulerService) Run() error {
 		return err
 	}
 
+	// 创建并启动短信超时扫描器
+	receiver.smsTimeoutScanner = scheduler.NewSMSTimeoutScanner()
+	if err := receiver.smsTimeoutScanner.Start(receiver.ctx); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -55,6 +62,10 @@ func (receiver *SchedulerService) Stop() error {
 
 	if receiver.quotaSyncer != nil {
 		receiver.quotaSyncer.Stop()
+	}
+
+	if receiver.smsTimeoutScanner != nil {
+		receiver.smsTimeoutScanner.Stop()
 	}
 
 	return nil

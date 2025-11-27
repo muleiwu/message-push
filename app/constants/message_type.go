@@ -45,4 +45,5 @@ const (
 	CallbackStatusDelivered = "delivered" // 已送达
 	CallbackStatusFailed    = "failed"    // 发送失败
 	CallbackStatusRejected  = "rejected"  // 被拒绝
+	CallbackStatusTimeout   = "timeout"   // 回调超时
 )

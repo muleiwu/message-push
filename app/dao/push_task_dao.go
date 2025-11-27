@@ -1,6 +1,8 @@
 package dao
 
 import (
+	"time"
+
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/internal/helper"
 	"gorm.io/gorm"
@@ -115,6 +117,20 @@ func (d *PushTaskDAO) UpdateProviderMsgID(taskID, providerMsgID string) error {
 	return d.db.Model(&model.PushTask{}).
 		Where("task_id = ?", taskID).
 		Update("provider_msg_id", providerMsgID).Error
+}
+
+// GetTimeoutProcessingTasks 获取超时的 processing 状态短信任务
+func (d *PushTaskDAO) GetTimeoutProcessingTasks(timeout time.Duration, limit int) ([]*model.PushTask, error) {
+	var tasks []*model.PushTask
+	cutoff := time.Now().Add(-timeout)
+	err := d.db.Where("status = ? AND message_type = ? AND updated_at < ?",
+		"processing", "sms", cutoff).
+		Limit(limit).
+		Find(&tasks).Error
+	if err != nil {
+		return nil, err
+	}
+	return tasks, nil
 }
 
 // List 获取任务列表（分页）
