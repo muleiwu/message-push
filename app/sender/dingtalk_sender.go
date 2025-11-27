@@ -163,6 +163,7 @@ func (s *DingTalkSender) Send(ctx context.Context, req *SendRequest) (*SendRespo
 		Success:    true,
 		ProviderID: fmt.Sprintf("%d", respData.TaskID),
 		TaskID:     req.Task.TaskID,
+		Status:     constants.TaskStatusSuccess, // 钉钉消息发送成功即完成
 	}, nil
 }
 
@@ -305,6 +306,7 @@ func (s *DingTalkSender) BatchSend(ctx context.Context, req *BatchSendRequest) (
 				Success:    true,
 				ProviderID: providerID,
 				TaskID:     task.TaskID,
+				Status:     constants.TaskStatusSuccess, // 钉钉消息发送成功即完成
 			}
 		}
 	}

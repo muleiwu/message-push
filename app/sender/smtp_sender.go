@@ -150,6 +150,7 @@ func (s *SMTPSender) Send(ctx context.Context, req *SendRequest) (*SendResponse,
 		Success:    true,
 		ProviderID: fmt.Sprintf("smtp_%s", req.Task.TaskID),
 		TaskID:     req.Task.TaskID,
+		Status:     constants.TaskStatusSuccess, // 邮件发送成功即完成
 	}, nil
 }
 
@@ -217,6 +218,7 @@ func (s *SMTPSender) BatchSend(ctx context.Context, req *BatchSendRequest) (*Bat
 				Success:    true,
 				ProviderID: fmt.Sprintf("smtp_%s", task.TaskID),
 				TaskID:     task.TaskID,
+				Status:     constants.TaskStatusSuccess, // 邮件发送成功即完成
 			}
 		}
 	}

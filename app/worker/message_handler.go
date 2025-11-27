@@ -118,7 +118,7 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 
 	// 处理发送结果
 	if resp.Success {
-		h.handleSuccess(task, providerAccount.ID, resp.ProviderID)
+		h.handleSuccess(task, providerAccount.ID, resp)
 	} else {
 		h.handleSendError(task, providerAccount.ID, resp.ErrorMessage)
 	}
@@ -143,9 +143,9 @@ func (h *MessageHandler) selectChannel(ctx context.Context, task *model.PushTask
 }
 
 // handleSuccess 处理成功
-func (h *MessageHandler) handleSuccess(task *model.PushTask, providerAccountID uint, providerID string) {
-	task.Status = constants.TaskStatusSuccess
-	task.ProviderMsgID = providerID // 保存服务商消息ID，用于回调匹配
+func (h *MessageHandler) handleSuccess(task *model.PushTask, providerAccountID uint, resp *sender.SendResponse) {
+	task.ProviderMsgID = resp.ProviderID // 保存服务商消息ID，用于回调匹配
+	task.Status = resp.Status            // 使用发送器返回的状态（processing=等待回调, success=直接成功）
 	h.taskDao.Update(task)
 
 	// 记录日志
@@ -155,13 +155,13 @@ func (h *MessageHandler) handleSuccess(task *model.PushTask, providerAccountID u
 		ProviderAccountID: providerAccountID,
 		Status:            "success",
 		RequestData:       "{}",
-		ResponseData:      fmt.Sprintf("{\"provider_id\":\"%s\"}", providerID),
+		ResponseData:      fmt.Sprintf("{\"provider_id\":\"%s\"}", resp.ProviderID),
 	})
 
 	// 通知选择器成功
 	h.selector.ReportSuccess(providerAccountID)
 
-	h.logger.Info(fmt.Sprintf("message sent successfully task_id=%s provider_id=%s", task.TaskID, providerID))
+	h.logger.Info(fmt.Sprintf("message sent successfully task_id=%s provider_id=%s status=%s", task.TaskID, resp.ProviderID, resp.Status))
 }
 
 // handleSendError 处理发送错误

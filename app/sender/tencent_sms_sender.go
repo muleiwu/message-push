@@ -174,6 +174,7 @@ func (s *TencentSMSSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 				Success:    true,
 				ProviderID: *status.SerialNo,
 				TaskID:     req.Task.TaskID,
+				Status:     constants.TaskStatusProcessing, // 等待回调
 			}, nil
 		}
 		return &SendResponse{
@@ -295,6 +296,7 @@ func (s *TencentSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest)
 				Success:    true,
 				ProviderID: *status.SerialNo,
 				TaskID:     taskID,
+				Status:     constants.TaskStatusProcessing, // 等待回调
 			})
 		} else {
 			results = append(results, &SendResponse{

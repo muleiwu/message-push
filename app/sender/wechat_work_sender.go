@@ -171,6 +171,7 @@ func (s *WeChatWorkSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 		Success:    true,
 		ProviderID: respData.MsgID,
 		TaskID:     req.Task.TaskID,
+		Status:     constants.TaskStatusSuccess, // 企业微信消息发送成功即完成
 	}, nil
 }
 
@@ -336,6 +337,7 @@ func (s *WeChatWorkSender) BatchSend(ctx context.Context, req *BatchSendRequest)
 				Success:    true,
 				ProviderID: respData.MsgID,
 				TaskID:     task.TaskID,
+				Status:     constants.TaskStatusSuccess, // 企业微信消息发送成功即完成
 			}
 		}
 	}

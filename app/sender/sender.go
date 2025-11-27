@@ -39,6 +39,7 @@ type SendResponse struct {
 	ErrorCode    string
 	ErrorMessage string
 	TaskID       string // 批量发送时用于关联；单发时可忽略
+	Status       string // 任务状态：processing(等待回调) 或 success(直接成功)
 }
 
 // Sender 发送器接口
