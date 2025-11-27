@@ -26,7 +26,7 @@ func (d *AdminUserDAO) GetByUsername(username string) (*model.AdminUser, error) 
 // GetByID 根据ID获取管理员
 func (d *AdminUserDAO) GetByID(id uint) (*model.AdminUser, error) {
 	var user model.AdminUser
-	err := d.db.Where("id = ? AND status = 1", id).First(&user).Error
+	err := d.db.Where("id = ?", id).First(&user).Error
 	return &user, err
 }
 
