@@ -143,7 +143,15 @@ func (s *ZrwinfoSMSSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 	params.Set("mobile", req.Task.Receiver)
 	params.Set("content", content)
 
-	// 5. 发送请求
+	// 5. 序列化请求数据用于日志（不记录敏感信息）
+	requestData, _ := json.Marshal(map[string]interface{}{
+		"sign":        signName,
+		"template_id": templateCode,
+		"mobile":      req.Task.Receiver,
+		"content":     content,
+	})
+
+	// 6. 发送请求
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", zrwinfoSingleSendURL, strings.NewReader(params.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -156,6 +164,8 @@ func (s *ZrwinfoSMSSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 			Success:      false,
 			ErrorMessage: err.Error(),
 			TaskID:       req.Task.TaskID,
+			RequestData:  string(requestData),
+			ResponseData: "",
 		}, nil
 	}
 	defer resp.Body.Close()
@@ -166,10 +176,12 @@ func (s *ZrwinfoSMSSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 			Success:      false,
 			ErrorMessage: fmt.Sprintf("failed to read response: %v", err),
 			TaskID:       req.Task.TaskID,
+			RequestData:  string(requestData),
+			ResponseData: "",
 		}, nil
 	}
 
-	// 6. 解析响应
+	// 7. 解析响应
 	var result struct {
 		Code   string `json:"code"`
 		Msg    string `json:"msg"`
@@ -181,15 +193,19 @@ func (s *ZrwinfoSMSSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 			Success:      false,
 			ErrorMessage: fmt.Sprintf("failed to parse response: %v, body: %s", err, string(body)),
 			TaskID:       req.Task.TaskID,
+			RequestData:  string(requestData),
+			ResponseData: string(body),
 		}, nil
 	}
 
 	if result.Code == "0" {
 		return &SendResponse{
-			Success:    true,
-			ProviderID: result.SmUuid,
-			TaskID:     req.Task.TaskID,
-			Status:     constants.TaskStatusSent, // 已发送，等待回调
+			Success:      true,
+			ProviderID:   result.SmUuid,
+			TaskID:       req.Task.TaskID,
+			Status:       constants.TaskStatusSent, // 已发送，等待回调
+			RequestData:  string(requestData),
+			ResponseData: string(body),
 		}, nil
 	}
 
@@ -198,6 +214,8 @@ func (s *ZrwinfoSMSSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 		ErrorCode:    result.Code,
 		ErrorMessage: result.Msg,
 		TaskID:       req.Task.TaskID,
+		RequestData:  string(requestData),
+		ResponseData: string(body),
 	}, nil
 }
 
@@ -351,6 +369,14 @@ func (s *ZrwinfoSMSSender) batchSendSameContent(ctx context.Context, req *BatchS
 	params.Set("mobile", strings.Join(mobiles, ","))
 	params.Set("content", content)
 
+	// 序列化请求数据用于日志
+	requestData, _ := json.Marshal(map[string]interface{}{
+		"sign":        signName,
+		"template_id": templateCode,
+		"mobiles":     mobiles,
+		"content":     content,
+	})
+
 	// 发送请求
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", zrwinfoBatchSendURL, strings.NewReader(params.Encode()))
 	if err != nil {
@@ -366,6 +392,8 @@ func (s *ZrwinfoSMSSender) batchSendSameContent(ctx context.Context, req *BatchS
 				Success:      false,
 				ErrorMessage: err.Error(),
 				TaskID:       task.TaskID,
+				RequestData:  string(requestData),
+				ResponseData: "",
 			}
 		}
 		return &BatchSendResponse{Results: results}, nil
@@ -380,6 +408,8 @@ func (s *ZrwinfoSMSSender) batchSendSameContent(ctx context.Context, req *BatchS
 				Success:      false,
 				ErrorMessage: fmt.Sprintf("failed to read response: %v", err),
 				TaskID:       task.TaskID,
+				RequestData:  string(requestData),
+				ResponseData: "",
 			}
 		}
 		return &BatchSendResponse{Results: results}, nil
@@ -399,6 +429,8 @@ func (s *ZrwinfoSMSSender) batchSendSameContent(ctx context.Context, req *BatchS
 				Success:      false,
 				ErrorMessage: fmt.Sprintf("failed to parse response: %v, body: %s", err, string(body)),
 				TaskID:       task.TaskID,
+				RequestData:  string(requestData),
+				ResponseData: string(body),
 			}
 		}
 		return &BatchSendResponse{Results: results}, nil
@@ -410,10 +442,12 @@ func (s *ZrwinfoSMSSender) batchSendSameContent(ctx context.Context, req *BatchS
 	for i, task := range req.Tasks {
 		if isSuccess {
 			results[i] = &SendResponse{
-				Success:    true,
-				ProviderID: fmt.Sprintf("%s_%d", result.BatchId, i), // 为每条记录生成唯一标识
-				TaskID:     task.TaskID,
-				Status:     constants.TaskStatusSent, // 已发送，等待回调
+				Success:      true,
+				ProviderID:   fmt.Sprintf("%s_%d", result.BatchId, i), // 为每条记录生成唯一标识
+				TaskID:       task.TaskID,
+				Status:       constants.TaskStatusSent, // 已发送，等待回调
+				RequestData:  string(requestData),
+				ResponseData: string(body),
 			}
 		} else {
 			results[i] = &SendResponse{
@@ -421,6 +455,8 @@ func (s *ZrwinfoSMSSender) batchSendSameContent(ctx context.Context, req *BatchS
 				ErrorCode:    result.Code,
 				ErrorMessage: result.Msg,
 				TaskID:       task.TaskID,
+				RequestData:  string(requestData),
+				ResponseData: string(body),
 			}
 		}
 	}
@@ -454,6 +490,13 @@ func (s *ZrwinfoSMSSender) batchSendPersonalized(ctx context.Context, req *Batch
 	params.Set("templateId", templateCode)
 	params.Set("data", string(dataJSON))
 
+	// 序列化请求数据用于日志
+	requestData, _ := json.Marshal(map[string]interface{}{
+		"sign":        signName,
+		"template_id": templateCode,
+		"data":        data,
+	})
+
 	// 发送请求
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", zrwinfoBatchSendURL, strings.NewReader(params.Encode()))
 	if err != nil {
@@ -469,6 +512,8 @@ func (s *ZrwinfoSMSSender) batchSendPersonalized(ctx context.Context, req *Batch
 				Success:      false,
 				ErrorMessage: err.Error(),
 				TaskID:       task.TaskID,
+				RequestData:  string(requestData),
+				ResponseData: "",
 			}
 		}
 		return &BatchSendResponse{Results: results}, nil
@@ -483,6 +528,8 @@ func (s *ZrwinfoSMSSender) batchSendPersonalized(ctx context.Context, req *Batch
 				Success:      false,
 				ErrorMessage: fmt.Sprintf("failed to read response: %v", err),
 				TaskID:       task.TaskID,
+				RequestData:  string(requestData),
+				ResponseData: "",
 			}
 		}
 		return &BatchSendResponse{Results: results}, nil
@@ -502,6 +549,8 @@ func (s *ZrwinfoSMSSender) batchSendPersonalized(ctx context.Context, req *Batch
 				Success:      false,
 				ErrorMessage: fmt.Sprintf("failed to parse response: %v, body: %s", err, string(body)),
 				TaskID:       task.TaskID,
+				RequestData:  string(requestData),
+				ResponseData: string(body),
 			}
 		}
 		return &BatchSendResponse{Results: results}, nil
@@ -513,10 +562,12 @@ func (s *ZrwinfoSMSSender) batchSendPersonalized(ctx context.Context, req *Batch
 	for i, task := range req.Tasks {
 		if isSuccess {
 			results[i] = &SendResponse{
-				Success:    true,
-				ProviderID: fmt.Sprintf("%s_%d", result.BatchId, i),
-				TaskID:     task.TaskID,
-				Status:     constants.TaskStatusSent, // 已发送，等待回调
+				Success:      true,
+				ProviderID:   fmt.Sprintf("%s_%d", result.BatchId, i),
+				TaskID:       task.TaskID,
+				Status:       constants.TaskStatusSent, // 已发送，等待回调
+				RequestData:  string(requestData),
+				ResponseData: string(body),
 			}
 		} else {
 			results[i] = &SendResponse{
@@ -524,6 +575,8 @@ func (s *ZrwinfoSMSSender) batchSendPersonalized(ctx context.Context, req *Batch
 				ErrorCode:    result.Code,
 				ErrorMessage: result.Msg,
 				TaskID:       task.TaskID,
+				RequestData:  string(requestData),
+				ResponseData: string(body),
 			}
 		}
 	}

@@ -40,6 +40,8 @@ type SendResponse struct {
 	ErrorMessage string
 	TaskID       string // 批量发送时用于关联；单发时可忽略
 	Status       string // 任务状态：processing(等待回调) 或 success(直接成功)
+	RequestData  string // 发送给供应商的请求参数（JSON格式），用于调试
+	ResponseData string // 供应商返回的响应数据（JSON格式），用于调试
 }
 
 // Sender 发送器接口

@@ -134,31 +134,48 @@ func (s *AliyunSMSSender) Send(ctx context.Context, req *SendRequest) (*SendResp
 		sendRequest.TemplateParam = tea.String(req.Task.TemplateParams)
 	}
 
-	// 4. 发送
+	// 4. 序列化请求数据用于日志
+	requestData, _ := json.Marshal(map[string]interface{}{
+		"phone_numbers":   req.Task.Receiver,
+		"sign_name":       signName,
+		"template_code":   templateCode,
+		"template_params": req.Task.TemplateParams,
+	})
+
+	// 5. 发送
 	response, err := client.SendSms(sendRequest)
 	if err != nil {
 		return &SendResponse{
 			Success:      false,
 			ErrorMessage: err.Error(),
 			TaskID:       req.Task.TaskID,
+			RequestData:  string(requestData),
+			ResponseData: "",
 		}, nil
 	}
 
-	// 5. 解析响应
+	// 6. 序列化响应数据用于日志
+	responseData, _ := json.Marshal(response.Body)
+
+	// 7. 解析响应
 	if response.Body == nil {
 		return &SendResponse{
 			Success:      false,
 			ErrorMessage: "empty response from aliyun",
 			TaskID:       req.Task.TaskID,
+			RequestData:  string(requestData),
+			ResponseData: "",
 		}, nil
 	}
 
 	if tea.StringValue(response.Body.Code) == "OK" {
 		return &SendResponse{
-			Success:    true,
-			ProviderID: tea.StringValue(response.Body.BizId),
-			TaskID:     req.Task.TaskID,
-			Status:     constants.TaskStatusSent, // 已发送，等待回调
+			Success:      true,
+			ProviderID:   tea.StringValue(response.Body.BizId),
+			TaskID:       req.Task.TaskID,
+			Status:       constants.TaskStatusSent, // 已发送，等待回调
+			RequestData:  string(requestData),
+			ResponseData: string(responseData),
 		}, nil
 	}
 
@@ -167,6 +184,8 @@ func (s *AliyunSMSSender) Send(ctx context.Context, req *SendRequest) (*SendResp
 		ErrorCode:    tea.StringValue(response.Body.Code),
 		ErrorMessage: tea.StringValue(response.Body.Message),
 		TaskID:       req.Task.TaskID,
+		RequestData:  string(requestData),
+		ResponseData: string(responseData),
 	}, nil
 }
 
@@ -272,7 +291,15 @@ func (s *AliyunSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest) 
 		TemplateParamJson: tea.String(string(templateParamsJSON)),
 	}
 
-	// 4. 发送
+	// 4. 序列化请求数据用于日志
+	requestData, _ := json.Marshal(map[string]interface{}{
+		"phone_numbers":   phoneNumbers,
+		"sign_names":      signNames,
+		"template_code":   templateCode,
+		"template_params": templateParams,
+	})
+
+	// 5. 发送
 	response, err := client.SendBatchSms(batchRequest)
 	if err != nil {
 		// 如果批量发送失败，返回所有任务都失败的结果
@@ -282,12 +309,17 @@ func (s *AliyunSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest) 
 				Success:      false,
 				ErrorMessage: err.Error(),
 				TaskID:       task.TaskID,
+				RequestData:  string(requestData),
+				ResponseData: "",
 			}
 		}
 		return &BatchSendResponse{Results: results}, nil
 	}
 
-	// 5. 解析响应
+	// 6. 序列化响应数据用于日志
+	responseData, _ := json.Marshal(response.Body)
+
+	// 7. 解析响应
 	// 阿里云批量发送成功时返回一个统一的 BizId
 	if response.Body == nil {
 		results := make([]*SendResponse, len(req.Tasks))
@@ -296,6 +328,8 @@ func (s *AliyunSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest) 
 				Success:      false,
 				ErrorMessage: "empty response from aliyun",
 				TaskID:       task.TaskID,
+				RequestData:  string(requestData),
+				ResponseData: "",
 			}
 		}
 		return &BatchSendResponse{Results: results}, nil
@@ -310,10 +344,12 @@ func (s *AliyunSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest) 
 	for i, task := range req.Tasks {
 		if isSuccess {
 			results[i] = &SendResponse{
-				Success:    true,
-				ProviderID: fmt.Sprintf("%s_%d", batchBizId, i), // 为每条记录生成唯一标识
-				TaskID:     task.TaskID,
-				Status:     constants.TaskStatusSent, // 已发送，等待回调
+				Success:      true,
+				ProviderID:   fmt.Sprintf("%s_%d", batchBizId, i), // 为每条记录生成唯一标识
+				TaskID:       task.TaskID,
+				Status:       constants.TaskStatusSent, // 已发送，等待回调
+				RequestData:  string(requestData),
+				ResponseData: string(responseData),
 			}
 		} else {
 			results[i] = &SendResponse{
@@ -321,6 +357,8 @@ func (s *AliyunSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest) 
 				ErrorCode:    errorCode,
 				ErrorMessage: errorMessage,
 				TaskID:       task.TaskID,
+				RequestData:  string(requestData),
+				ResponseData: string(responseData),
 			}
 		}
 	}

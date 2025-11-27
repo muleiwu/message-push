@@ -65,7 +65,7 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 	node, err := h.selectChannel(ctx, task)
 	if err != nil {
 		h.logger.Error(fmt.Sprintf("failed to select channel task_id=%s: %v", taskID, err))
-		h.handleFailure(task, 0, err.Error())
+		h.handleEarlyFailure(task, 0, err.Error())
 		return err
 	}
 
@@ -74,7 +74,7 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 	if providerAccount == nil {
 		err := fmt.Errorf("provider account not found in channel node")
 		h.logger.Error(fmt.Sprintf("failed to get provider account task_id=%s: %v", taskID, err))
-		h.handleFailure(task, 0, err.Error())
+		h.handleEarlyFailure(task, 0, err.Error())
 		return err
 	}
 
@@ -82,7 +82,7 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 	messageSender, err := h.senderFactory.GetSender(providerAccount.ProviderCode)
 	if err != nil {
 		h.logger.Error(fmt.Sprintf("failed to get sender task_id=%s: %v", taskID, err))
-		h.handleFailure(task, providerAccount.ID, err.Error())
+		h.handleEarlyFailure(task, providerAccount.ID, err.Error())
 		return err
 	}
 
@@ -108,7 +108,12 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 	resp, err := messageSender.Send(ctx, sendReq)
 	if err != nil {
 		h.logger.Error(fmt.Sprintf("sender error task_id=%s: %v", taskID, err))
-		h.handleSendError(task, providerAccount.ID, err.Error())
+		// 如果 Send 返回了 resp（即使有 error），使用它来记录日志
+		if resp != nil {
+			h.handleSendError(task, providerAccount.ID, resp)
+		} else {
+			h.handleEarlyFailure(task, providerAccount.ID, err.Error())
+		}
 		return err
 	}
 
@@ -116,7 +121,7 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 	if resp.Success {
 		h.handleSuccess(task, providerAccount.ID, resp)
 	} else {
-		h.handleSendError(task, providerAccount.ID, resp.ErrorMessage)
+		h.handleSendError(task, providerAccount.ID, resp)
 	}
 
 	return nil
@@ -144,14 +149,14 @@ func (h *MessageHandler) handleSuccess(task *model.PushTask, providerAccountID u
 	task.Status = resp.Status            // 使用发送器返回的状态（processing=等待回调, success=直接成功）
 	h.taskDao.Update(task)
 
-	// 记录日志
+	// 记录日志（每次新增，便于观测请求链路）
 	h.logDao.Create(&model.PushLog{
 		TaskID:            task.TaskID,
 		AppID:             task.AppID,
 		ProviderAccountID: providerAccountID,
 		Status:            "success",
-		RequestData:       "{}",
-		ResponseData:      fmt.Sprintf("{\"provider_id\":\"%s\"}", resp.ProviderID),
+		RequestData:       resp.RequestData,
+		ResponseData:      resp.ResponseData,
 	})
 
 	// 通知选择器成功
@@ -161,16 +166,27 @@ func (h *MessageHandler) handleSuccess(task *model.PushTask, providerAccountID u
 }
 
 // handleSendError 处理发送错误
-func (h *MessageHandler) handleSendError(task *model.PushTask, providerAccountID uint, errorMsg string) {
+func (h *MessageHandler) handleSendError(task *model.PushTask, providerAccountID uint, resp *sender.SendResponse) {
 	// 通知选择器失败
 	h.selector.ReportFailure(providerAccountID)
 
 	// 判断是否需要重试
-	shouldRetry, delay := h.retryHelper.ShouldRetry(errorMsg, task.RetryCount, task.MaxRetry)
+	shouldRetry, delay := h.retryHelper.ShouldRetry(resp.ErrorMessage, task.RetryCount, task.MaxRetry)
 
 	if shouldRetry {
 		task.RetryCount++
 		h.taskDao.Update(task)
+
+		// 记录重试日志（每次新增，便于观测请求链路）
+		h.logDao.Create(&model.PushLog{
+			TaskID:            task.TaskID,
+			AppID:             task.AppID,
+			ProviderAccountID: providerAccountID,
+			Status:            "retry",
+			RequestData:       resp.RequestData,
+			ResponseData:      resp.ResponseData,
+			ErrorMessage:      resp.ErrorMessage,
+		})
 
 		// 重新推送到队列
 		go func() {
@@ -181,16 +197,37 @@ func (h *MessageHandler) handleSendError(task *model.PushTask, providerAccountID
 
 		h.logger.Info(fmt.Sprintf("message will retry task_id=%s retry_count=%d delay=%v", task.TaskID, task.RetryCount, delay))
 	} else {
-		h.handleFailure(task, providerAccountID, errorMsg)
+		h.handleFailure(task, providerAccountID, resp)
 	}
 }
 
-// handleFailure 处理失败
-func (h *MessageHandler) handleFailure(task *model.PushTask, providerAccountID uint, errorMsg string) {
+// handleFailure 处理失败（有供应商响应数据）
+func (h *MessageHandler) handleFailure(task *model.PushTask, providerAccountID uint, resp *sender.SendResponse) {
 	task.Status = constants.TaskStatusFailed
 	h.taskDao.Update(task)
 
-	// 记录日志
+	// 记录日志（每次新增，便于观测请求链路）
+	if providerAccountID > 0 {
+		h.logDao.Create(&model.PushLog{
+			TaskID:            task.TaskID,
+			AppID:             task.AppID,
+			ProviderAccountID: providerAccountID,
+			Status:            "failed",
+			RequestData:       resp.RequestData,
+			ResponseData:      resp.ResponseData,
+			ErrorMessage:      resp.ErrorMessage,
+		})
+	}
+
+	h.logger.Error(fmt.Sprintf("message failed task_id=%s error=%s", task.TaskID, resp.ErrorMessage))
+}
+
+// handleEarlyFailure 处理早期失败（发送前的错误，无供应商响应数据）
+func (h *MessageHandler) handleEarlyFailure(task *model.PushTask, providerAccountID uint, errorMsg string) {
+	task.Status = constants.TaskStatusFailed
+	h.taskDao.Update(task)
+
+	// 记录日志（每次新增，便于观测请求链路）
 	if providerAccountID > 0 {
 		h.logDao.Create(&model.PushLog{
 			TaskID:            task.TaskID,

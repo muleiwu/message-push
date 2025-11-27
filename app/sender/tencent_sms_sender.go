@@ -159,22 +159,42 @@ func (s *TencentSMSSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 	}
 	request.TemplateParamSet = common.StringPtrs(params)
 
-	// 4. 发送
+	// 4. 序列化请求数据用于日志
+	requestData, _ := json.Marshal(map[string]interface{}{
+		"sdk_app_id":   sdkAppId,
+		"sign_name":    signName,
+		"template_id":  templateID,
+		"phone_number": req.Task.Receiver,
+		"params":       params,
+	})
+
+	// 5. 发送
 	response, err := client.SendSms(request)
 	if err != nil {
-		return nil, err
+		return &SendResponse{
+			Success:      false,
+			ErrorMessage: err.Error(),
+			TaskID:       req.Task.TaskID,
+			RequestData:  string(requestData),
+			ResponseData: "",
+		}, err
 	}
 
-	// 5. 解析响应
+	// 6. 序列化响应数据用于日志
+	responseData, _ := json.Marshal(response.Response)
+
+	// 7. 解析响应
 	// 腾讯云支持批量发送，这里我们只发了一条
 	if len(response.Response.SendStatusSet) > 0 {
 		status := response.Response.SendStatusSet[0]
 		if *status.Code == "Ok" {
 			return &SendResponse{
-				Success:    true,
-				ProviderID: *status.SerialNo,
-				TaskID:     req.Task.TaskID,
-				Status:     constants.TaskStatusSent, // 已发送，等待回调
+				Success:      true,
+				ProviderID:   *status.SerialNo,
+				TaskID:       req.Task.TaskID,
+				Status:       constants.TaskStatusSent, // 已发送，等待回调
+				RequestData:  string(requestData),
+				ResponseData: string(responseData),
 			}, nil
 		}
 		return &SendResponse{
@@ -182,6 +202,8 @@ func (s *TencentSMSSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 			ErrorCode:    *status.Code,
 			ErrorMessage: *status.Message,
 			TaskID:       req.Task.TaskID,
+			RequestData:  string(requestData),
+			ResponseData: string(responseData),
 		}, nil
 	}
 
@@ -189,6 +211,8 @@ func (s *TencentSMSSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 		Success:      false,
 		ErrorMessage: "empty response from tencent cloud",
 		TaskID:       req.Task.TaskID,
+		RequestData:  string(requestData),
+		ResponseData: string(responseData),
 	}, nil
 }
 
@@ -277,13 +301,25 @@ func (s *TencentSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest)
 	}
 	request.TemplateParamSet = common.StringPtrs(params)
 
-	// 4. 发送
+	// 4. 序列化请求数据用于日志
+	requestData, _ := json.Marshal(map[string]interface{}{
+		"sdk_app_id":    sdkAppId,
+		"sign_name":     signName,
+		"template_id":   templateID,
+		"phone_numbers": phoneNumbers,
+		"params":        params,
+	})
+
+	// 5. 发送
 	response, err := client.SendSms(request)
 	if err != nil {
 		return nil, err
 	}
 
-	// 5. 解析响应
+	// 6. 序列化响应数据用于日志
+	responseData, _ := json.Marshal(response.Response)
+
+	// 7. 解析响应
 	results := make([]*SendResponse, 0, len(response.Response.SendStatusSet))
 	for i, status := range response.Response.SendStatusSet {
 		taskID := ""
@@ -293,10 +329,12 @@ func (s *TencentSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest)
 
 		if *status.Code == "Ok" {
 			results = append(results, &SendResponse{
-				Success:    true,
-				ProviderID: *status.SerialNo,
-				TaskID:     taskID,
-				Status:     constants.TaskStatusSent, // 已发送，等待回调
+				Success:      true,
+				ProviderID:   *status.SerialNo,
+				TaskID:       taskID,
+				Status:       constants.TaskStatusSent, // 已发送，等待回调
+				RequestData:  string(requestData),
+				ResponseData: string(responseData),
 			})
 		} else {
 			results = append(results, &SendResponse{
@@ -304,6 +342,8 @@ func (s *TencentSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest)
 				ErrorCode:    *status.Code,
 				ErrorMessage: *status.Message,
 				TaskID:       taskID,
+				RequestData:  string(requestData),
+				ResponseData: string(responseData),
 			})
 		}
 	}
