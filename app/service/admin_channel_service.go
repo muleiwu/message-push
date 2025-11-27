@@ -7,6 +7,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/app/selector"
 	"cnb.cool/mliev/push/message-push/internal/helper"
 )
 
@@ -17,6 +18,7 @@ type AdminChannelService struct {
 	providerTemplateDAO  *dao.ProviderTemplateDAO
 	signatureMappingDAO  *dao.ChannelSignatureMappingDAO
 	providerSignatureDAO *dao.ProviderSignatureDAO
+	channelSelector      *selector.ChannelSelector // 用于在配置变更时重置缓存和权重
 }
 
 // NewAdminChannelService 创建通道管理服务实例
@@ -28,7 +30,15 @@ func NewAdminChannelService() *AdminChannelService {
 		providerTemplateDAO:  dao.NewProviderTemplateDAO(),
 		signatureMappingDAO:  dao.NewChannelSignatureMappingDAO(db),
 		providerSignatureDAO: dao.NewProviderSignatureDAO(db),
+		channelSelector:      selector.NewChannelSelector(),
 	}
+}
+
+// invalidateChannelCache 清除通道缓存和权重状态
+// 在通道配置变更后调用，确保变更立即生效
+func (s *AdminChannelService) invalidateChannelCache(channelID uint) {
+	s.channelSelector.InvalidateCacheForBinding(channelID)
+	s.channelSelector.ResetWeightsByChannelID(channelID)
 }
 
 // CreateChannel 创建通道
@@ -219,6 +229,9 @@ func (s *AdminChannelService) DeleteChannel(id uint) error {
 		return err
 	}
 
+	// 清除通道缓存和权重状态
+	s.invalidateChannelCache(id)
+
 	return nil
 }
 
@@ -300,19 +313,35 @@ func (s *AdminChannelService) UpdateChannelBinding(bindingID uint, req *dto.Upda
 		return nil
 	}
 
-	return s.bindingDAO.Update(bindingID, updates)
+	if err := s.bindingDAO.Update(bindingID, updates); err != nil {
+		return err
+	}
+
+	// 清除通道缓存和权重状态，确保配置变更立即生效
+	s.invalidateChannelCache(binding.ChannelID)
+
+	return nil
 }
 
 // DeleteChannelBinding 删除通道绑定配置
 func (s *AdminChannelService) DeleteChannelBinding(bindingID uint) error {
 	// 检查绑定是否存在
-	_, err := s.bindingDAO.GetByID(bindingID)
+	binding, err := s.bindingDAO.GetByID(bindingID)
 	if err != nil {
 		return fmt.Errorf("binding not found: %w", err)
 	}
 
+	channelID := binding.ChannelID
+
 	// 删除绑定
-	return s.bindingDAO.Delete(bindingID)
+	if err := s.bindingDAO.Delete(bindingID); err != nil {
+		return err
+	}
+
+	// 清除通道缓存和权重状态，确保配置变更立即生效
+	s.invalidateChannelCache(channelID)
+
+	return nil
 }
 
 // GetActiveChannels 获取活跃通道列表
@@ -489,6 +518,9 @@ func (s *AdminChannelService) CreateChannelBinding(channelID uint, req *dto.Crea
 			response.ProviderType = binding.ProviderTemplate.ProviderAccount.ProviderType
 		}
 	}
+
+	// 清除通道缓存和权重状态，确保新配置立即生效
+	s.invalidateChannelCache(channelID)
 
 	logger.Info("通道绑定配置创建成功")
 	return response, nil

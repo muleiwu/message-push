@@ -3,6 +3,7 @@ package selector
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -14,7 +15,13 @@ import (
 )
 
 // 缓存 key 前缀
-const cacheKeyPrefix = "channel_selector:"
+const (
+	cacheKeyPrefix  = "channel_selector:"
+	weightKeyPrefix = "channel_weight:"
+)
+
+// 权重状态 TTL（24小时作为兜底，管理操作会主动清除）
+const weightTTL = 24 * time.Hour
 
 // ChannelNode 通道节点（带权重）
 type ChannelNode struct {
@@ -51,7 +58,7 @@ func buildCacheKey(channelID uint, messageType string) string {
 	return fmt.Sprintf("%s%d:%s", cacheKeyPrefix, channelID, messageType)
 }
 
-// Select 选择通道（平滑加权轮询）
+// Select 选择通道（平滑加权轮询，权重状态持久化到 Redis）
 func (s *ChannelSelector) Select(ctx context.Context, channelID uint, messageType string) (*ChannelNode, error) {
 	nodes, err := s.getChannelNodes(ctx, channelID, messageType)
 	if err != nil {
@@ -62,8 +69,8 @@ func (s *ChannelSelector) Select(ctx context.Context, channelID uint, messageTyp
 		return nil, fmt.Errorf("no available channel for channel_id=%d type=%s", channelID, messageType)
 	}
 
-	// 使用平滑加权轮询选择
-	selected := s.smoothWeightedRoundRobin(nodes)
+	// 使用平滑加权轮询选择（权重状态持久化到 Redis）
+	selected := s.smoothWeightedRoundRobin(ctx, channelID, nodes)
 	if selected == nil {
 		return nil, fmt.Errorf("failed to select channel")
 	}
@@ -157,8 +164,8 @@ func (s *ChannelSelector) filterAvailableNodes(nodes []*ChannelNode) []*ChannelN
 	return available
 }
 
-// smoothWeightedRoundRobin 平滑加权轮询算法
-func (s *ChannelSelector) smoothWeightedRoundRobin(nodes []*ChannelNode) *ChannelNode {
+// smoothWeightedRoundRobin 平滑加权轮询算法（权重状态持久化到 Redis）
+func (s *ChannelSelector) smoothWeightedRoundRobin(ctx context.Context, channelID uint, nodes []*ChannelNode) *ChannelNode {
 	if len(nodes) == 0 {
 		return nil
 	}
@@ -198,6 +205,9 @@ func (s *ChannelSelector) smoothWeightedRoundRobin(nodes []*ChannelNode) *Channe
 	s.weightMu.Lock()
 	defer s.weightMu.Unlock()
 
+	// 从 Redis 加载各节点的当前权重状态
+	s.loadWeightStates(ctx, channelID, candidates)
+
 	// 在同优先级组内使用加权轮询
 	var totalWeight int
 	var selected *ChannelNode
@@ -218,7 +228,72 @@ func (s *ChannelSelector) smoothWeightedRoundRobin(nodes []*ChannelNode) *Channe
 		selected.CurrentWeight -= totalWeight
 	}
 
+	// 保存更新后的权重状态到 Redis
+	s.saveWeightStates(ctx, channelID, candidates)
+
 	return selected
+}
+
+// buildWeightKey 构建权重状态缓存 key
+func buildWeightKey(channelID uint, bindingID uint) string {
+	return fmt.Sprintf("%s%d:%d", weightKeyPrefix, channelID, bindingID)
+}
+
+// loadWeightStates 从 Redis 批量加载权重状态
+func (s *ChannelSelector) loadWeightStates(ctx context.Context, channelID uint, nodes []*ChannelNode) {
+	for _, node := range nodes {
+		if node.ChannelTemplateBinding == nil {
+			continue
+		}
+
+		key := buildWeightKey(channelID, node.ChannelTemplateBinding.ID)
+		var weightStr string
+		err := s.cache.Get(ctx, key, &weightStr)
+		if err == nil && weightStr != "" {
+			if weight, parseErr := strconv.Atoi(weightStr); parseErr == nil {
+				node.CurrentWeight = weight
+			}
+		}
+		// 如果获取失败或解析失败，使用默认值 0
+	}
+}
+
+// saveWeightStates 批量保存权重状态到 Redis
+func (s *ChannelSelector) saveWeightStates(ctx context.Context, channelID uint, nodes []*ChannelNode) {
+	for _, node := range nodes {
+		if node.ChannelTemplateBinding == nil {
+			continue
+		}
+
+		key := buildWeightKey(channelID, node.ChannelTemplateBinding.ID)
+		weightStr := strconv.Itoa(node.CurrentWeight)
+		if err := s.cache.Set(ctx, key, weightStr, weightTTL); err != nil {
+			s.logger.Warn(fmt.Sprintf("failed to save weight state key=%s: %v", key, err))
+		}
+	}
+}
+
+// ResetWeightsByChannelID 重置指定通道的所有权重状态
+// 在管理员操作（新增、修改、删除绑定）后调用
+func (s *ChannelSelector) ResetWeightsByChannelID(channelID uint) {
+	ctx := context.Background()
+
+	// 从数据库获取该通道的所有绑定配置
+	bindings, err := s.channelTemplateBindingDao.GetByChannelID(channelID)
+	if err != nil {
+		s.logger.Warn(fmt.Sprintf("failed to get bindings for weight reset channel_id=%d: %v", channelID, err))
+		return
+	}
+
+	// 删除每个绑定的权重状态
+	for _, binding := range bindings {
+		key := buildWeightKey(channelID, binding.ID)
+		if err := s.cache.Del(ctx, key); err != nil {
+			s.logger.Warn(fmt.Sprintf("failed to delete weight state key=%s: %v", key, err))
+		}
+	}
+
+	s.logger.Info(fmt.Sprintf("weight states reset for channel_id=%d, cleared %d bindings", channelID, len(bindings)))
 }
 
 // ReportSuccess 报告成功
