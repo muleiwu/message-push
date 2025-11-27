@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"cnb.cool/mliev/push/message-push/app/constants"
@@ -60,7 +61,7 @@ func (s *CallbackService) HandleCallback(ctx context.Context, providerCode strin
 	}
 
 	// 3. 更新任务状态
-	rawData := string(req.RawBody)
+	rawData := buildRawDataJSON(req)
 	for _, result := range results {
 		if err := s.processCallbackResult(ctx, providerCode, result, rawData); err != nil {
 			s.logger.Error(fmt.Sprintf("failed to process callback result provider_id=%s: %v", result.ProviderID, err))
@@ -143,4 +144,20 @@ func (s *CallbackService) GetSupportedProviders() []string {
 		providers = append(providers, handler.GetProviderCode())
 	}
 	return providers
+}
+
+// buildRawDataJSON 将回调请求数据转换为有效的 JSON 字符串
+func buildRawDataJSON(req *sender.CallbackRequest) string {
+	// 首先尝试解析为 JSON，如果已经是有效的 JSON 则直接使用
+	if json.Valid(req.RawBody) {
+		return string(req.RawBody)
+	}
+	// 否则构建结构化的 JSON 对象
+	data := map[string]interface{}{
+		"raw_body":     string(req.RawBody),
+		"form_data":    req.FormData,
+		"query_params": req.QueryParams,
+	}
+	jsonBytes, _ := json.Marshal(data)
+	return string(jsonBytes)
 }
