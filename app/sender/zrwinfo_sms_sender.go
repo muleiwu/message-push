@@ -536,83 +536,46 @@ func (s *ZrwinfoSMSSender) SupportsCallback() bool {
 }
 
 // HandleCallback 处理掌榕网短信回调
-// 回调数据格式：
-// {
-//
-//	"smUuid": "10000_1_0_13700000000_1_NKWkEcS_1",
-//	"mobile": "13700000000",
-//	"batchId": "abc123456",
-//	"deliverResult": "DELIVRD",
-//	"deliverTime": "2018-01-01 18:00:00"
-//
-// }
+// 请求方式：POST，Content-Type: application/form-data;charset=utf-8
+// 表单参数：
+//   - smUuid: 短信唯一标识，例 10000_1_0_13700000000_1_NKWkEcS_1
+//   - mobile: 手机号码，例 13700000000
+//   - batchId: 批次id（可选），例 abc123456
+//   - deliverResult: 回执状态，DELIVRD 成功，其他失败
+//   - deliverTime: 状态码回执时间，格式 yyyy-MM-dd HH:mm:ss
 func (s *ZrwinfoSMSSender) HandleCallback(ctx context.Context, req *CallbackRequest) (CallbackResponse, []*CallbackResult, error) {
-	// 默认响应（掌榕网期望返回 {"code":0,"msg":"success"}）
+	// 默认响应（掌榕网期望返回 HTTP 200 状态码）
 	resp := CallbackResponse{
 		StatusCode: 200,
-		Body:       `{"code":0,"msg":"SUCCESS"}`,
+		Body:       `{"code":"0","msg":"SUCCESS"}`,
 	}
 
-	// 尝试解析为单个回调
-	var singleReport struct {
-		SmUuid        string `json:"smUuid"`
-		Mobile        string `json:"mobile"`
-		BatchId       string `json:"batchId"`
-		DeliverResult string `json:"deliverResult"`
-		DeliverTime   string `json:"deliverTime"`
+	// 从表单数据中读取字段
+	smUuid := req.FormData["smUuid"]
+	deliverResult := req.FormData["deliverResult"]
+	deliverTime := req.FormData["deliverTime"]
+
+	// 验证必填字段
+	if smUuid == "" {
+		return resp, nil, fmt.Errorf("missing required field: smUuid")
 	}
 
-	if err := json.Unmarshal(req.RawBody, &singleReport); err == nil && singleReport.SmUuid != "" {
-		// 成功解析为单个回调
-		status := constants.CallbackStatusDelivered
-		if singleReport.DeliverResult != "DELIVRD" {
-			status = constants.CallbackStatusFailed
-		}
-
-		reportTime, _ := time.ParseInLocation("2006-01-02 15:04:05", singleReport.DeliverTime, time.Local)
-
-		return resp, []*CallbackResult{
-			{
-				ProviderID:   singleReport.SmUuid,
-				Status:       status,
-				ErrorCode:    singleReport.DeliverResult,
-				ErrorMessage: "",
-				ReportTime:   reportTime,
-			},
-		}, nil
+	// 判断状态
+	status := constants.CallbackStatusDelivered
+	if deliverResult != "DELIVRD" {
+		status = constants.CallbackStatusFailed
 	}
 
-	// 尝试解析为批量回调（数组格式）
-	var batchReports []struct {
-		SmUuid        string `json:"smUuid"`
-		Mobile        string `json:"mobile"`
-		BatchId       string `json:"batchId"`
-		DeliverResult string `json:"deliverResult"`
-		DeliverTime   string `json:"deliverTime"`
-	}
+	// 解析时间
+	reportTime, _ := time.ParseInLocation("2006-01-02 15:04:05", deliverTime, time.Local)
 
-	if err := json.Unmarshal(req.RawBody, &batchReports); err != nil {
-		// 即使解析失败也返回成功响应，避免服务商重复推送
-		return resp, nil, fmt.Errorf("invalid callback data: %w", err)
-	}
-
-	results := make([]*CallbackResult, 0, len(batchReports))
-	for _, report := range batchReports {
-		status := constants.CallbackStatusDelivered
-		if report.DeliverResult != "DELIVRD" {
-			status = constants.CallbackStatusFailed
-		}
-
-		reportTime, _ := time.ParseInLocation("2006-01-02 15:04:05", report.DeliverTime, time.Local)
-
-		results = append(results, &CallbackResult{
-			ProviderID:   report.SmUuid,
+	return resp, []*CallbackResult{
+		{
+			ProviderID:   smUuid,
 			Status:       status,
-			ErrorCode:    report.DeliverResult,
+			ErrorCode:    deliverResult,
 			ErrorMessage: "",
 			ReportTime:   reportTime,
-		})
-	}
-
-	return resp, results, nil
+		},
+	}, nil
 }
