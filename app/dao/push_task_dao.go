@@ -119,12 +119,12 @@ func (d *PushTaskDAO) UpdateProviderMsgID(taskID, providerMsgID string) error {
 		Update("provider_msg_id", providerMsgID).Error
 }
 
-// GetTimeoutProcessingTasks 获取超时的 processing 状态短信任务
-func (d *PushTaskDAO) GetTimeoutProcessingTasks(timeout time.Duration, limit int) ([]*model.PushTask, error) {
+// GetTimeoutSentTasks 获取超时的 sent 状态短信任务
+func (d *PushTaskDAO) GetTimeoutSentTasks(timeout time.Duration, limit int) ([]*model.PushTask, error) {
 	var tasks []*model.PushTask
 	cutoff := time.Now().Add(-timeout)
 	err := d.db.Where("status = ? AND message_type = ? AND updated_at < ?",
-		"processing", "sms", cutoff).
+		"sent", "sms", cutoff).
 		Limit(limit).
 		Find(&tasks).Error
 	if err != nil {

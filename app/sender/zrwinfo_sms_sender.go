@@ -189,7 +189,7 @@ func (s *ZrwinfoSMSSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 			Success:    true,
 			ProviderID: result.SmUuid,
 			TaskID:     req.Task.TaskID,
-			Status:     constants.TaskStatusProcessing, // 等待回调
+			Status:     constants.TaskStatusSent, // 已发送，等待回调
 		}, nil
 	}
 
@@ -413,7 +413,7 @@ func (s *ZrwinfoSMSSender) batchSendSameContent(ctx context.Context, req *BatchS
 				Success:    true,
 				ProviderID: fmt.Sprintf("%s_%d", result.BatchId, i), // 为每条记录生成唯一标识
 				TaskID:     task.TaskID,
-				Status:     constants.TaskStatusProcessing, // 等待回调
+				Status:     constants.TaskStatusSent, // 已发送，等待回调
 			}
 		} else {
 			results[i] = &SendResponse{
@@ -516,7 +516,7 @@ func (s *ZrwinfoSMSSender) batchSendPersonalized(ctx context.Context, req *Batch
 				Success:    true,
 				ProviderID: fmt.Sprintf("%s_%d", result.BatchId, i),
 				TaskID:     task.TaskID,
-				Status:     constants.TaskStatusProcessing, // 等待回调
+				Status:     constants.TaskStatusSent, // 已发送，等待回调
 			}
 		} else {
 			results[i] = &SendResponse{

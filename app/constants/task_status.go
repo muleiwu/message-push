@@ -4,6 +4,7 @@ package constants
 const (
 	TaskStatusPending    = "pending"    // 待处理
 	TaskStatusProcessing = "processing" // 处理中
+	TaskStatusSent       = "sent"       // 已发送（短信等待回调）
 	TaskStatusSuccess    = "success"    // 成功
 	TaskStatusFailed     = "failed"     // 失败
 )
@@ -18,7 +19,7 @@ const (
 // IsValidTaskStatus 检查任务状态是否有效
 func IsValidTaskStatus(status string) bool {
 	switch status {
-	case TaskStatusPending, TaskStatusProcessing, TaskStatusSuccess, TaskStatusFailed:
+	case TaskStatusPending, TaskStatusProcessing, TaskStatusSent, TaskStatusSuccess, TaskStatusFailed:
 		return true
 	default:
 		return false

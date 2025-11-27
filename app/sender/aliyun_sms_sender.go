@@ -158,7 +158,7 @@ func (s *AliyunSMSSender) Send(ctx context.Context, req *SendRequest) (*SendResp
 			Success:    true,
 			ProviderID: tea.StringValue(response.Body.BizId),
 			TaskID:     req.Task.TaskID,
-			Status:     constants.TaskStatusProcessing, // 等待回调
+			Status:     constants.TaskStatusSent, // 已发送，等待回调
 		}, nil
 	}
 
@@ -313,7 +313,7 @@ func (s *AliyunSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest) 
 				Success:    true,
 				ProviderID: fmt.Sprintf("%s_%d", batchBizId, i), // 为每条记录生成唯一标识
 				TaskID:     task.TaskID,
-				Status:     constants.TaskStatusProcessing, // 等待回调
+				Status:     constants.TaskStatusSent, // 已发送，等待回调
 			}
 		} else {
 			results[i] = &SendResponse{
