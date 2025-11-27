@@ -25,30 +25,28 @@ type PushTaskListResponse struct {
 
 // PushTaskItem 推送任务项
 type PushTaskItem struct {
-	ID                uint       `json:"id"`
-	TaskID            string     `json:"task_id"`
-	AppID             string     `json:"app_id"`
-	ChannelID         uint       `json:"channel_id"`
-	ProviderAccountID *uint      `json:"provider_account_id"`
-	ProviderMsgID     string     `json:"provider_msg_id"`
-	MessageType       string     `json:"message_type"`
-	Receiver          string     `json:"receiver"`
-	Title             string     `json:"title"`
-	Content           string     `json:"content"`
-	TemplateCode      string     `json:"template_code"`
-	TemplateParams    string     `json:"template_params"`
-	Signature         string     `json:"signature"`
-	Status            string     `json:"status"`
-	CallbackStatus    string     `json:"callback_status"`
-	CallbackTime      *time.Time `json:"callback_time"`
-	RetryCount        int        `json:"retry_count"`
-	MaxRetry          int        `json:"max_retry"`
-	ScheduledAt       *time.Time `json:"scheduled_at"`
-	CreatedAt         string     `json:"created_at"`
-	UpdatedAt         string     `json:"updated_at"`
+	ID             uint       `json:"id"`
+	TaskID         string     `json:"task_id"`
+	AppID          string     `json:"app_id"`
+	ChannelID      uint       `json:"channel_id"`
+	ProviderMsgID  string     `json:"provider_msg_id"`
+	MessageType    string     `json:"message_type"`
+	Receiver       string     `json:"receiver"`
+	Title          string     `json:"title"`
+	Content        string     `json:"content"`
+	TemplateCode   string     `json:"template_code"`
+	TemplateParams string     `json:"template_params"`
+	Signature      string     `json:"signature"`
+	Status         string     `json:"status"`
+	CallbackStatus string     `json:"callback_status"`
+	CallbackTime   *time.Time `json:"callback_time"`
+	RetryCount     int        `json:"retry_count"`
+	MaxRetry       int        `json:"max_retry"`
+	ScheduledAt    *time.Time `json:"scheduled_at"`
+	CreatedAt      string     `json:"created_at"`
+	UpdatedAt      string     `json:"updated_at"`
 	// 关联数据
-	ChannelName         string `json:"channel_name,omitempty"`
-	ProviderAccountName string `json:"provider_account_name,omitempty"`
+	ChannelName string `json:"channel_name,omitempty"`
 }
 
 // PushBatchTaskListRequest 批量任务列表请求参数

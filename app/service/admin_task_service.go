@@ -11,19 +11,17 @@ import (
 
 // AdminTaskService 管理后台任务服务
 type AdminTaskService struct {
-	pushTaskDAO        *dao.PushTaskDAO
-	batchTaskDAO       *dao.PushBatchTaskDAO
-	appDAO             *dao.ApplicationDAO
-	providerAccountDAO *dao.ProviderAccountDAO
+	pushTaskDAO  *dao.PushTaskDAO
+	batchTaskDAO *dao.PushBatchTaskDAO
+	appDAO       *dao.ApplicationDAO
 }
 
 // NewAdminTaskService 创建服务
 func NewAdminTaskService() *AdminTaskService {
 	return &AdminTaskService{
-		pushTaskDAO:        dao.NewPushTaskDAO(),
-		batchTaskDAO:       dao.NewPushBatchTaskDAO(),
-		appDAO:             dao.NewApplicationDAO(),
-		providerAccountDAO: dao.NewProviderAccountDAO(),
+		pushTaskDAO:  dao.NewPushTaskDAO(),
+		batchTaskDAO: dao.NewPushBatchTaskDAO(),
+		appDAO:       dao.NewApplicationDAO(),
 	}
 }
 
@@ -63,7 +61,6 @@ func (s *AdminTaskService) GetPushTaskList(req *dto.PushTaskListRequest) (*dto.P
 	// 预加载缓存
 	db := helper.GetHelper().GetDatabase()
 	channelMap := make(map[uint]string)
-	providerMap := make(map[uint]string)
 
 	for _, task := range tasks {
 		// 获取通道名称
@@ -80,44 +77,28 @@ func (s *AdminTaskService) GetPushTaskList(req *dto.PushTaskListRequest) (*dto.P
 			}
 		}
 
-		// 获取服务商账号名称
-		providerAccountName := ""
-		if task.ProviderAccountID != nil && *task.ProviderAccountID > 0 {
-			if name, ok := providerMap[*task.ProviderAccountID]; ok {
-				providerAccountName = name
-			} else {
-				account, err := s.providerAccountDAO.GetByID(*task.ProviderAccountID)
-				if err == nil && account != nil {
-					providerAccountName = account.AccountName
-					providerMap[*task.ProviderAccountID] = providerAccountName
-				}
-			}
-		}
-
 		items = append(items, &dto.PushTaskItem{
-			ID:                  task.ID,
-			TaskID:              task.TaskID,
-			AppID:               task.AppID,
-			ChannelID:           task.ChannelID,
-			ProviderAccountID:   task.ProviderAccountID,
-			ProviderMsgID:       task.ProviderMsgID,
-			MessageType:         task.MessageType,
-			Receiver:            task.Receiver,
-			Title:               task.Title,
-			Content:             task.Content,
-			TemplateCode:        task.TemplateCode,
-			TemplateParams:      task.TemplateParams,
-			Signature:           task.Signature,
-			Status:              task.Status,
-			CallbackStatus:      task.CallbackStatus,
-			CallbackTime:        task.CallbackTime,
-			RetryCount:          task.RetryCount,
-			MaxRetry:            task.MaxRetry,
-			ScheduledAt:         task.ScheduledAt,
-			CreatedAt:           task.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:           task.UpdatedAt.Format(time.RFC3339),
-			ChannelName:         channelName,
-			ProviderAccountName: providerAccountName,
+			ID:             task.ID,
+			TaskID:         task.TaskID,
+			AppID:          task.AppID,
+			ChannelID:      task.ChannelID,
+			ProviderMsgID:  task.ProviderMsgID,
+			MessageType:    task.MessageType,
+			Receiver:       task.Receiver,
+			Title:          task.Title,
+			Content:        task.Content,
+			TemplateCode:   task.TemplateCode,
+			TemplateParams: task.TemplateParams,
+			Signature:      task.Signature,
+			Status:         task.Status,
+			CallbackStatus: task.CallbackStatus,
+			CallbackTime:   task.CallbackTime,
+			RetryCount:     task.RetryCount,
+			MaxRetry:       task.MaxRetry,
+			ScheduledAt:    task.ScheduledAt,
+			CreatedAt:      task.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:      task.UpdatedAt.Format(time.RFC3339),
+			ChannelName:    channelName,
 		})
 	}
 
@@ -225,39 +206,28 @@ func (s *AdminTaskService) convertPushTaskToItem(task *model.PushTask) *dto.Push
 		}
 	}
 
-	// 获取服务商账号名称
-	providerAccountName := ""
-	if task.ProviderAccountID != nil && *task.ProviderAccountID > 0 {
-		account, err := s.providerAccountDAO.GetByID(*task.ProviderAccountID)
-		if err == nil && account != nil {
-			providerAccountName = account.AccountName
-		}
-	}
-
 	return &dto.PushTaskItem{
-		ID:                  task.ID,
-		TaskID:              task.TaskID,
-		AppID:               task.AppID,
-		ChannelID:           task.ChannelID,
-		ProviderAccountID:   task.ProviderAccountID,
-		ProviderMsgID:       task.ProviderMsgID,
-		MessageType:         task.MessageType,
-		Receiver:            task.Receiver,
-		Title:               task.Title,
-		Content:             task.Content,
-		TemplateCode:        task.TemplateCode,
-		TemplateParams:      task.TemplateParams,
-		Signature:           task.Signature,
-		Status:              task.Status,
-		CallbackStatus:      task.CallbackStatus,
-		CallbackTime:        task.CallbackTime,
-		RetryCount:          task.RetryCount,
-		MaxRetry:            task.MaxRetry,
-		ScheduledAt:         task.ScheduledAt,
-		CreatedAt:           task.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:           task.UpdatedAt.Format(time.RFC3339),
-		ChannelName:         channelName,
-		ProviderAccountName: providerAccountName,
+		ID:             task.ID,
+		TaskID:         task.TaskID,
+		AppID:          task.AppID,
+		ChannelID:      task.ChannelID,
+		ProviderMsgID:  task.ProviderMsgID,
+		MessageType:    task.MessageType,
+		Receiver:       task.Receiver,
+		Title:          task.Title,
+		Content:        task.Content,
+		TemplateCode:   task.TemplateCode,
+		TemplateParams: task.TemplateParams,
+		Signature:      task.Signature,
+		Status:         task.Status,
+		CallbackStatus: task.CallbackStatus,
+		CallbackTime:   task.CallbackTime,
+		RetryCount:     task.RetryCount,
+		MaxRetry:       task.MaxRetry,
+		ScheduledAt:    task.ScheduledAt,
+		CreatedAt:      task.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:      task.UpdatedAt.Format(time.RFC3339),
+		ChannelName:    channelName,
 	}
 }
 

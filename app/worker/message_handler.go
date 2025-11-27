@@ -78,10 +78,6 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 		return err
 	}
 
-	// 更新任务的服务商账号ID
-	task.ProviderAccountID = &providerAccount.ID
-	h.taskDao.Update(task)
-
 	// 获取发送器（按服务商代码获取）
 	messageSender, err := h.senderFactory.GetSender(providerAccount.ProviderCode)
 	if err != nil {
