@@ -56,6 +56,19 @@ func (s *MessageService) Send(ctx context.Context, req *dto.SendRequest) (*dto.S
 		return nil, fmt.Errorf("channel is not active")
 	}
 
+	// 检查通道是否有可用的模板绑定
+	// GetActiveByChannelID 查询条件：is_active=1 AND status=1（只查可用的绑定）
+	channelBindingDao := dao.NewChannelTemplateBindingDAO()
+	bindings, err := channelBindingDao.GetActiveByChannelID(uint(req.ChannelID))
+	if err != nil {
+		s.logger.Error(fmt.Sprintf("failed to check channel bindings channel_id=%d: %v", req.ChannelID, err))
+		return nil, fmt.Errorf("failed to check channel bindings: %w", err)
+	}
+	if len(bindings) == 0 {
+		s.logger.Error(fmt.Sprintf("no active template bindings configured channel_id=%d app_id=%s", req.ChannelID, req.AppID))
+		return nil, fmt.Errorf("no active template bindings configured for channel_id=%d", req.ChannelID)
+	}
+
 	// 2. 验证消息类型
 	if !s.isValidMessageType(channel.Type) {
 		return nil, fmt.Errorf("invalid message_type: %s", channel.Type)
@@ -128,6 +141,19 @@ func (s *MessageService) BatchSend(ctx context.Context, req *dto.BatchSendReques
 	// 检查通道状态
 	if channel.Status != 1 {
 		return nil, fmt.Errorf("channel is not active")
+	}
+
+	// 检查通道是否有可用的模板绑定
+	// GetActiveByChannelID 查询条件：is_active=1 AND status=1（只查可用的绑定）
+	channelBindingDao := dao.NewChannelTemplateBindingDAO()
+	bindings, err := channelBindingDao.GetActiveByChannelID(uint(req.ChannelID))
+	if err != nil {
+		s.logger.Error(fmt.Sprintf("failed to check channel bindings channel_id=%d: %v", req.ChannelID, err))
+		return nil, fmt.Errorf("failed to check channel bindings: %w", err)
+	}
+	if len(bindings) == 0 {
+		s.logger.Error(fmt.Sprintf("no active template bindings configured channel_id=%d app_id=%s", req.ChannelID, req.AppID))
+		return nil, fmt.Errorf("no active template bindings configured for channel_id=%d", req.ChannelID)
 	}
 
 	// 2. 加载系统模板（使用 channel 的 MessageTemplateID）

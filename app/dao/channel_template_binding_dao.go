@@ -91,10 +91,16 @@ func (d *ChannelTemplateBindingDAO) UpdatePriority(id uint, priority int) error 
 	return db.Model(&model.ChannelTemplateBinding{}).Where("id = ?", id).Update("priority", priority).Error
 }
 
-// UpdateStatus 更新状态
+// UpdateStatus 更新状态（status 字段）
 func (d *ChannelTemplateBindingDAO) UpdateStatus(id uint, status int8) error {
 	db := helper.GetHelper().GetDatabase()
-	return db.Model(&model.ChannelTemplateBinding{}).Where("id = ?", id).Update("is_active", status).Error
+	return db.Model(&model.ChannelTemplateBinding{}).Where("id = ?", id).Update("status", status).Error
+}
+
+// UpdateIsActive 更新激活状态（is_active 字段）
+func (d *ChannelTemplateBindingDAO) UpdateIsActive(id uint, isActive int8) error {
+	db := helper.GetHelper().GetDatabase()
+	return db.Model(&model.ChannelTemplateBinding{}).Where("id = ?", id).Update("is_active", isActive).Error
 }
 
 // Delete 删除配置

@@ -127,10 +127,13 @@ func (s *ChannelSelector) getChannelNodes(ctx context.Context, channelID uint, m
 }
 
 // filterAvailableNodes 过滤可用节点
+// 同时检查 status（管理员手动控制）和 is_active（系统熔断控制）
 func (s *ChannelSelector) filterAvailableNodes(nodes []*ChannelNode) []*ChannelNode {
 	var available []*ChannelNode
 	for _, node := range nodes {
-		if node.ChannelTemplateBinding != nil && node.ChannelTemplateBinding.IsActive == 1 {
+		if node.ChannelTemplateBinding != nil &&
+			node.ChannelTemplateBinding.Status == 1 &&
+			node.ChannelTemplateBinding.IsActive == 1 {
 			available = append(available, node)
 		}
 	}
