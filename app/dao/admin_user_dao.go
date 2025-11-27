@@ -51,3 +51,42 @@ func (d *AdminUserDAO) UsernameExists(username string) bool {
 func (d *AdminUserDAO) CountAll(count *int64) error {
 	return d.db.Model(&model.AdminUser{}).Count(count).Error
 }
+
+// GetList 获取管理员用户列表
+func (d *AdminUserDAO) GetList(page, pageSize int, username string, status *int8) ([]*model.AdminUser, int64, error) {
+	var users []*model.AdminUser
+	var total int64
+
+	query := d.db.Model(&model.AdminUser{})
+
+	// 条件过滤
+	if username != "" {
+		query = query.Where("username LIKE ?", "%"+username+"%")
+	}
+	if status != nil {
+		query = query.Where("status = ?", *status)
+	}
+
+	// 获取总数
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// 分页查询
+	offset := (page - 1) * pageSize
+	if err := query.Offset(offset).Limit(pageSize).Order("id DESC").Find(&users).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return users, total, nil
+}
+
+// Delete 删除管理员用户（软删除）
+func (d *AdminUserDAO) Delete(id uint) error {
+	return d.db.Delete(&model.AdminUser{}, id).Error
+}
+
+// UpdatePassword 更新密码
+func (d *AdminUserDAO) UpdatePassword(id uint, hashedPassword string) error {
+	return d.db.Model(&model.AdminUser{}).Where("id = ?", id).Update("password", hashedPassword).Error
+}

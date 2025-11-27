@@ -72,6 +72,17 @@ func (receiver Router) InitConfig(helper envInterface.HelperInterface) map[strin
 				adminGroup.GET("/user/info", deps.WrapHandler(admin.AuthController{}.GetUserInfo))
 				adminGroup.GET("/auth/codes", deps.WrapHandler(admin.AuthController{}.GetAccessCodes))
 
+				// 管理员用户管理
+				users := adminGroup.Group("/users")
+				{
+					users.GET("", deps.WrapHandler(admin.AdminUserController{}.GetUserList))
+					users.POST("", deps.WrapHandler(admin.AdminUserController{}.CreateUser))
+					users.GET("/:id", deps.WrapHandler(admin.AdminUserController{}.GetUser))
+					users.PUT("/:id", deps.WrapHandler(admin.AdminUserController{}.UpdateUser))
+					users.DELETE("/:id", deps.WrapHandler(admin.AdminUserController{}.DeleteUser))
+					users.POST("/:id/reset-password", deps.WrapHandler(admin.AdminUserController{}.ResetPassword))
+				}
+
 				// 应用管理
 				apps := adminGroup.Group("/applications")
 				{
