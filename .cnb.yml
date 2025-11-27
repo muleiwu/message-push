@@ -154,7 +154,7 @@ develop:
   push:
     - <<: *git-clone
     #    - <<: *build-loong64
-    - <<: *build-arm
+#    - <<: *build-arm
     - <<: *build-amd64
 
     - services:
@@ -168,10 +168,10 @@ develop:
           type: cnb:await
           options:
             key: build-amd64
-        - name: await the arm64
-          type: cnb:await
-          options:
-            key: build-arm64
+#        - name: await the arm64
+#          type: cnb:await
+#          options:
+#            key: build-arm64
         #        - name: await the loong64
         #          type: cnb:await
         #          options:
