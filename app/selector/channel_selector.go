@@ -3,13 +3,18 @@ package selector
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
+	"time"
 
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/internal/helper"
 	"github.com/muleiwu/gsr"
 )
+
+// 缓存 key 前缀
+const cacheKeyPrefix = "channel_selector:"
 
 // ChannelNode 通道节点（带权重）
 type ChannelNode struct {
@@ -24,8 +29,9 @@ type ChannelSelector struct {
 	logger                    gsr.Logger
 	channelTemplateBindingDao *dao.ChannelTemplateBindingDAO
 	providerAccountDAO        *dao.ProviderAccountDAO
-	cache                     map[string][]*ChannelNode // 按业务通道ID缓存
-	mu                        sync.RWMutex
+	cache                     gsr.Cacher    // 使用统一缓存接口
+	cacheTTL                  time.Duration // 缓存过期时间
+	weightMu                  sync.Mutex    // 保护权重修改的并发安全
 }
 
 // NewChannelSelector 创建通道选择器
@@ -35,8 +41,14 @@ func NewChannelSelector() *ChannelSelector {
 		logger:                    h.GetLogger(),
 		channelTemplateBindingDao: dao.NewChannelTemplateBindingDAO(),
 		providerAccountDAO:        dao.NewProviderAccountDAO(),
-		cache:                     make(map[string][]*ChannelNode),
+		cache:                     h.GetCache(),
+		cacheTTL:                  30 * time.Second, // 默认30秒
 	}
+}
+
+// buildCacheKey 构建缓存 key
+func buildCacheKey(channelID uint, messageType string) string {
+	return fmt.Sprintf("%s%d:%s", cacheKeyPrefix, channelID, messageType)
 }
 
 // Select 选择通道（平滑加权轮询）
@@ -61,25 +73,33 @@ func (s *ChannelSelector) Select(ctx context.Context, channelID uint, messageTyp
 
 // getChannelNodes 获取通道节点列表（使用新的ChannelTemplateBinding）
 func (s *ChannelSelector) getChannelNodes(ctx context.Context, channelID uint, messageType string) ([]*ChannelNode, error) {
-	cacheKey := fmt.Sprintf("%d:%s", channelID, messageType)
+	cacheKey := buildCacheKey(channelID, messageType)
 
-	// 先从缓存读取
-	s.mu.RLock()
-	if nodes, ok := s.cache[cacheKey]; ok {
-		s.mu.RUnlock()
-		return s.filterAvailableNodes(nodes), nil
+	// 使用 GetSet 方法，自带缓存穿透保护
+	var nodes []*ChannelNode
+	err := s.cache.GetSet(ctx, cacheKey, s.cacheTTL, &nodes, func(key string, obj any) error {
+		// 缓存未命中，从数据库加载
+		loadedNodes, loadErr := s.loadChannelNodesFromDB(channelID)
+		if loadErr != nil {
+			return loadErr
+		}
+
+		// 将结果赋值给 obj
+		nodesPtr := obj.(*[]*ChannelNode)
+		*nodesPtr = loadedNodes
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
 	}
-	s.mu.RUnlock()
 
-	// 缓存未命中，从数据库加载
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	// 过滤可用节点
+	return s.filterAvailableNodes(nodes), nil
+}
 
-	// Double check
-	if nodes, ok := s.cache[cacheKey]; ok {
-		return s.filterAvailableNodes(nodes), nil
-	}
-
+// loadChannelNodesFromDB 从数据库加载通道节点
+func (s *ChannelSelector) loadChannelNodesFromDB(channelID uint) ([]*ChannelNode, error) {
 	// 获取通道的所有模板绑定配置
 	channelBindings, err := s.channelTemplateBindingDao.GetActiveByChannelID(channelID)
 	if err != nil {
@@ -120,10 +140,7 @@ func (s *ChannelSelector) getChannelNodes(ctx context.Context, channelID uint, m
 		nodes = append(nodes, node)
 	}
 
-	// 缓存结果
-	s.cache[cacheKey] = nodes
-
-	return s.filterAvailableNodes(nodes), nil
+	return nodes, nil
 }
 
 // filterAvailableNodes 过滤可用节点
@@ -177,6 +194,10 @@ func (s *ChannelSelector) smoothWeightedRoundRobin(nodes []*ChannelNode) *Channe
 		return candidates[0]
 	}
 
+	// 加锁保护权重修改的并发安全
+	s.weightMu.Lock()
+	defer s.weightMu.Unlock()
+
 	// 在同优先级组内使用加权轮询
 	var totalWeight int
 	var selected *ChannelNode
@@ -210,25 +231,53 @@ func (s *ChannelSelector) ReportFailure(providerAccountID uint) {
 	// TODO: record failure to circuit breaker and auto-disable based on threshold
 }
 
-// ClearCache 清除缓存
+// ClearCache 清除所有缓存
+// 注意：由于使用 gsr.Cacher 接口，无法遍历删除所有 key
+// 这里通过设置 TTL 让缓存自动过期，如需立即清除可以重启服务
 func (s *ChannelSelector) ClearCache() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.cache = make(map[string][]*ChannelNode)
-	s.logger.Info("channel selector cache cleared")
+	s.logger.Info("channel selector cache will expire based on TTL")
 }
 
 // ClearCacheByChannelID 清除指定通道的缓存
 func (s *ChannelSelector) ClearCacheByChannelID(channelID uint) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	ctx := context.Background()
 
-	// 删除所有包含该通道ID的缓存
-	for key := range s.cache {
-		if len(key) > 0 && key[0:len(fmt.Sprintf("%d", channelID))] == fmt.Sprintf("%d", channelID) {
-			delete(s.cache, key)
+	// 清除常见的 messageType 组合
+	messageTypes := []string{"sms", "email", "push", "voice", "wechat", ""}
+	for _, msgType := range messageTypes {
+		cacheKey := buildCacheKey(channelID, msgType)
+		if err := s.cache.Del(ctx, cacheKey); err != nil {
+			s.logger.Warn(fmt.Sprintf("failed to delete cache key %s: %v", cacheKey, err))
 		}
 	}
 
 	s.logger.Info(fmt.Sprintf("channel selector cache cleared for channel id=%d", channelID))
+}
+
+// ClearCacheByKey 清除指定 key 的缓存
+func (s *ChannelSelector) ClearCacheByKey(channelID uint, messageType string) {
+	ctx := context.Background()
+	cacheKey := buildCacheKey(channelID, messageType)
+
+	if err := s.cache.Del(ctx, cacheKey); err != nil {
+		s.logger.Warn(fmt.Sprintf("failed to delete cache key %s: %v", cacheKey, err))
+	} else {
+		s.logger.Info(fmt.Sprintf("channel selector cache cleared for key %s", cacheKey))
+	}
+}
+
+// InvalidateCacheForBinding 当绑定配置变更时清除相关缓存
+// 用于管理员在界面操作后立即生效
+func (s *ChannelSelector) InvalidateCacheForBinding(channelID uint) {
+	s.ClearCacheByChannelID(channelID)
+}
+
+// GetCacheKeyPrefix 获取缓存 key 前缀（用于外部清理）
+func GetCacheKeyPrefix() string {
+	return cacheKeyPrefix
+}
+
+// IsCacheKey 判断是否为通道选择器的缓存 key
+func IsCacheKey(key string) bool {
+	return strings.HasPrefix(key, cacheKeyPrefix)
 }
