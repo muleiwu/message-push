@@ -84,6 +84,7 @@ type CallbackRequest struct {
 	RawBody      []byte            // 原始请求体
 	Headers      map[string]string // 请求头（用于签名验证等）
 	QueryParams  map[string]string // URL 查询参数
+	FormData     map[string]string // 表单数据（用于 form-data 请求）
 }
 
 // CallbackResult 回调结果

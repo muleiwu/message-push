@@ -49,12 +49,24 @@ func (ctrl CallbackController) Handle(c *gin.Context, helper interfaces.HelperIn
 		return
 	}
 
+	// 解析表单数据（支持 application/x-www-form-urlencoded 和 multipart/form-data）
+	_ = c.Request.ParseMultipartForm(32 << 20) // 32MB
+	formData := make(map[string]string)
+	if c.Request.PostForm != nil {
+		for key, values := range c.Request.PostForm {
+			if len(values) > 0 {
+				formData[key] = values[0]
+			}
+		}
+	}
+
 	// 构造回调请求
 	req := &sender.CallbackRequest{
 		ProviderCode: providerCode,
 		RawBody:      rawBody,
 		Headers:      make(map[string]string),
 		QueryParams:  make(map[string]string),
+		FormData:     formData,
 	}
 
 	// 收集请求头
