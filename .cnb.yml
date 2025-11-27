@@ -183,7 +183,7 @@ develop:
             template: ${PRIVATE_IMAGE_NAME}:${CNB_COMMIT}-OS-ARCH
             platforms:
               - linux/amd64
-              - linux/arm64
+#              - linux/arm64
         #              - linux/loong64
         - name: manifest public
           image: cnbcool/manifest
