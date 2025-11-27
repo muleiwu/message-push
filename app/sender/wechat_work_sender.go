@@ -352,7 +352,13 @@ func (s *WeChatWorkSender) SupportsCallback() bool {
 
 // HandleCallback 处理企业微信回调
 // 企业微信消息发送状态回调格式（需要在企业微信后台配置回调URL）
-func (s *WeChatWorkSender) HandleCallback(ctx context.Context, req *CallbackRequest) ([]*CallbackResult, error) {
+func (s *WeChatWorkSender) HandleCallback(ctx context.Context, req *CallbackRequest) (CallbackResponse, []*CallbackResult, error) {
+	// 默认响应（企业微信期望返回 {"errcode": 0, "errmsg": "ok"}）
+	resp := CallbackResponse{
+		StatusCode: 200,
+		Body:       `{"errcode":0,"errmsg":"ok"}`,
+	}
+
 	// 企业微信回调数据格式
 	var callbackData struct {
 		MsgID      string `json:"msgid"`
@@ -364,7 +370,8 @@ func (s *WeChatWorkSender) HandleCallback(ctx context.Context, req *CallbackRequ
 	}
 
 	if err := json.Unmarshal(req.RawBody, &callbackData); err != nil {
-		return nil, fmt.Errorf("invalid callback data: %w", err)
+		// 即使解析失败也返回成功响应，避免服务商重复推送
+		return resp, nil, fmt.Errorf("invalid callback data: %w", err)
 	}
 
 	status := constants.CallbackStatusDelivered
@@ -377,7 +384,7 @@ func (s *WeChatWorkSender) HandleCallback(ctx context.Context, req *CallbackRequ
 		reportTime = time.Now()
 	}
 
-	return []*CallbackResult{{
+	return resp, []*CallbackResult{{
 		ProviderID:   callbackData.MsgID,
 		Status:       status,
 		ErrorCode:    fmt.Sprintf("%d", callbackData.ErrCode),

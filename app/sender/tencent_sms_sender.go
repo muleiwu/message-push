@@ -319,7 +319,13 @@ func (s *TencentSMSSender) SupportsCallback() bool {
 // HandleCallback 处理腾讯云短信回调
 // 腾讯云短信状态报告格式：
 // [{"user_receive_time":"2015-10-17 08:03:04","nationcode":"86","mobile":"13xxxxxxxxx","report_status":"SUCCESS","errmsg":"DELIVRD","description":"用户短信送达成功","sid":"xxxxxxx"}]
-func (s *TencentSMSSender) HandleCallback(ctx context.Context, req *CallbackRequest) ([]*CallbackResult, error) {
+func (s *TencentSMSSender) HandleCallback(ctx context.Context, req *CallbackRequest) (CallbackResponse, []*CallbackResult, error) {
+	// 默认响应（腾讯云期望返回 {"result": 0, "errmsg": "OK"}）
+	resp := CallbackResponse{
+		StatusCode: 200,
+		Body:       `{"result":0,"errmsg":"OK"}`,
+	}
+
 	// 解析回调数据
 	var reports []struct {
 		UserReceiveTime string `json:"user_receive_time"`
@@ -332,7 +338,8 @@ func (s *TencentSMSSender) HandleCallback(ctx context.Context, req *CallbackRequ
 	}
 
 	if err := json.Unmarshal(req.RawBody, &reports); err != nil {
-		return nil, fmt.Errorf("invalid callback data: %w", err)
+		// 即使解析失败也返回成功响应，避免服务商重复推送
+		return resp, nil, fmt.Errorf("invalid callback data: %w", err)
 	}
 
 	results := make([]*CallbackResult, 0, len(reports))
@@ -353,5 +360,5 @@ func (s *TencentSMSSender) HandleCallback(ctx context.Context, req *CallbackRequ
 		})
 	}
 
-	return results, nil
+	return resp, results, nil
 }

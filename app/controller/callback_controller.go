@@ -73,13 +73,14 @@ func (ctrl CallbackController) Handle(c *gin.Context, helper interfaces.HelperIn
 
 	// 处理回调
 	callbackService := service.NewCallbackService()
-	if err := callbackService.HandleCallback(c.Request.Context(), providerCode, req); err != nil {
-		helper.GetLogger().Error("callback handler error: " + err.Error())
-		// 即使处理失败，也返回成功，避免服务商重复推送
-		c.JSON(200, gin.H{"code": 0, "message": "ok"})
-		return
+	resp := callbackService.HandleCallback(c.Request.Context(), providerCode, req)
+
+	// 如果状态码为 0，自动设置为 500
+	statusCode := resp.StatusCode
+	if statusCode == 0 {
+		statusCode = 500
 	}
 
-	// 返回成功（不同服务商可能期望不同的响应格式）
-	c.JSON(200, gin.H{"code": 0, "message": "ok"})
+	// 返回供应商期望的响应格式
+	c.String(statusCode, resp.Body)
 }

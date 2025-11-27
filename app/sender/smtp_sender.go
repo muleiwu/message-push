@@ -236,7 +236,13 @@ func (s *SMTPSender) SupportsCallback() bool {
 // HandleCallback 处理 SMTP 退信回调
 // 退信格式通常是邮件内容，包含原始邮件信息和退信原因
 // 这里提供一个简化的实现，实际使用中可能需要更复杂的解析
-func (s *SMTPSender) HandleCallback(ctx context.Context, req *CallbackRequest) ([]*CallbackResult, error) {
+func (s *SMTPSender) HandleCallback(ctx context.Context, req *CallbackRequest) (CallbackResponse, []*CallbackResult, error) {
+	// 默认响应
+	resp := CallbackResponse{
+		StatusCode: 200,
+		Body:       `{"status":"ok"}`,
+	}
+
 	// 尝试解析 JSON 格式的退信通知（如果使用邮件服务提供商的 webhook）
 	var bounceReport struct {
 		MessageID    string `json:"message_id"`
@@ -253,13 +259,14 @@ func (s *SMTPSender) HandleCallback(ctx context.Context, req *CallbackRequest) (
 		bodyStr := string(req.RawBody)
 		if strings.Contains(bodyStr, "Delivery Status Notification") ||
 			strings.Contains(bodyStr, "Undelivered Mail") {
-			return []*CallbackResult{{
+			return resp, []*CallbackResult{{
 				Status:       constants.CallbackStatusFailed,
 				ErrorMessage: "Email delivery failed (bounce detected)",
 				ReportTime:   time.Now(),
 			}}, nil
 		}
-		return nil, fmt.Errorf("invalid callback data: %w", err)
+		// 即使解析失败也返回成功响应，避免服务商重复推送
+		return resp, nil, fmt.Errorf("invalid callback data: %w", err)
 	}
 
 	status := constants.CallbackStatusDelivered
@@ -274,7 +281,7 @@ func (s *SMTPSender) HandleCallback(ctx context.Context, req *CallbackRequest) (
 		reportTime = time.Now()
 	}
 
-	return []*CallbackResult{{
+	return resp, []*CallbackResult{{
 		ProviderID:   bounceReport.MessageID,
 		Status:       status,
 		ErrorCode:    bounceReport.ErrorCode,

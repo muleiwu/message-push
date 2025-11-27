@@ -33,19 +33,27 @@ func NewCallbackService() *CallbackService {
 }
 
 // HandleCallback 处理服务商回调
-func (s *CallbackService) HandleCallback(ctx context.Context, providerCode string, req *sender.CallbackRequest) error {
+// 返回值：供应商期望的响应信息（实体，始终返回）
+func (s *CallbackService) HandleCallback(ctx context.Context, providerCode string, req *sender.CallbackRequest) sender.CallbackResponse {
+	// 默认响应（当无法获取处理器时使用）
+	defaultResp := sender.CallbackResponse{
+		StatusCode: 200,
+		Body:       `{"code":0,"message":"ok"}`,
+	}
+
 	// 1. 获取对应的回调处理器
 	handler, err := s.senderFactory.GetCallbackHandler(providerCode)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("failed to get callback handler for provider=%s: %v", providerCode, err))
-		return fmt.Errorf("unsupported provider: %s", providerCode)
+		return defaultResp
 	}
 
-	// 2. 解析回调数据
-	results, err := handler.HandleCallback(ctx, req)
+	// 2. 解析回调数据（始终返回响应，即使有错误）
+	resp, results, err := handler.HandleCallback(ctx, req)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("failed to handle callback for provider=%s: %v", providerCode, err))
-		return fmt.Errorf("failed to parse callback data: %w", err)
+		// 返回供应商期望的响应，不再返回错误
+		return resp
 	}
 
 	// 3. 更新任务状态
@@ -56,7 +64,7 @@ func (s *CallbackService) HandleCallback(ctx context.Context, providerCode strin
 		}
 	}
 
-	return nil
+	return resp
 }
 
 // processCallbackResult 处理单个回调结果

@@ -546,7 +546,13 @@ func (s *ZrwinfoSMSSender) SupportsCallback() bool {
 //	"deliverTime": "2018-01-01 18:00:00"
 //
 // }
-func (s *ZrwinfoSMSSender) HandleCallback(ctx context.Context, req *CallbackRequest) ([]*CallbackResult, error) {
+func (s *ZrwinfoSMSSender) HandleCallback(ctx context.Context, req *CallbackRequest) (CallbackResponse, []*CallbackResult, error) {
+	// 默认响应（掌榕网期望返回 {"code":0,"msg":"success"}）
+	resp := CallbackResponse{
+		StatusCode: 200,
+		Body:       `{"code":0,"msg":"SUCCESS"}`,
+	}
+
 	// 尝试解析为单个回调
 	var singleReport struct {
 		SmUuid        string `json:"smUuid"`
@@ -565,7 +571,7 @@ func (s *ZrwinfoSMSSender) HandleCallback(ctx context.Context, req *CallbackRequ
 
 		reportTime, _ := time.ParseInLocation("2006-01-02 15:04:05", singleReport.DeliverTime, time.Local)
 
-		return []*CallbackResult{
+		return resp, []*CallbackResult{
 			{
 				ProviderID:   singleReport.SmUuid,
 				Status:       status,
@@ -586,7 +592,8 @@ func (s *ZrwinfoSMSSender) HandleCallback(ctx context.Context, req *CallbackRequ
 	}
 
 	if err := json.Unmarshal(req.RawBody, &batchReports); err != nil {
-		return nil, fmt.Errorf("invalid callback data: %w", err)
+		// 即使解析失败也返回成功响应，避免服务商重复推送
+		return resp, nil, fmt.Errorf("invalid callback data: %w", err)
 	}
 
 	results := make([]*CallbackResult, 0, len(batchReports))
@@ -607,5 +614,5 @@ func (s *ZrwinfoSMSSender) HandleCallback(ctx context.Context, req *CallbackRequ
 		})
 	}
 
-	return results, nil
+	return resp, results, nil
 }

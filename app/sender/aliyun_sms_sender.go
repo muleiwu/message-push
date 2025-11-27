@@ -336,7 +336,13 @@ func (s *AliyunSMSSender) SupportsCallback() bool {
 // HandleCallback 处理阿里云短信回调
 // 阿里云短信状态报告格式：
 // [{"phone_number":"1381111****","send_time":"2017-01-01 00:00:00","report_time":"2017-01-01 00:00:00","success":true,"err_code":"DELIVRD","err_msg":"用户接收成功","sms_size":"1","biz_id":"12345^67890","out_id":""}]
-func (s *AliyunSMSSender) HandleCallback(ctx context.Context, req *CallbackRequest) ([]*CallbackResult, error) {
+func (s *AliyunSMSSender) HandleCallback(ctx context.Context, req *CallbackRequest) (CallbackResponse, []*CallbackResult, error) {
+	// 默认响应（阿里云期望返回 "OK"）
+	resp := CallbackResponse{
+		StatusCode: 200,
+		Body:       "OK",
+	}
+
 	// 解析回调数据
 	var reports []struct {
 		PhoneNumber string `json:"phone_number"`
@@ -351,7 +357,8 @@ func (s *AliyunSMSSender) HandleCallback(ctx context.Context, req *CallbackReque
 	}
 
 	if err := json.Unmarshal(req.RawBody, &reports); err != nil {
-		return nil, fmt.Errorf("invalid callback data: %w", err)
+		// 即使解析失败也返回成功响应，避免服务商重复推送
+		return resp, nil, fmt.Errorf("invalid callback data: %w", err)
 	}
 
 	results := make([]*CallbackResult, 0, len(reports))
@@ -379,5 +386,5 @@ func (s *AliyunSMSSender) HandleCallback(ctx context.Context, req *CallbackReque
 		})
 	}
 
-	return results, nil
+	return resp, results, nil
 }

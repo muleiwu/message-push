@@ -96,10 +96,17 @@ type CallbackResult struct {
 	ReportTime   time.Time // 回调时间
 }
 
+// CallbackResponse 回调响应（返回给服务商）
+type CallbackResponse struct {
+	StatusCode int    // HTTP 状态码
+	Body       string // 响应体（字符串格式）
+}
+
 // CallbackHandler 回调处理器接口
 type CallbackHandler interface {
 	// HandleCallback 处理服务商回调
-	HandleCallback(ctx context.Context, req *CallbackRequest) ([]*CallbackResult, error)
+	// 返回值：响应信息（实体，始终返回）、回调结果列表、错误
+	HandleCallback(ctx context.Context, req *CallbackRequest) (CallbackResponse, []*CallbackResult, error)
 	// GetProviderCode 获取服务商代码
 	GetProviderCode() string
 	// SupportsCallback 是否支持回调

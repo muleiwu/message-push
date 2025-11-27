@@ -321,7 +321,13 @@ func (s *DingTalkSender) SupportsCallback() bool {
 
 // HandleCallback 处理钉钉回调
 // 钉钉工作通知消息发送结果回调
-func (s *DingTalkSender) HandleCallback(ctx context.Context, req *CallbackRequest) ([]*CallbackResult, error) {
+func (s *DingTalkSender) HandleCallback(ctx context.Context, req *CallbackRequest) (CallbackResponse, []*CallbackResult, error) {
+	// 默认响应（钉钉期望返回 "success"）
+	resp := CallbackResponse{
+		StatusCode: 200,
+		Body:       "success",
+	}
+
 	// 钉钉回调数据格式（需要在钉钉开放平台配置回调URL）
 	var callbackData struct {
 		EventType string `json:"EventType"` // bpms_task_change, check_url, etc.
@@ -335,7 +341,8 @@ func (s *DingTalkSender) HandleCallback(ctx context.Context, req *CallbackReques
 	}
 
 	if err := json.Unmarshal(req.RawBody, &callbackData); err != nil {
-		return nil, fmt.Errorf("invalid callback data: %w", err)
+		// 即使解析失败也返回成功响应，避免服务商重复推送
+		return resp, nil, fmt.Errorf("invalid callback data: %w", err)
 	}
 
 	// 钉钉的消息状态：0-未读, 1-已读, 2-已使用
@@ -349,7 +356,7 @@ func (s *DingTalkSender) HandleCallback(ctx context.Context, req *CallbackReques
 		reportTime = time.Now()
 	}
 
-	return []*CallbackResult{{
+	return resp, []*CallbackResult{{
 		ProviderID:   fmt.Sprintf("%d", callbackData.TaskID),
 		Status:       status,
 		ErrorCode:    fmt.Sprintf("%d", callbackData.ErrCode),
