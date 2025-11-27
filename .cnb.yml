@@ -192,7 +192,7 @@ develop:
             template: ${PRIVATE_IMAGE_NAME}:${CNB_COMMIT}-OS-ARCH
             platforms:
               - linux/amd64
-              - linux/arm64
+#              - linux/arm64
         #              - linux/loong64
         - name: remove tag
           type: artifact:remove-tag
@@ -200,7 +200,7 @@ develop:
             name: ${CNB_REPO_NAME}
             tags:
               - ${CNB_COMMIT}-linux-amd64
-              - ${CNB_COMMIT}-linux-arm64
+#              - ${CNB_COMMIT}-linux-arm64
             #              - ${CNB_COMMIT}-linux-loong64
             type: docker
 
