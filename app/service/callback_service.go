@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dao"
@@ -105,23 +106,33 @@ func (s *CallbackService) processCallbackResult(ctx context.Context, providerCod
 
 	// 3. 更新任务状态
 	oldStatus := task.Status
+
+	// 设置回调状态和时间
+	task.CallbackStatus = result.Status
+	if !result.ReportTime.IsZero() {
+		task.CallbackTime = &result.ReportTime
+	} else {
+		now := time.Now()
+		task.CallbackTime = &now
+	}
+
 	switch result.Status {
 	case "delivered":
 		task.Status = constants.TaskStatusSuccess
 	case "failed", "rejected":
 		task.Status = constants.TaskStatusFailed
 	default:
-		// 未知状态，记录日志但不更新
+		// 未知状态，记录回调状态但不更新任务主状态
 		s.logger.Warn(fmt.Sprintf("unknown callback status=%s for task_id=%s", result.Status, task.TaskID))
-		return nil
 	}
 
-	// 只有状态发生变化时才更新
-	if oldStatus != task.Status {
-		if err := s.taskDao.Update(task); err != nil {
-			return fmt.Errorf("failed to update task status: %w", err)
-		}
+	// 更新任务（回调状态已变化）
+	if err := s.taskDao.Update(task); err != nil {
+		return fmt.Errorf("failed to update task: %w", err)
+	}
 
+	// 只有主状态发生变化时才触发 Webhook 通知
+	if oldStatus != task.Status {
 		s.logger.Info(fmt.Sprintf("task status updated task_id=%s old_status=%s new_status=%s",
 			task.TaskID, oldStatus, task.Status))
 
