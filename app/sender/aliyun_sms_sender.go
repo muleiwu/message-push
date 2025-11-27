@@ -47,9 +47,10 @@ func init() {
 			},
 		},
 		// 能力声明
-		SupportsSend:      true,
-		SupportsBatchSend: true,
-		SupportsCallback:  true,
+		SupportsSend:        true,
+		SupportsBatchSend:   true,
+		SupportsCallback:    true,
+		SupportsStatusQuery: true,
 		// 扩展信息
 		Website:    "https://www.aliyun.com/product/sms",
 		Icon:       "/image/logo/alibabacloud-color.png",
@@ -371,6 +372,97 @@ func (s *AliyunSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest) 
 // SupportsCallback 是否支持回调
 func (s *AliyunSMSSender) SupportsCallback() bool {
 	return true
+}
+
+// ==================== StatusQuerier 接口实现 ====================
+
+// SupportsStatusQuery 是否支持状态查询
+func (s *AliyunSMSSender) SupportsStatusQuery() bool {
+	return true
+}
+
+// QueryStatus 查询短信发送状态
+// 使用阿里云 QuerySendDetails API
+func (s *AliyunSMSSender) QueryStatus(ctx context.Context, req *StatusQueryRequest) (*StatusQueryResponse, error) {
+	// 1. 获取配置
+	config, err := req.ProviderAccount.GetConfig()
+	if err != nil {
+		return nil, fmt.Errorf("invalid provider config: %w", err)
+	}
+
+	accessKeyID, _ := config["access_key_id"].(string)
+	accessKeySecret, _ := config["access_key_secret"].(string)
+
+	if accessKeyID == "" || accessKeySecret == "" {
+		return nil, fmt.Errorf("missing aliyun sms config: access_key_id or access_key_secret")
+	}
+
+	// 2. 初始化客户端
+	client, err := s.createClient(accessKeyID, accessKeySecret)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create aliyun sms client: %w", err)
+	}
+
+	// 3. 构造查询请求
+	queryRequest := &dysmsapi.QuerySendDetailsRequest{
+		PhoneNumber: tea.String(req.PhoneNumber),
+		SendDate:    tea.String(req.SendDate.Format("20060102")),
+		PageSize:    tea.Int64(10),
+		CurrentPage: tea.Int64(1),
+	}
+
+	// 如果有 BizId，添加到查询条件
+	if req.ProviderMsgID != "" {
+		queryRequest.BizId = tea.String(req.ProviderMsgID)
+	}
+
+	// 4. 发送查询请求
+	response, err := client.QuerySendDetails(queryRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query send details: %w", err)
+	}
+
+	// 5. 解析响应
+	if response.Body == nil || tea.StringValue(response.Body.Code) != "OK" {
+		errCode := ""
+		errMsg := "unknown error"
+		if response.Body != nil {
+			errCode = tea.StringValue(response.Body.Code)
+			errMsg = tea.StringValue(response.Body.Message)
+		}
+		return nil, fmt.Errorf("query failed: code=%s, message=%s", errCode, errMsg)
+	}
+
+	// 6. 转换结果
+	results := make([]*StatusQueryResult, 0)
+	if response.Body.SmsSendDetailDTOs != nil && response.Body.SmsSendDetailDTOs.SmsSendDetailDTO != nil {
+		for _, detail := range response.Body.SmsSendDetailDTOs.SmsSendDetailDTO {
+			status := constants.CallbackStatusFailed
+			sendStatus := tea.Int64Value(detail.SendStatus)
+			// 阿里云状态：1-等待回执，2-发送失败，3-发送成功
+			switch sendStatus {
+			case 1:
+				status = "pending" // 等待回执
+			case 2:
+				status = constants.CallbackStatusFailed
+			case 3:
+				status = constants.CallbackStatusDelivered
+			}
+
+			reportTime, _ := time.ParseInLocation("2006-01-02 15:04:05", tea.StringValue(detail.ReceiveDate), time.Local)
+
+			results = append(results, &StatusQueryResult{
+				ProviderMsgID: req.ProviderMsgID,
+				PhoneNumber:   tea.StringValue(detail.PhoneNum),
+				Status:        status,
+				ErrorCode:     tea.StringValue(detail.ErrCode),
+				ErrorMessage:  "",
+				ReportTime:    reportTime,
+			})
+		}
+	}
+
+	return &StatusQueryResponse{Results: results}, nil
 }
 
 // HandleCallback 处理阿里云短信回调
