@@ -1,4 +1,5 @@
 # 服务器配置
+# 注意：应用访问地址（用于生成回调URL等）会自动从请求中获取，无需配置
 server:
   mode: release  # debug, release, test
   addr: ":8080"

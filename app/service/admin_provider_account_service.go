@@ -7,10 +7,12 @@ import (
 
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
+	appHelper "cnb.cool/mliev/push/message-push/app/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/app/registry"
 	"cnb.cool/mliev/push/message-push/app/sender"
 	"cnb.cool/mliev/push/message-push/internal/helper"
+	"github.com/gin-gonic/gin"
 )
 
 // AdminProviderAccountService 服务商账号配置管理服务
@@ -19,6 +21,19 @@ type AdminProviderAccountService struct{}
 // NewAdminProviderAccountService 创建服务商账号管理服务实例
 func NewAdminProviderAccountService() *AdminProviderAccountService {
 	return &AdminProviderAccountService{}
+}
+
+// generateCallbackURL 生成回调地址
+// 仅当服务商支持回调时返回URL，否则返回空字符串
+func (s *AdminProviderAccountService) generateCallbackURL(c *gin.Context, accountID uint, providerCode string) string {
+	// 从注册中心检查是否支持回调
+	meta, err := registry.GetByCode(providerCode)
+	if err != nil || !meta.SupportsCallback {
+		return ""
+	}
+
+	// 生成回调 URL
+	return appHelper.GetBaseURL(c, fmt.Sprintf("/api/callback/%d", accountID))
 }
 
 // GetAvailableProviders 获取可用的服务商列表（从注册中心）
@@ -103,7 +118,7 @@ func (s *AdminProviderAccountService) GetProviderConfigFields(providerCode strin
 }
 
 // CreateProviderAccount 创建服务商账号配置
-func (s *AdminProviderAccountService) CreateProviderAccount(req *dto.CreateProviderAccountRequest) (*dto.ProviderAccountResponse, error) {
+func (s *AdminProviderAccountService) CreateProviderAccount(c *gin.Context, req *dto.CreateProviderAccountRequest) (*dto.ProviderAccountResponse, error) {
 	logger := helper.GetHelper().GetLogger()
 
 	// 验证服务商代码是否已注册
@@ -158,13 +173,14 @@ func (s *AdminProviderAccountService) CreateProviderAccount(req *dto.CreateProvi
 		Description:  account.Remark,
 		Config:       config,
 		Status:       int(account.Status),
+		CallbackURL:  s.generateCallbackURL(c, account.ID, account.ProviderCode),
 		CreatedAt:    account.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:    account.UpdatedAt.Format(time.RFC3339),
 	}, nil
 }
 
 // GetProviderAccountList 获取服务商账号列表
-func (s *AdminProviderAccountService) GetProviderAccountList(req *dto.ProviderAccountListRequest) (*dto.ProviderAccountListResponse, error) {
+func (s *AdminProviderAccountService) GetProviderAccountList(c *gin.Context, req *dto.ProviderAccountListRequest) (*dto.ProviderAccountListResponse, error) {
 	page := req.Page
 	if page <= 0 {
 		page = 1
@@ -200,6 +216,7 @@ func (s *AdminProviderAccountService) GetProviderAccountList(req *dto.ProviderAc
 			Description:  account.Remark,
 			Config:       config,
 			Status:       int(account.Status),
+			CallbackURL:  s.generateCallbackURL(c, account.ID, account.ProviderCode),
 			CreatedAt:    account.CreatedAt.Format(time.RFC3339),
 			UpdatedAt:    account.UpdatedAt.Format(time.RFC3339),
 		})
@@ -214,7 +231,7 @@ func (s *AdminProviderAccountService) GetProviderAccountList(req *dto.ProviderAc
 }
 
 // GetProviderAccountByID 获取服务商账号详情
-func (s *AdminProviderAccountService) GetProviderAccountByID(id uint) (*dto.ProviderAccountResponse, error) {
+func (s *AdminProviderAccountService) GetProviderAccountByID(c *gin.Context, id uint) (*dto.ProviderAccountResponse, error) {
 	accountDAO := dao.NewProviderAccountDAO()
 	account, err := accountDAO.GetByID(id)
 	if err != nil {
@@ -239,6 +256,7 @@ func (s *AdminProviderAccountService) GetProviderAccountByID(id uint) (*dto.Prov
 		Description:  account.Remark,
 		Config:       config,
 		Status:       int(account.Status),
+		CallbackURL:  s.generateCallbackURL(c, account.ID, account.ProviderCode),
 		CreatedAt:    account.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:    account.UpdatedAt.Format(time.RFC3339),
 	}, nil

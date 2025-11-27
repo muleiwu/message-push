@@ -52,7 +52,7 @@ func (c ProviderAccountController) CreateProviderAccount(ctx *gin.Context, helpe
 		return
 	}
 
-	resp, err := adminService.CreateProviderAccount(&req)
+	resp, err := adminService.CreateProviderAccount(ctx, &req)
 	if err != nil {
 		controller.ErrorResponse(ctx, 500, "failed to create provider account: "+err.Error())
 		return
@@ -70,7 +70,7 @@ func (c ProviderAccountController) GetProviderAccountList(ctx *gin.Context, help
 		return
 	}
 
-	resp, err := adminService.GetProviderAccountList(&req)
+	resp, err := adminService.GetProviderAccountList(ctx, &req)
 	if err != nil {
 		controller.ErrorResponse(ctx, 500, "failed to get provider account list: "+err.Error())
 		return
@@ -89,7 +89,7 @@ func (c ProviderAccountController) GetProviderAccount(ctx *gin.Context, helper i
 		return
 	}
 
-	resp, err := adminService.GetProviderAccountByID(uint(id))
+	resp, err := adminService.GetProviderAccountByID(ctx, uint(id))
 	if err != nil {
 		controller.ErrorResponse(ctx, 404, "provider account not found")
 		return

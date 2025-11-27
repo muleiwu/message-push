@@ -101,6 +101,7 @@ type ProviderAccountResponse struct {
 	Description  string                 `json:"description"`
 	Config       map[string]interface{} `json:"config"`
 	Status       int                    `json:"status"`
+	CallbackURL  string                 `json:"callback_url,omitempty"` // 回调地址（仅支持回调的服务商有值）
 	CreatedAt    string                 `json:"created_at"`
 	UpdatedAt    string                 `json:"updated_at"`
 }

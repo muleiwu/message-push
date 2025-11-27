@@ -38,11 +38,9 @@ func (receiver Router) InitConfig(helper envInterface.HelperInterface) map[strin
 			// Callback API - 服务商回调（不需要认证，供服务商调用）
 			callback := router.Group("/api/callback")
 			{
-				// 动态路由，支持所有服务商
-				callback.POST("/:provider", deps.WrapHandler(controller.CallbackController{}.Handle))
-				callback.GET("/:provider", deps.WrapHandler(controller.CallbackController{}.Handle))
-				// 获取支持回调的服务商列表
-				callback.GET("", deps.WrapHandler(controller.CallbackController{}.GetSupportedProviders))
+				// 动态路由，支持所有账号的回调
+				callback.POST("/:id", deps.WrapHandler(controller.CallbackController{}.Handle))
+				callback.GET("/:id", deps.WrapHandler(controller.CallbackController{}.Handle))
 			}
 
 			// API v1 - 需要认证、限流、配额检查
