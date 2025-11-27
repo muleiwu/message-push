@@ -37,6 +37,10 @@ func (receiver Migration) Get() []any {
 
 		// Webhook 配置
 		&model.WebhookConfig{},
+
+		// 回调和通知日志
+		&model.CallbackLog{},
+		&model.WebhookLog{},
 	}
 }
 

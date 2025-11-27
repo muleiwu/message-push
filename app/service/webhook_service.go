@@ -23,6 +23,7 @@ import (
 type WebhookService struct {
 	logger           gsr.Logger
 	webhookConfigDao *dao.WebhookConfigDAO
+	webhookLogDao    *dao.WebhookLogDAO
 	httpClient       *http.Client
 }
 
@@ -32,6 +33,7 @@ func NewWebhookService() *WebhookService {
 	return &WebhookService{
 		logger:           h.GetLogger(),
 		webhookConfigDao: dao.NewWebhookConfigDAO(),
+		webhookLogDao:    dao.NewWebhookLogDAO(),
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -96,24 +98,6 @@ func (s *WebhookService) sendWebhook(ctx context.Context, config *model.WebhookC
 		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
-	// 创建请求
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, config.WebhookURL, bytes.NewBuffer(body))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// 设置请求头
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "MessagePush-Webhook/1.0")
-	req.Header.Set("X-Webhook-Event", payload.Event)
-	req.Header.Set("X-Webhook-Timestamp", fmt.Sprintf("%d", payload.Timestamp))
-
-	// 如果配置了签名密钥，添加签名
-	if config.Secret != "" {
-		signature := s.generateSignature(body, config.Secret, payload.Timestamp)
-		req.Header.Set("X-Webhook-Signature", signature)
-	}
-
 	// 设置超时
 	timeout := time.Duration(config.Timeout) * time.Second
 	if timeout <= 0 {
@@ -123,16 +107,39 @@ func (s *WebhookService) sendWebhook(ctx context.Context, config *model.WebhookC
 
 	// 发送请求（带重试）
 	var lastErr error
+	var lastRespStatus int
+	var lastRespBody string
 	maxRetries := config.RetryCount
 	if maxRetries <= 0 {
 		maxRetries = 3
 	}
 
+	retryCount := 0
 	for i := 0; i <= maxRetries; i++ {
 		if i > 0 {
 			// 重试延迟
 			time.Sleep(time.Duration(i) * time.Second)
 			s.logger.Info(fmt.Sprintf("retrying webhook request for task_id=%s, attempt=%d", payload.TaskID, i))
+			retryCount = i
+		}
+
+		// 每次重试都需要创建新的请求（因为 body reader 会被消耗）
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, config.WebhookURL, bytes.NewBuffer(body))
+		if err != nil {
+			lastErr = fmt.Errorf("failed to create request: %w", err)
+			continue
+		}
+
+		// 设置请求头
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("User-Agent", "MessagePush-Webhook/1.0")
+		req.Header.Set("X-Webhook-Event", payload.Event)
+		req.Header.Set("X-Webhook-Timestamp", fmt.Sprintf("%d", payload.Timestamp))
+
+		// 如果配置了签名密钥，添加签名
+		if config.Secret != "" {
+			signature := s.generateSignature(body, config.Secret, payload.Timestamp)
+			req.Header.Set("X-Webhook-Signature", signature)
 		}
 
 		resp, err := s.httpClient.Do(req)
@@ -145,16 +152,50 @@ func (s *WebhookService) sendWebhook(ctx context.Context, config *model.WebhookC
 		// 读取响应
 		respBody, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
+		lastRespStatus = resp.StatusCode
+		lastRespBody = string(respBody)
 
 		// 检查响应状态
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 			s.logger.Info(fmt.Sprintf("webhook sent successfully task_id=%s url=%s", payload.TaskID, config.WebhookURL))
+			// 记录成功日志
+			s.webhookLogDao.Create(&model.WebhookLog{
+				TaskID:          payload.TaskID,
+				AppID:           payload.AppID,
+				WebhookConfigID: config.ID,
+				WebhookURL:      config.WebhookURL,
+				Event:           payload.Event,
+				RequestData:     string(body),
+				ResponseStatus:  resp.StatusCode,
+				ResponseData:    lastRespBody,
+				Status:          "success",
+				RetryCount:      retryCount,
+			})
 			return nil
 		}
 
 		lastErr = fmt.Errorf("webhook returned status %d: %s", resp.StatusCode, string(respBody))
 		s.logger.Error(fmt.Sprintf("webhook request failed: %v", lastErr))
 	}
+
+	// 记录失败日志
+	errMsg := ""
+	if lastErr != nil {
+		errMsg = lastErr.Error()
+	}
+	s.webhookLogDao.Create(&model.WebhookLog{
+		TaskID:          payload.TaskID,
+		AppID:           payload.AppID,
+		WebhookConfigID: config.ID,
+		WebhookURL:      config.WebhookURL,
+		Event:           payload.Event,
+		RequestData:     string(body),
+		ResponseStatus:  lastRespStatus,
+		ResponseData:    lastRespBody,
+		Status:          "failed",
+		ErrorMessage:    errMsg,
+		RetryCount:      retryCount,
+	})
 
 	return fmt.Errorf("webhook failed after %d retries: %w", maxRetries, lastErr)
 }

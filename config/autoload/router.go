@@ -159,6 +159,9 @@ func (receiver Router) InitConfig(helper envInterface.HelperInterface) map[strin
 				{
 					logs.GET("", deps.WrapHandler(admin.LogController{}.GetLogList))
 					logs.GET("/:id", deps.WrapHandler(admin.LogController{}.GetLog))
+					logs.GET("/task/:task_id", deps.WrapHandler(admin.LogController{}.GetLogsByTaskID))
+					logs.GET("/task/:task_id/callback", deps.WrapHandler(admin.LogController{}.GetCallbackLogsByTaskID))
+					logs.GET("/task/:task_id/webhook", deps.WrapHandler(admin.LogController{}.GetWebhookLogsByTaskID))
 				}
 
 				// 任务管理

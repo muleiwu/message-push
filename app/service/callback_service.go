@@ -6,6 +6,7 @@ import (
 
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dao"
+	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/app/sender"
 	internalHelper "cnb.cool/mliev/push/message-push/internal/helper"
 	"github.com/muleiwu/gsr"
@@ -16,6 +17,7 @@ type CallbackService struct {
 	logger         gsr.Logger
 	taskDao        *dao.PushTaskDAO
 	logDao         *dao.PushLogDAO
+	callbackLogDao *dao.CallbackLogDAO
 	senderFactory  *sender.Factory
 	webhookService *WebhookService
 }
@@ -27,6 +29,7 @@ func NewCallbackService() *CallbackService {
 		logger:         h.GetLogger(),
 		taskDao:        dao.NewPushTaskDAO(),
 		logDao:         dao.NewPushLogDAO(),
+		callbackLogDao: dao.NewCallbackLogDAO(),
 		senderFactory:  sender.NewFactory(),
 		webhookService: NewWebhookService(),
 	}
@@ -57,8 +60,9 @@ func (s *CallbackService) HandleCallback(ctx context.Context, providerCode strin
 	}
 
 	// 3. 更新任务状态
+	rawData := string(req.RawBody)
 	for _, result := range results {
-		if err := s.processCallbackResult(ctx, providerCode, result); err != nil {
+		if err := s.processCallbackResult(ctx, providerCode, result, rawData); err != nil {
 			s.logger.Error(fmt.Sprintf("failed to process callback result provider_id=%s: %v", result.ProviderID, err))
 			// 继续处理其他结果
 		}
@@ -68,16 +72,37 @@ func (s *CallbackService) HandleCallback(ctx context.Context, providerCode strin
 }
 
 // processCallbackResult 处理单个回调结果
-func (s *CallbackService) processCallbackResult(ctx context.Context, providerCode string, result *sender.CallbackResult) error {
+func (s *CallbackService) processCallbackResult(ctx context.Context, providerCode string, result *sender.CallbackResult, rawData string) error {
 	// 1. 通过 ProviderID 查找任务
 	task, err := s.taskDao.GetByProviderID(result.ProviderID)
 	if err != nil {
 		// 如果找不到任务，可能是回调延迟或者任务已被清理
+		// 仍然记录回调日志（无任务关联）
+		s.callbackLogDao.Create(&model.CallbackLog{
+			ProviderCode:   providerCode,
+			ProviderID:     result.ProviderID,
+			CallbackStatus: result.Status,
+			ErrorCode:      result.ErrorCode,
+			ErrorMessage:   result.ErrorMessage,
+			RawData:        rawData,
+		})
 		s.logger.Warn(fmt.Sprintf("task not found for provider_id=%s", result.ProviderID))
 		return nil
 	}
 
-	// 2. 更新任务状态
+	// 2. 记录回调日志
+	s.callbackLogDao.Create(&model.CallbackLog{
+		TaskID:         task.TaskID,
+		AppID:          task.AppID,
+		ProviderCode:   providerCode,
+		ProviderID:     result.ProviderID,
+		CallbackStatus: result.Status,
+		ErrorCode:      result.ErrorCode,
+		ErrorMessage:   result.ErrorMessage,
+		RawData:        rawData,
+	})
+
+	// 3. 更新任务状态
 	oldStatus := task.Status
 	switch result.Status {
 	case "delivered":
@@ -99,7 +124,7 @@ func (s *CallbackService) processCallbackResult(ctx context.Context, providerCod
 		s.logger.Info(fmt.Sprintf("task status updated task_id=%s old_status=%s new_status=%s",
 			task.TaskID, oldStatus, task.Status))
 
-		// 3. 触发业务方 Webhook 通知
+		// 4. 触发业务方 Webhook 通知
 		go func() {
 			if err := s.webhookService.NotifyStatusChange(context.Background(), task, result); err != nil {
 				s.logger.Error(fmt.Sprintf("failed to notify webhook for task_id=%s: %v", task.TaskID, err))

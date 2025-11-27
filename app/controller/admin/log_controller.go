@@ -51,3 +51,57 @@ func (c LogController) GetLog(ctx *gin.Context, helper interfaces.HelperInterfac
 
 	controller.SuccessResponse(ctx, resp)
 }
+
+// GetLogsByTaskID 根据任务ID获取推送日志
+func (c LogController) GetLogsByTaskID(ctx *gin.Context, helper interfaces.HelperInterface) {
+	adminService := service.NewAdminLogService()
+	taskID := ctx.Param("task_id")
+	if taskID == "" {
+		controller.ErrorResponse(ctx, 400, "task_id is required")
+		return
+	}
+
+	resp, err := adminService.GetLogsByTaskID(taskID)
+	if err != nil {
+		controller.ErrorResponse(ctx, 500, "failed to get logs: "+err.Error())
+		return
+	}
+
+	controller.SuccessResponse(ctx, resp)
+}
+
+// GetCallbackLogsByTaskID 根据任务ID获取回调日志
+func (c LogController) GetCallbackLogsByTaskID(ctx *gin.Context, helper interfaces.HelperInterface) {
+	adminService := service.NewAdminLogService()
+	taskID := ctx.Param("task_id")
+	if taskID == "" {
+		controller.ErrorResponse(ctx, 400, "task_id is required")
+		return
+	}
+
+	resp, err := adminService.GetCallbackLogsByTaskID(taskID)
+	if err != nil {
+		controller.ErrorResponse(ctx, 500, "failed to get callback logs: "+err.Error())
+		return
+	}
+
+	controller.SuccessResponse(ctx, resp)
+}
+
+// GetWebhookLogsByTaskID 根据任务ID获取Webhook日志
+func (c LogController) GetWebhookLogsByTaskID(ctx *gin.Context, helper interfaces.HelperInterface) {
+	adminService := service.NewAdminLogService()
+	taskID := ctx.Param("task_id")
+	if taskID == "" {
+		controller.ErrorResponse(ctx, 400, "task_id is required")
+		return
+	}
+
+	resp, err := adminService.GetWebhookLogsByTaskID(taskID)
+	if err != nil {
+		controller.ErrorResponse(ctx, 500, "failed to get webhook logs: "+err.Error())
+		return
+	}
+
+	controller.SuccessResponse(ctx, resp)
+}
