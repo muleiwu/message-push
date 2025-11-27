@@ -469,10 +469,10 @@ func (s *AliyunSMSSender) QueryStatus(ctx context.Context, req *StatusQueryReque
 // 阿里云短信状态报告格式：
 // [{"phone_number":"1381111****","send_time":"2017-01-01 00:00:00","report_time":"2017-01-01 00:00:00","success":true,"err_code":"DELIVRD","err_msg":"用户接收成功","sms_size":"1","biz_id":"12345^67890","out_id":""}]
 func (s *AliyunSMSSender) HandleCallback(ctx context.Context, req *CallbackRequest) (CallbackResponse, []*CallbackResult, error) {
-	// 默认响应（阿里云期望返回 "OK"）
+	// 默认响应（阿里云期望返回 {"code" : 0, "msg" : "接收成功"} ）
 	resp := CallbackResponse{
 		StatusCode: 200,
-		Body:       "OK",
+		Body:       `{"code" : 0, "msg" : "接收成功"}`,
 	}
 
 	// 解析回调数据
