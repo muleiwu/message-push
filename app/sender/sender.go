@@ -116,3 +116,56 @@ type CallbackHandler interface {
 	// SupportsCallback 是否支持回调
 	SupportsCallback() bool
 }
+
+// ==================== 状态查询相关 ====================
+
+// StatusQueryRequest 单条状态查询请求（阿里云、腾讯云）
+type StatusQueryRequest struct {
+	ProviderAccount *model.ProviderAccount
+	ProviderMsgID   string    // 服务商消息ID
+	PhoneNumber     string    // 手机号
+	SendDate        time.Time // 发送日期
+}
+
+// StatusQueryResult 状态查询结果
+type StatusQueryResult struct {
+	ProviderMsgID string    // 服务商消息ID
+	PhoneNumber   string    // 手机号
+	Status        string    // 状态：使用 constants.CallbackStatus* 常量
+	ErrorCode     string    // 错误码
+	ErrorMessage  string    // 错误信息
+	ReportTime    time.Time // 状态报告时间
+}
+
+// StatusQueryResponse 状态查询响应
+type StatusQueryResponse struct {
+	Results []*StatusQueryResult
+}
+
+// StatusQuerier 单条状态查询接口（阿里云、腾讯云）
+// 适用于支持按消息ID或手机号查询状态的服务商
+type StatusQuerier interface {
+	// QueryStatus 查询消息状态
+	QueryStatus(ctx context.Context, req *StatusQueryRequest) (*StatusQueryResponse, error)
+	// SupportsStatusQuery 是否支持状态查询
+	SupportsStatusQuery() bool
+	// GetProviderCode 获取服务商代码
+	GetProviderCode() string
+}
+
+// StatusPullRequest 批量拉取请求（掌榕网）
+type StatusPullRequest struct {
+	ProviderAccount *model.ProviderAccount
+}
+
+// StatusPuller 批量状态拉取接口（掌榕网）
+// 适用于只支持批量拉取待处理状态的服务商
+type StatusPuller interface {
+	// PullStatus 批量拉取待处理状态
+	// 注意：已拉取的状态不会再次返回
+	PullStatus(ctx context.Context, req *StatusPullRequest) (*StatusQueryResponse, error)
+	// SupportsStatusPull 是否支持状态拉取
+	SupportsStatusPull() bool
+	// GetProviderCode 获取服务商代码
+	GetProviderCode() string
+}

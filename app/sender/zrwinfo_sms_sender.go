@@ -17,8 +17,9 @@ import (
 
 // 掌榕网 API 端点
 const (
-	zrwinfoSingleSendURL = "http://api.1cloudsp.com/api/v2/single_send"
-	zrwinfoBatchSendURL  = "http://api.1cloudsp.com/api/v2/send"
+	zrwinfoSingleSendURL   = "http://api.1cloudsp.com/api/v2/single_send"
+	zrwinfoBatchSendURL    = "http://api.1cloudsp.com/api/v2/send"
+	zrwinfoReportStatusURL = "http://api.1cloudsp.com/report/status"
 )
 
 func init() {
@@ -49,9 +50,10 @@ func init() {
 			},
 		},
 		// 能力声明
-		SupportsSend:      true,
-		SupportsBatchSend: true,
-		SupportsCallback:  true,
+		SupportsSend:       true,
+		SupportsBatchSend:  true,
+		SupportsCallback:   true,
+		SupportsStatusPull: true,
 		// 扩展信息
 		Website:    "https://www.zrwinfo.com",
 		Icon:       "http://e.cryun.com/static/favicon.ico",
@@ -582,6 +584,97 @@ func (s *ZrwinfoSMSSender) batchSendPersonalized(ctx context.Context, req *Batch
 	}
 
 	return &BatchSendResponse{Results: results}, nil
+}
+
+// ==================== StatusPuller 接口实现 ====================
+
+// SupportsStatusPull 是否支持状态拉取
+func (s *ZrwinfoSMSSender) SupportsStatusPull() bool {
+	return true
+}
+
+// PullStatus 批量拉取待处理状态
+// 使用掌榕网 /report/status API
+// 注意：已拉取的状态不会再次返回，需在开发者工具中开启"主动获取"功能
+func (s *ZrwinfoSMSSender) PullStatus(ctx context.Context, req *StatusPullRequest) (*StatusQueryResponse, error) {
+	// 1. 获取配置
+	config, err := req.ProviderAccount.GetConfig()
+	if err != nil {
+		return nil, fmt.Errorf("invalid provider config: %w", err)
+	}
+
+	accesskey, _ := config["accesskey"].(string)
+	secret, _ := config["secret"].(string)
+
+	if accesskey == "" || secret == "" {
+		return nil, fmt.Errorf("missing zrwinfo sms config: accesskey or secret")
+	}
+
+	// 2. 构造请求参数
+	params := url.Values{}
+	params.Set("accesskey", accesskey)
+	params.Set("secret", secret)
+
+	// 3. 发送请求
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", zrwinfoReportStatusURL, strings.NewReader(params.Encode()))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded;charset=utf-8")
+
+	resp, err := s.client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	// 4. 解析响应
+	var result struct {
+		Code string `json:"code"`
+		Msg  string `json:"msg"`
+		Data []struct {
+			SmUuid        string `json:"smUuid"`
+			DeliverTime   string `json:"deliverTime"`
+			Mobile        string `json:"mobile"`
+			DeliverResult string `json:"deliverResult"`
+			BatchId       string `json:"batchId"`
+		} `json:"data"`
+	}
+
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w, body: %s", err, string(body))
+	}
+
+	if result.Code != "0" {
+		return nil, fmt.Errorf("pull status failed: code=%s, msg=%s", result.Code, result.Msg)
+	}
+
+	// 5. 转换结果
+	results := make([]*StatusQueryResult, 0, len(result.Data))
+	for _, item := range result.Data {
+		status := constants.CallbackStatusDelivered
+		if item.DeliverResult != "DELIVRD" {
+			status = constants.CallbackStatusFailed
+		}
+
+		reportTime, _ := time.ParseInLocation("2006-01-02 15:04:05", item.DeliverTime, time.Local)
+
+		results = append(results, &StatusQueryResult{
+			ProviderMsgID: item.SmUuid,
+			PhoneNumber:   item.Mobile,
+			Status:        status,
+			ErrorCode:     item.DeliverResult,
+			ErrorMessage:  "",
+			ReportTime:    reportTime,
+		})
+	}
+
+	return &StatusQueryResponse{Results: results}, nil
 }
 
 // ==================== CallbackHandler 接口实现 ====================

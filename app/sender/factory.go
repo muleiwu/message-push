@@ -88,3 +88,63 @@ func (f *Factory) GetAllCallbackHandlers() []CallbackHandler {
 	}
 	return handlers
 }
+
+// GetStatusQuerier 根据服务商代码获取状态查询器
+func (f *Factory) GetStatusQuerier(providerCode string) (StatusQuerier, error) {
+	sender, exists := f.senders[providerCode]
+	if !exists {
+		return nil, fmt.Errorf("unknown provider code: %s", providerCode)
+	}
+
+	querier, ok := sender.(StatusQuerier)
+	if !ok {
+		return nil, fmt.Errorf("provider %s does not implement StatusQuerier", providerCode)
+	}
+
+	if !querier.SupportsStatusQuery() {
+		return nil, fmt.Errorf("provider %s does not support status query", providerCode)
+	}
+
+	return querier, nil
+}
+
+// GetStatusPuller 根据服务商代码获取状态拉取器
+func (f *Factory) GetStatusPuller(providerCode string) (StatusPuller, error) {
+	sender, exists := f.senders[providerCode]
+	if !exists {
+		return nil, fmt.Errorf("unknown provider code: %s", providerCode)
+	}
+
+	puller, ok := sender.(StatusPuller)
+	if !ok {
+		return nil, fmt.Errorf("provider %s does not implement StatusPuller", providerCode)
+	}
+
+	if !puller.SupportsStatusPull() {
+		return nil, fmt.Errorf("provider %s does not support status pull", providerCode)
+	}
+
+	return puller, nil
+}
+
+// GetAllStatusQueriers 获取所有支持状态查询的查询器
+func (f *Factory) GetAllStatusQueriers() []StatusQuerier {
+	var queriers []StatusQuerier
+	for _, sender := range f.senders {
+		if querier, ok := sender.(StatusQuerier); ok && querier.SupportsStatusQuery() {
+			queriers = append(queriers, querier)
+		}
+	}
+	return queriers
+}
+
+// GetAllStatusPullers 获取所有支持状态拉取的拉取器
+func (f *Factory) GetAllStatusPullers() []StatusPuller {
+	var pullers []StatusPuller
+	for _, sender := range f.senders {
+		if puller, ok := sender.(StatusPuller); ok && puller.SupportsStatusPull() {
+			pullers = append(pullers, puller)
+		}
+	}
+	return pullers
+}

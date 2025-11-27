@@ -28,8 +28,8 @@ func NewSMSTimeoutScanner() *SMSTimeoutScanner {
 	return &SMSTimeoutScanner{
 		logger:   h.GetLogger(),
 		taskDao:  dao.NewPushTaskDAO(),
-		interval: 2 * time.Second,  // 每5分钟扫描一次
-		timeout:  10 * time.Second, // 24小时未收到回调视为超时
+		interval: 10 * time.Second, // 每10秒扫描一次
+		timeout:  60 * time.Second, // 60秒未收到回调视为超时
 		limit:    100,              // 每次最多处理100个
 		stopCh:   make(chan struct{}),
 	}

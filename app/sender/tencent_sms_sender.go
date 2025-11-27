@@ -64,9 +64,10 @@ func init() {
 			},
 		},
 		// 能力声明
-		SupportsSend:      true,
-		SupportsBatchSend: true,
-		SupportsCallback:  true,
+		SupportsSend:        true,
+		SupportsBatchSend:   true,
+		SupportsCallback:    true,
+		SupportsStatusQuery: true,
 		// 扩展信息
 		Website:    "https://cloud.tencent.com/product/sms",
 		Icon:       "https://cloudcache.tencent-cloud.com/qcloud/favicon.ico",
@@ -349,6 +350,112 @@ func (s *TencentSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest)
 	}
 
 	return &BatchSendResponse{Results: results}, nil
+}
+
+// ==================== StatusQuerier 接口实现 ====================
+
+// SupportsStatusQuery 是否支持状态查询
+func (s *TencentSMSSender) SupportsStatusQuery() bool {
+	return true
+}
+
+// QueryStatus 查询短信发送状态
+// 使用腾讯云 PullSmsSendStatusByPhoneNumber API
+func (s *TencentSMSSender) QueryStatus(ctx context.Context, req *StatusQueryRequest) (*StatusQueryResponse, error) {
+	// 1. 获取配置
+	config, err := req.ProviderAccount.GetConfig()
+	if err != nil {
+		return nil, fmt.Errorf("invalid provider config: %w", err)
+	}
+
+	secretId, _ := config["secret_id"].(string)
+	secretKey, _ := config["secret_key"].(string)
+	region, _ := config["region"].(string)
+	sdkAppId, _ := config["sdk_app_id"].(string)
+
+	if secretId == "" || secretKey == "" || sdkAppId == "" {
+		return nil, fmt.Errorf("missing tencent sms config: secret_id, secret_key or sdk_app_id")
+	}
+	if region == "" {
+		region = "ap-guangzhou"
+	}
+
+	// 2. 初始化客户端
+	credential := common.NewCredential(secretId, secretKey)
+	cpf := profile.NewClientProfile()
+	cpf.HttpProfile.Endpoint = "sms.tencentcloudapi.com"
+	client, _ := sms.NewClient(credential, region, cpf)
+
+	// 3. 构造查询请求
+	// 腾讯云按手机号拉取状态，需要指定时间范围
+	request := sms.NewPullSmsSendStatusByPhoneNumberRequest()
+	request.SmsSdkAppId = common.StringPtr(sdkAppId)
+	request.PhoneNumber = common.StringPtr(req.PhoneNumber)
+
+	// 设置时间范围：发送日期的开始和结束时间戳
+	beginTime := req.SendDate.Unix()
+	endTime := req.SendDate.Add(24 * time.Hour).Unix()
+	request.BeginTime = common.Uint64Ptr(uint64(beginTime))
+	request.EndTime = common.Uint64Ptr(uint64(endTime))
+	request.Offset = common.Uint64Ptr(0)
+	request.Limit = common.Uint64Ptr(100)
+
+	// 4. 发送查询请求
+	response, err := client.PullSmsSendStatusByPhoneNumber(request)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query send status: %w", err)
+	}
+
+	// 5. 转换结果
+	results := make([]*StatusQueryResult, 0)
+	if response.Response != nil && response.Response.PullSmsSendStatusSet != nil {
+		for _, detail := range response.Response.PullSmsSendStatusSet {
+			status := constants.CallbackStatusFailed
+			if detail.ReportStatus != nil && *detail.ReportStatus == "SUCCESS" {
+				status = constants.CallbackStatusDelivered
+			}
+
+			// 获取 SerialNo
+			serialNo := ""
+			if detail.SerialNo != nil {
+				serialNo = *detail.SerialNo
+			}
+
+			// 如果指定了 ProviderMsgID，只返回匹配的记录
+			if req.ProviderMsgID != "" && serialNo != req.ProviderMsgID {
+				continue
+			}
+
+			// 获取接收时间
+			var reportTime time.Time
+			if detail.UserReceiveTime != nil {
+				reportTime = time.Unix(int64(*detail.UserReceiveTime), 0)
+			}
+
+			// 获取手机号
+			phoneNumber := ""
+			if detail.PhoneNumber != nil {
+				phoneNumber = *detail.PhoneNumber
+			}
+
+			// 获取描述信息
+			description := ""
+			if detail.Description != nil {
+				description = *detail.Description
+			}
+
+			results = append(results, &StatusQueryResult{
+				ProviderMsgID: serialNo,
+				PhoneNumber:   phoneNumber,
+				Status:        status,
+				ErrorCode:     "",
+				ErrorMessage:  description,
+				ReportTime:    reportTime,
+			})
+		}
+	}
+
+	return &StatusQueryResponse{Results: results}, nil
 }
 
 // ==================== CallbackHandler 接口实现 ====================

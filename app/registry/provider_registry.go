@@ -14,9 +14,11 @@ type ProviderMeta struct {
 	ConfigFields []ConfigField `json:"config_fields"` // 配置参数定义
 
 	// 能力声明
-	SupportsSend      bool `json:"supports_send"`       // 是否支持单条发送
-	SupportsBatchSend bool `json:"supports_batch_send"` // 是否支持批量发送
-	SupportsCallback  bool `json:"supports_callback"`   // 是否支持回调
+	SupportsSend        bool `json:"supports_send"`         // 是否支持单条发送
+	SupportsBatchSend   bool `json:"supports_batch_send"`   // 是否支持批量发送
+	SupportsCallback    bool `json:"supports_callback"`     // 是否支持回调
+	SupportsStatusQuery bool `json:"supports_status_query"` // 是否支持单条状态查询（阿里云、腾讯云）
+	SupportsStatusPull  bool `json:"supports_status_pull"`  // 是否支持批量状态拉取（掌榕网）
 
 	// 扩展信息
 	Website    string   `json:"website"`     // 官网地址
