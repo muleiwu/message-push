@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"cnb.cool/mliev/push/message-push/app/constants"
@@ -504,10 +503,10 @@ func (s *AliyunSMSSender) HandleCallback(ctx context.Context, req *CallbackReque
 
 		// BizId 格式可能是 "bizId^taskId" 或纯 bizId
 		providerID := report.BizId
-		if strings.Contains(report.BizId, "^") {
-			parts := strings.Split(report.BizId, "^")
-			providerID = parts[0]
-		}
+		//if strings.Contains(report.BizId, "^") {
+		//	parts := strings.Split(report.BizId, "^")
+		//	providerID = parts[0]
+		//}
 
 		results = append(results, &CallbackResult{
 			ProviderID:   providerID,
