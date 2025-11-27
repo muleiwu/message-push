@@ -118,6 +118,7 @@ POST /api/v1/messages
 | `channel_id` | int | 是 | 通道 ID（通道绑定了消息类型和模板） |
 | `receiver` | string | 是 | 接收者（手机号/邮箱/用户ID） |
 | `template_params` | object | 否 | 模板参数（键值对） |
+| `signature_name` | string | 否 | 签名名称（用于 SMS 消息，如"公司名称"） |
 | `scheduled_at` | string | 否 | 定时发送时间（ISO 8601 格式） |
 
 **请求示例**
@@ -129,7 +130,8 @@ POST /api/v1/messages
   "template_params": {
     "code": "123456",
     "expire_time": "5"
-  }
+  },
+  "signature_name": "公司名称"
 }
 ```
 
@@ -176,6 +178,7 @@ POST /api/v1/messages/batch
 | `channel_id` | int | 是 | 通道 ID（通道绑定了消息类型和模板） |
 | `receivers` | string[] | 是 | 接收者列表（手机号/邮箱/用户ID数组） |
 | `template_params` | object | 否 | 模板参数（所有接收者共用） |
+| `signature_name` | string | 否 | 签名名称（用于 SMS 消息，如"公司名称"） |
 | `scheduled_at` | string | 否 | 定时发送时间（ISO 8601 格式） |
 
 **请求示例**
@@ -191,7 +194,8 @@ POST /api/v1/messages/batch
   "template_params": {
     "content": "系统将于今晚22:00进行维护",
     "duration": "2小时"
-  }
+  },
+  "signature_name": "公司名称"
 }
 ```
 
@@ -349,22 +353,26 @@ class MessagePushClient:
         
         return response.json()
 
-    def send_message(self, channel_id, receiver, params=None):
+    def send_message(self, channel_id, receiver, params=None, signature_name=None):
         """发送单条消息"""
         data = {
             "channel_id": channel_id,
             "receiver": receiver,
             "template_params": params or {}
         }
+        if signature_name:
+            data["signature_name"] = signature_name
         return self._request("POST", "/api/v1/messages", data)
 
-    def send_batch(self, channel_id, receivers, params=None):
+    def send_batch(self, channel_id, receivers, params=None, signature_name=None):
         """批量发送消息"""
         data = {
             "channel_id": channel_id,
             "receivers": receivers,
             "template_params": params or {}
         }
+        if signature_name:
+            data["signature_name"] = signature_name
         return self._request("POST", "/api/v1/messages/batch", data)
 
     def query_task(self, task_id):
@@ -384,7 +392,8 @@ if __name__ == "__main__":
     result = client.send_message(
         channel_id=1,
         receiver="13800138000",
-        params={"code": "123456"}
+        params={"code": "123456"},
+        signature_name="公司名称"  # 可选：指定签名名称
     )
     print(result)
     
@@ -474,6 +483,7 @@ type SendMessageRequest struct {
 	ChannelID      int                    `json:"channel_id"`
 	Receiver       string                 `json:"receiver"`
 	TemplateParams map[string]interface{} `json:"template_params,omitempty"`
+	SignatureName  string                 `json:"signature_name,omitempty"`
 }
 
 // Response 响应结构
@@ -494,6 +504,9 @@ func (c *MessagePushClient) SendMessage(req *SendMessageRequest) (*Response, err
 		"channel_id":      req.ChannelID,
 		"receiver":        req.Receiver,
 		"template_params": req.TemplateParams,
+	}
+	if req.SignatureName != "" {
+		params["signature_name"] = req.SignatureName
 	}
 	
 	signature := c.generateSignature("POST", path, params, timestamp, nonce)
@@ -583,6 +596,7 @@ func main() {
 		TemplateParams: map[string]interface{}{
 			"code": "123456",
 		},
+		SignatureName: "公司名称", // 可选：指定签名名称
 	})
 
 	if err != nil {
@@ -675,7 +689,7 @@ public class MessagePushClient {
      * 发送单条消息
      */
     public Map<String, Object> sendMessage(int channelId, String receiver, 
-            Map<String, Object> params) throws Exception {
+            Map<String, Object> params, String signatureName) throws Exception {
         
         String path = "/api/v1/messages";
         String timestamp = String.valueOf(System.currentTimeMillis() / 1000);
@@ -685,6 +699,9 @@ public class MessagePushClient {
         requestBody.put("channel_id", channelId);
         requestBody.put("receiver", receiver);
         requestBody.put("template_params", params != null ? params : new HashMap<>());
+        if (signatureName != null && !signatureName.isEmpty()) {
+            requestBody.put("signature_name", signatureName);
+        }
 
         String signature = generateSignature("POST", path, requestBody, timestamp, nonce);
         String body = objectMapper.writeValueAsString(requestBody);
@@ -740,7 +757,8 @@ public class MessagePushClient {
         Map<String, Object> params = new HashMap<>();
         params.put("code", "123456");
 
-        Map<String, Object> result = client.sendMessage(1, "13800138000", params);
+        // 可选：指定签名名称
+        Map<String, Object> result = client.sendMessage(1, "13800138000", params, "公司名称");
         System.out.println("Result: " + result);
 
         // 查询任务状态
@@ -862,24 +880,30 @@ class MessagePushClient {
     /**
      * 发送单条消息
      */
-    async sendMessage(channelId, receiver, params = {}) {
+    async sendMessage(channelId, receiver, params = {}, signatureName = null) {
         const data = {
             channel_id: channelId,
             receiver: receiver,
             template_params: params,
         };
+        if (signatureName) {
+            data.signature_name = signatureName;
+        }
         return this.request('POST', '/api/v1/messages', data);
     }
 
     /**
      * 批量发送消息
      */
-    async sendBatch(channelId, receivers, params = {}) {
+    async sendBatch(channelId, receivers, params = {}, signatureName = null) {
         const data = {
             channel_id: channelId,
             receivers: receivers,
             template_params: params,
         };
+        if (signatureName) {
+            data.signature_name = signatureName;
+        }
         return this.request('POST', '/api/v1/messages/batch', data);
     }
 
@@ -904,7 +928,8 @@ async function main() {
         const result = await client.sendMessage(
             1,
             '13800138000',
-            { code: '123456' }
+            { code: '123456' },
+            '公司名称'  // 可选：指定签名名称
         );
         console.log('Send result:', result);
 
@@ -1020,26 +1045,32 @@ class MessagePushClient
     /**
      * 发送单条消息
      */
-    public function sendMessage(int $channelId, string $receiver, array $params = []): array
+    public function sendMessage(int $channelId, string $receiver, array $params = [], ?string $signatureName = null): array
     {
         $data = [
             'channel_id' => $channelId,
             'receiver' => $receiver,
             'template_params' => $params,
         ];
+        if ($signatureName !== null) {
+            $data['signature_name'] = $signatureName;
+        }
         return $this->request('POST', '/api/v1/messages', $data);
     }
 
     /**
      * 批量发送消息
      */
-    public function sendBatch(int $channelId, array $receivers, array $params = []): array
+    public function sendBatch(int $channelId, array $receivers, array $params = [], ?string $signatureName = null): array
     {
         $data = [
             'channel_id' => $channelId,
             'receivers' => $receivers,
             'template_params' => $params,
         ];
+        if ($signatureName !== null) {
+            $data['signature_name'] = $signatureName;
+        }
         return $this->request('POST', '/api/v1/messages/batch', $data);
     }
 
@@ -1064,7 +1095,8 @@ try {
     $result = $client->sendMessage(
         1,
         '13800138000',
-        ['code' => '123456']
+        ['code' => '123456'],
+        '公司名称'  // 可选：指定签名名称
     );
     print_r($result);
 
@@ -1151,6 +1183,7 @@ try {
 |------|------|------|
 | 待处理 | `pending` | 任务已创建，等待发送 |
 | 处理中 | `processing` | 任务正在发送 |
+| 已发送 | `sent` | 已发送，等待回调确认（短信等类型） |
 | 成功 | `success` | 发送成功 |
 | 失败 | `failed` | 发送失败（已达最大重试次数） |
 
@@ -1161,6 +1194,7 @@ try {
 | 已送达 | `delivered` | 消息已送达接收者 |
 | 发送失败 | `failed` | 运营商/服务商发送失败 |
 | 被拒绝 | `rejected` | 接收者拒收 |
+| 超时 | `timeout` | 等待回调超时 |
 
 ### D. 最佳实践
 
@@ -1173,6 +1207,6 @@ try {
 
 ---
 
-**文档版本**: v1.2.0  
-**更新日期**: 2025-11-25
+**文档版本**: v1.3.0  
+**更新日期**: 2025-11-27
 
