@@ -11,6 +11,40 @@ import (
 	"cnb.cool/mliev/push/message-push/internal/helper"
 )
 
+// convertModelParamMappingToDTO 将 model.ParamMappingItem 转换为 dto.ParamMappingItem
+func convertModelParamMappingToDTO(items []model.ParamMappingItem) []dto.ParamMappingItem {
+	if items == nil {
+		return nil
+	}
+	result := make([]dto.ParamMappingItem, len(items))
+	for i, item := range items {
+		result[i] = dto.ParamMappingItem{
+			Type:        dto.ParamMappingType(item.Type),
+			ProviderVar: item.ProviderVar,
+			SystemVar:   item.SystemVar,
+			Value:       item.Value,
+		}
+	}
+	return result
+}
+
+// convertDTOParamMappingToModel 将 dto.ParamMappingItem 转换为 model.ParamMappingItem
+func convertDTOParamMappingToModel(items []dto.ParamMappingItem) []model.ParamMappingItem {
+	if items == nil {
+		return nil
+	}
+	result := make([]model.ParamMappingItem, len(items))
+	for i, item := range items {
+		result[i] = model.ParamMappingItem{
+			Type:        model.ParamMappingType(item.Type),
+			ProviderVar: item.ProviderVar,
+			SystemVar:   item.SystemVar,
+			Value:       item.Value,
+		}
+	}
+	return result
+}
+
 // AdminChannelService 通道管理服务
 type AdminChannelService struct {
 	bindingDAO           *dao.ChannelTemplateBindingDAO
@@ -251,7 +285,7 @@ func (s *AdminChannelService) GetChannelBindings(channelID uint) ([]*dto.Channel
 			ID:                   b.ID,
 			ProviderTemplateID:   b.ProviderTemplateID,
 			ProviderID:           b.ProviderID,
-			ParamMapping:         paramMapping,
+			ParamMapping:         convertModelParamMappingToDTO(paramMapping),
 			Weight:               b.Weight,
 			Priority:             b.Priority,
 			Status:               b.Status,
@@ -287,7 +321,7 @@ func (s *AdminChannelService) UpdateChannelBinding(bindingID uint, req *dto.Upda
 	updates := make(map[string]interface{})
 
 	if req.ParamMapping != nil {
-		if err := binding.SetParamMapping(req.ParamMapping); err != nil {
+		if err := binding.SetParamMapping(convertDTOParamMappingToModel(req.ParamMapping)); err != nil {
 			return fmt.Errorf("failed to set param mapping: %w", err)
 		}
 		updates["param_mapping"] = binding.ParamMapping
@@ -377,7 +411,7 @@ func (s *AdminChannelService) GetChannelBinding(bindingID uint) (*dto.ChannelBin
 		ID:                   binding.ID,
 		ProviderTemplateID:   binding.ProviderTemplateID,
 		ProviderID:           binding.ProviderID,
-		ParamMapping:         paramMapping,
+		ParamMapping:         convertModelParamMappingToDTO(paramMapping),
 		Weight:               binding.Weight,
 		Priority:             binding.Priority,
 		Status:               binding.Status,
@@ -477,7 +511,7 @@ func (s *AdminChannelService) CreateChannelBinding(channelID uint, req *dto.Crea
 
 	// 设置参数映射
 	if req.ParamMapping != nil {
-		if err := binding.SetParamMapping(req.ParamMapping); err != nil {
+		if err := binding.SetParamMapping(convertDTOParamMappingToModel(req.ParamMapping)); err != nil {
 			return nil, fmt.Errorf("failed to set param mapping: %w", err)
 		}
 	}
@@ -500,7 +534,7 @@ func (s *AdminChannelService) CreateChannelBinding(channelID uint, req *dto.Crea
 		ID:                   binding.ID,
 		ProviderTemplateID:   binding.ProviderTemplateID,
 		ProviderID:           binding.ProviderID,
-		ParamMapping:         paramMapping,
+		ParamMapping:         convertModelParamMappingToDTO(paramMapping),
 		Weight:               binding.Weight,
 		Priority:             binding.Priority,
 		Status:               binding.Status,

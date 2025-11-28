@@ -119,19 +119,19 @@ type ProviderTemplateListResponse struct {
 
 // CreateTemplateBindingRequest 创建模板绑定请求
 type CreateTemplateBindingRequest struct {
-	MessageTemplateID  uint              `json:"message_template_id" binding:"required"`
-	ProviderTemplateID uint              `json:"provider_template_id" binding:"required"`
-	ProviderID         uint              `json:"provider_id" binding:"required"`
-	ParamMapping       map[string]string `json:"param_mapping"`
-	Status             *int8             `json:"status"`
-	Priority           *int              `json:"priority"`
+	MessageTemplateID  uint               `json:"message_template_id" binding:"required"`
+	ProviderTemplateID uint               `json:"provider_template_id" binding:"required"`
+	ProviderID         uint               `json:"provider_id" binding:"required"`
+	ParamMapping       []ParamMappingItem `json:"param_mapping"`
+	Status             *int8              `json:"status"`
+	Priority           *int               `json:"priority"`
 }
 
 // UpdateTemplateBindingRequest 更新模板绑定请求
 type UpdateTemplateBindingRequest struct {
-	ParamMapping map[string]string `json:"param_mapping"`
-	Status       *int8             `json:"status"`
-	Priority     *int              `json:"priority"`
+	ParamMapping []ParamMappingItem `json:"param_mapping"`
+	Status       *int8              `json:"status"`
+	Priority     *int               `json:"priority"`
 }
 
 // TemplateBindingResponse 模板绑定响应
@@ -140,7 +140,7 @@ type TemplateBindingResponse struct {
 	MessageTemplateID  uint                        `json:"message_template_id"`
 	ProviderTemplateID uint                        `json:"provider_template_id"`
 	ProviderID         uint                        `json:"provider_id"`
-	ParamMapping       map[string]string           `json:"param_mapping"`
+	ParamMapping       []ParamMappingItem          `json:"param_mapping"`
 	Status             int8                        `json:"status"`
 	Priority           int                         `json:"priority"`
 	MessageTemplate    *SimpleMessageTemplateInfo  `json:"message_template,omitempty"`
