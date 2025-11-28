@@ -21,7 +21,7 @@ func init() {
 		Code:        constants.ProviderDingTalk,
 		Name:        "钉钉",
 		Type:        constants.MessageTypeDingTalk,
-		Description: "钉钉工作通知消息推送服务，支持文本和Markdown消息",
+		Description: "钉钉工作通知消息服务，支持文本和Markdown消息",
 		ConfigFields: []registry.ConfigField{
 			{
 				Key:         "app_key",

@@ -14,6 +14,6 @@ type IndexController struct {
 func (receiver IndexController) GetIndex(c *gin.Context, helper interfaces.HelperInterface) {
 	helper.GetLogger().Info("visiting homepage")
 	c.HTML(http.StatusOK, "index.html", gin.H{
-		"title": "Message Push",
+		"title": "Mulei Message Service",
 	})
 }

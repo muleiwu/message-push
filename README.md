@@ -1,10 +1,10 @@
-# Message Push Service
+# Mulei Message Service
 
 [![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8.svg)](https://golang.org)
 [![Gin Framework](https://img.shields.io/badge/Gin-v1.10-00ADD8.svg)](https://github.com/gin-gonic/gin)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-A high-performance, multi-channel message push service built with Go. Supports SMS, Email, WeChatWork, DingTalk, and Webhook with enterprise-grade features including queue processing, circuit breaker, rate limiting, and quota management.
+A high-performance, multi-channel message service built with Go. Supports SMS, Email, WeChatWork, DingTalk, and Webhook with enterprise-grade features including queue processing, circuit breaker, rate limiting, and quota management.
 
 [中文文档](README.zh-cn.md)
 

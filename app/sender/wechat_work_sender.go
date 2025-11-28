@@ -21,7 +21,7 @@ func init() {
 		Code:        constants.ProviderWeChatWork,
 		Name:        "企业微信",
 		Type:        constants.MessageTypeWeChatWork,
-		Description: "企业微信应用消息推送服务，支持文本和Markdown消息",
+		Description: "企业微信应用消息服务，支持文本和Markdown消息",
 		ConfigFields: []registry.ConfigField{
 			{
 				Key:         "corp_id",
