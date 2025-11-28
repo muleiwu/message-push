@@ -67,6 +67,12 @@ func buildCacheKey(channelID uint, messageType string) string {
 // Select 选择通道（平滑加权轮询，权重状态持久化到 Redis）
 // appID 和 receiver 用于 5 分钟内同一接收者切换供应商策略
 func (s *ChannelSelector) Select(ctx context.Context, channelID uint, messageType string, appID string, receiver string) (*ChannelNode, error) {
+	return s.SelectWithExcludes(ctx, channelID, messageType, appID, receiver, nil)
+}
+
+// SelectWithExcludes 选择通道，支持排除指定供应商
+// excludeProviderIDs: 需要排除的供应商账号ID列表（规则引擎切换供应商时使用）
+func (s *ChannelSelector) SelectWithExcludes(ctx context.Context, channelID uint, messageType string, appID string, receiver string, excludeProviderIDs []uint) (*ChannelNode, error) {
 	nodes, err := s.getChannelNodes(ctx, channelID, messageType)
 	if err != nil {
 		return nil, err
@@ -74,6 +80,15 @@ func (s *ChannelSelector) Select(ctx context.Context, channelID uint, messageTyp
 
 	if len(nodes) == 0 {
 		return nil, fmt.Errorf("no available channel for channel_id=%d type=%s", channelID, messageType)
+	}
+
+	// 过滤排除的供应商（规则引擎切换供应商时使用）
+	if len(excludeProviderIDs) > 0 {
+		nodes = s.filterExcludedProviders(nodes, excludeProviderIDs)
+		if len(nodes) == 0 {
+			return nil, fmt.Errorf("no available channel after excluding providers for channel_id=%d", channelID)
+		}
+		s.logger.Info(fmt.Sprintf("filtered excluded providers, remaining nodes=%d, excluded=%v", len(nodes), excludeProviderIDs))
 	}
 
 	// 获取上次使用的供应商 ID（5 分钟内同一接收者切换供应商）
@@ -91,6 +106,27 @@ func (s *ChannelSelector) Select(ctx context.Context, channelID uint, messageTyp
 	}
 
 	return selected, nil
+}
+
+// filterExcludedProviders 过滤排除的供应商
+func (s *ChannelSelector) filterExcludedProviders(nodes []*ChannelNode, excludeIDs []uint) []*ChannelNode {
+	if len(excludeIDs) == 0 {
+		return nodes
+	}
+
+	// 构建排除ID的map以提高查找效率
+	excludeMap := make(map[uint]bool)
+	for _, id := range excludeIDs {
+		excludeMap[id] = true
+	}
+
+	var filtered []*ChannelNode
+	for _, node := range nodes {
+		if node.ProviderAccount != nil && !excludeMap[node.ProviderAccount.ID] {
+			filtered = append(filtered, node)
+		}
+	}
+	return filtered
 }
 
 // getChannelNodes 获取通道节点列表（使用新的ChannelTemplateBinding）

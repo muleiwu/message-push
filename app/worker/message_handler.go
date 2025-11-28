@@ -162,8 +162,12 @@ func (h *MessageHandler) selectChannel(ctx context.Context, task *model.PushTask
 		return nil, fmt.Errorf("invalid channel_id: %w", err)
 	}
 
+	// 获取需要排除的供应商ID列表（规则引擎切换供应商时设置）
+	excludeProviderIDs := task.GetExcludeProviderIDs()
+
 	// 传入 appID 和 receiver 用于 5 分钟内同一接收者切换供应商策略
-	node, err := h.selector.Select(ctx, channelID, task.MessageType, task.AppID, task.Receiver)
+	// 同时传入排除列表用于规则引擎的切换供应商功能
+	node, err := h.selector.SelectWithExcludes(ctx, channelID, task.MessageType, task.AppID, task.Receiver, excludeProviderIDs)
 	if err != nil {
 		return nil, err
 	}

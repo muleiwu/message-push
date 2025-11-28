@@ -154,10 +154,10 @@ func (s *CallbackService) processCallbackResult(ctx context.Context, providerCod
 		}
 		evalResult := s.ruleEngine.Evaluate(ctx, evalReq)
 
-		// 构造执行上下文
+		// 构造执行上下文（从 pushLog 获取 ProviderAccountID）
 		execCtx := &ExecuteContext{
 			Task:              task,
-			ProviderAccountID: 0, // 回调时可能没有供应商账号ID
+			ProviderAccountID: pushLog.ProviderAccountID, // 从发送日志获取供应商账号ID
 			ProviderCode:      providerCode,
 			ErrorCode:         result.ErrorCode,
 			ErrorMessage:      result.ErrorMessage,
@@ -167,8 +167,8 @@ func (s *CallbackService) processCallbackResult(ctx context.Context, providerCod
 
 		// 执行规则动作
 		execResult := s.actionExecutor.Execute(ctx, evalResult, execCtx)
-		s.logger.Info(fmt.Sprintf("callback rule engine executed task_id=%s action=%s retry=%v",
-			task.TaskID, execResult.Action, execResult.ShouldRetry))
+		s.logger.Info(fmt.Sprintf("callback rule engine executed task_id=%s action=%s retry=%v provider_account_id=%d",
+			task.TaskID, execResult.Action, execResult.ShouldRetry, pushLog.ProviderAccountID))
 
 		// 如果规则引擎决定重试，不更新状态为失败，等待重试
 		if execResult.ShouldRetry {
