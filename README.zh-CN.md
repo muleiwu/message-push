@@ -256,16 +256,23 @@ message-push/
 
 ## 部署
 
-### Docker
+### Docker Compose
+
+```yaml
+# docker-compose.yml
+services:
+  mliev-push:
+    container_name: mliev-push
+    image: docker.cnb.cool/mliev/open/mliev-push:develop
+    restart: always
+    ports:
+      - "8080:8080"
+    volumes:
+      - "./config/:/app/config/"
+```
 
 ```bash
-# 构建镜像
-docker build -t message-push .
-
-# 运行容器
-docker run -d -p 8080:8080 \
-  -v $(pwd)/config.yaml:/app/config.yaml \
-  message-push
+docker compose up -d
 ```
 
 ### Kubernetes
@@ -284,6 +291,13 @@ kubectl apply -f deploy/kubernetes/
 - [安装指南](docs/INSTALL_GUIDE.md)
 - [生产部署](docs/PRODUCTION_DEPLOYMENT.md)
 - [项目规范](docs/PROJECT_SPECIFICATION.md)
+
+## SDKs
+
+| 语言 | 仓库 | 说明 |
+|------|------|------|
+| Go | [push-go](https://github.com/mliev-sdk/push-go) | Go SDK，支持 context 和完整的错误处理 |
+| PHP | [push-php](https://github.com/mliev-sdk/push-php) | PHP SDK，支持 PSR-18 HTTP 客户端 |
 
 ## 技术栈
 
@@ -308,8 +322,8 @@ kubectl apply -f deploy/kubernetes/
 
 ## 社区
 
-| QQ 群 | 企业微信 |
-|:-----:|:--------:|
+| QQ 群 | 微信 |
+|:-----:|:----:|
 | ![QQ](https://static.1ms.run/dwz/image/httpsn3.inklmKc.png) | ![微信](https://static.1ms.run/dwz/image/wechat_qr_code.png) |
 | 群号: 1021660914 | 扫码加入 |
 
