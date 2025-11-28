@@ -27,6 +27,7 @@ type MessageHandler struct {
 	senderFactory       *sender.Factory
 	retryHelper         *helper.RetryHelper
 	signatureMappingDao *dao.ChannelSignatureMappingDAO
+	templateHelper      *helper.TemplateHelper
 }
 
 // NewMessageHandler 创建消息处理器
@@ -39,6 +40,7 @@ func NewMessageHandler() *MessageHandler {
 		senderFactory:       sender.NewFactory(),
 		retryHelper:         helper.NewRetryHelper(),
 		signatureMappingDao: dao.NewChannelSignatureMappingDAO(internalHelper.GetHelper().GetDatabase()),
+		templateHelper:      helper.NewTemplateHelper(),
 	}
 }
 
@@ -97,12 +99,36 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 		}
 	}
 
+	// 解析模板参数并进行映射转换
+	var mappedParams map[string]string
+	if task.TemplateParams != "" && node.ChannelTemplateBinding != nil {
+		// 解析任务的模板参数
+		var templateParams map[string]string
+		if err := json.Unmarshal([]byte(task.TemplateParams), &templateParams); err != nil {
+			h.logger.Warn(fmt.Sprintf("failed to parse template params task_id=%s: %v", taskID, err))
+		} else {
+			// 获取参数映射配置
+			paramMapping, err := node.ChannelTemplateBinding.GetParamMapping()
+			if err != nil {
+				h.logger.Warn(fmt.Sprintf("failed to get param mapping task_id=%s: %v", taskID, err))
+			} else if len(paramMapping) > 0 {
+				// 执行参数映射转换
+				mappedParams = h.templateHelper.MapParams(templateParams, paramMapping)
+				h.logger.Info(fmt.Sprintf("params mapped task_id=%s original=%v mapped=%v", taskID, templateParams, mappedParams))
+			} else {
+				// 没有映射配置，直接使用原参数
+				mappedParams = templateParams
+			}
+		}
+	}
+
 	// 发送消息
 	sendReq := &sender.SendRequest{
 		Task:                   task,
 		ProviderAccount:        providerAccount,
 		ChannelTemplateBinding: node.ChannelTemplateBinding,
 		Signature:              providerSignature,
+		MappedParams:           mappedParams,
 	}
 
 	resp, err := messageSender.Send(ctx, sendReq)

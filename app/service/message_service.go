@@ -249,7 +249,7 @@ func (s *MessageService) QueryTask(ctx context.Context, taskID string) (*model.P
 }
 
 // validateTemplateParams 验证模板参数是否完整
-func (s *MessageService) validateTemplateParams(templateVars []string, params map[string]interface{}) error {
+func (s *MessageService) validateTemplateParams(templateVars []string, params map[string]string) error {
 	var missingVars []string
 	for _, v := range templateVars {
 		if _, ok := params[v]; !ok {

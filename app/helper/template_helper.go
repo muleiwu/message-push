@@ -22,7 +22,7 @@ func NewTemplateHelper() *TemplateHelper {
 }
 
 // Render 渲染模板（支持旧的{{.variable}}和新的{variable}格式）
-func (h *TemplateHelper) Render(templateCode string, params map[string]interface{}) (string, error) {
+func (h *TemplateHelper) Render(templateCode string, params map[string]string) (string, error) {
 	templateContent, err := h.getTemplateContent(templateCode)
 	if err != nil {
 		return "", fmt.Errorf("template not found: %s", templateCode)
@@ -42,7 +42,7 @@ func (h *TemplateHelper) Render(templateCode string, params map[string]interface
 }
 
 // RenderSimple 渲染简单模板（使用{variable}占位符格式）
-func (h *TemplateHelper) RenderSimple(templateContent string, params map[string]interface{}) (string, error) {
+func (h *TemplateHelper) RenderSimple(templateContent string, params map[string]string) (string, error) {
 	result := templateContent
 
 	// 使用正则表达式匹配 {variable} 格式
@@ -54,7 +54,7 @@ func (h *TemplateHelper) RenderSimple(templateContent string, params map[string]
 
 		// 从参数中获取值
 		if value, exists := params[varName]; exists {
-			return fmt.Sprintf("%v", value)
+			return value
 		}
 
 		// 如果参数不存在，保持原样
@@ -65,12 +65,12 @@ func (h *TemplateHelper) RenderSimple(templateContent string, params map[string]
 }
 
 // MapParams 根据参数映射转换参数
-func (h *TemplateHelper) MapParams(params map[string]interface{}, mapping map[string]string) map[string]interface{} {
+func (h *TemplateHelper) MapParams(params map[string]string, mapping map[string]string) map[string]string {
 	if len(mapping) == 0 {
 		return params
 	}
 
-	result := make(map[string]interface{})
+	result := make(map[string]string)
 
 	for systemVar, providerVar := range mapping {
 		if value, exists := params[systemVar]; exists {
@@ -99,7 +99,7 @@ func (h *TemplateHelper) getTemplateContent(templateCode string) (string, error)
 }
 
 // RenderJSON 渲染为JSON格式
-func (h *TemplateHelper) RenderJSON(params map[string]interface{}) (string, error) {
+func (h *TemplateHelper) RenderJSON(params map[string]string) (string, error) {
 	data, err := json.Marshal(params)
 	if err != nil {
 		return "", err
