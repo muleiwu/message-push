@@ -3,6 +3,8 @@ package model
 import (
 	"encoding/json"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // PushTask 推送任务表
@@ -32,7 +34,7 @@ type PushTask struct {
 
 // GetExcludeProviderIDs 获取排除的供应商ID列表
 func (t *PushTask) GetExcludeProviderIDs() []uint {
-	if t.ExcludeProviderIDs == "" {
+	if t.ExcludeProviderIDs == "" || t.ExcludeProviderIDs == "[]" {
 		return nil
 	}
 	var ids []uint
@@ -45,11 +47,20 @@ func (t *PushTask) GetExcludeProviderIDs() []uint {
 // SetExcludeProviderIDs 设置排除的供应商ID列表
 func (t *PushTask) SetExcludeProviderIDs(ids []uint) {
 	if len(ids) == 0 {
-		t.ExcludeProviderIDs = ""
+		t.ExcludeProviderIDs = "[]"
 		return
 	}
 	data, _ := json.Marshal(ids)
 	t.ExcludeProviderIDs = string(data)
+}
+
+// BeforeSave GORM hook - 确保 ExcludeProviderIDs 是有效的 JSON
+func (t *PushTask) BeforeSave(tx *gorm.DB) error {
+	// 如果 ExcludeProviderIDs 为空字符串，设置为有效的空 JSON 数组
+	if t.ExcludeProviderIDs == "" {
+		t.ExcludeProviderIDs = "[]"
+	}
+	return nil
 }
 
 // AddExcludeProviderID 添加一个需要排除的供应商ID
