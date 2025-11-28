@@ -2,7 +2,7 @@
 
 [![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8.svg)](https://golang.org)
 [![Gin Framework](https://img.shields.io/badge/Gin-v1.10-00ADD8.svg)](https://github.com/gin-gonic/gin)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-Proprietary-blue.svg)](LICENSE)
 
 A high-performance, multi-channel message service built with Go. Supports SMS, Email, WeChatWork, DingTalk, and Webhook with enterprise-grade features including queue processing, circuit breaker, rate limiting, and quota management.
 
@@ -329,4 +329,8 @@ For production deployment guide, see [Production Deployment](docs/PRODUCTION_DEP
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Copyright © 2025 Hefei Muleiwu(Mliev) Information Technology Co., Ltd. All Rights Reserved.
+
+This software is provided under a proprietary license. Free for commercial and non-commercial use with restrictions. You must retain copyright notices and "Powered by" marks. Redistribution of derivative works is prohibited.
+
+See the [LICENSE](LICENSE) file for complete terms.

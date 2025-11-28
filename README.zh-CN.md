@@ -2,7 +2,7 @@
 
 [![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8.svg)](https://golang.org)
 [![Gin Framework](https://img.shields.io/badge/Gin-v1.10-00ADD8.svg)](https://github.com/gin-gonic/gin)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-Proprietary-blue.svg)](LICENSE)
 
 一个基于 Go 语言构建的高性能多通道消息推送服务。支持短信、邮件、企业微信、钉钉和 Webhook，具备队列处理、熔断器、限流和配额管理等企业级特性。
 
@@ -329,5 +329,9 @@ kubectl apply -f deploy/kubernetes/
 
 ## 许可证
 
-本项目基于 MIT 许可证开源 - 详见 [LICENSE](LICENSE) 文件。
+版权所有 © 2025 合肥木雷坞信息技术有限公司 保留所有权利
+
+本软件基于自定义授权协议发布。可免费用于商业和非商业用途，但有使用限制。您必须保留版权标识和"Powered by"标识，禁止重新分发派生版本。
+
+完整条款请参阅 [LICENSE](LICENSE) 文件。
 
