@@ -29,10 +29,17 @@ func (receiver Router) InitConfig(helper envInterface.HelperInterface) map[strin
 			// Install API - 系统安装（不需要认证）
 			install := router.Group("/api/install")
 			{
+				// 检查安装状态 - 始终可访问
 				install.GET("/check", deps.WrapHandler(controller.InstallController{}.CheckInstall))
-				install.POST("/test-connection", deps.WrapHandler(controller.InstallController{}.TestConnection))
-				install.POST("/test-redis", deps.WrapHandler(controller.InstallController{}.TestRedisConnection))
-				install.POST("/submit", deps.WrapHandler(controller.InstallController{}.SubmitInstall))
+			}
+
+			// Install API - 安装操作（已安装后禁止访问）
+			installOps := router.Group("/api/install")
+			installOps.Use(middleware.BlockIfInstalledMiddleware())
+			{
+				installOps.POST("/test-connection", deps.WrapHandler(controller.InstallController{}.TestConnection))
+				installOps.POST("/test-redis", deps.WrapHandler(controller.InstallController{}.TestRedisConnection))
+				installOps.POST("/submit", deps.WrapHandler(controller.InstallController{}.SubmitInstall))
 			}
 
 			// Callback API - 服务商回调（不需要认证，供服务商调用）

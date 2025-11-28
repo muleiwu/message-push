@@ -4,9 +4,27 @@ import (
 	"net/http"
 	"strings"
 
+	"cnb.cool/mliev/push/message-push/internal/helper"
 	"cnb.cool/mliev/push/message-push/internal/interfaces"
 	"github.com/gin-gonic/gin"
 )
+
+// BlockIfInstalledMiddleware 阻止已安装系统访问安装路由
+// 如果系统已安装，返回 403 禁止访问
+func BlockIfInstalledMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		installed := helper.GetHelper().GetConfig().GetBool("app.installed", false)
+		if installed {
+			c.JSON(http.StatusForbidden, gin.H{
+				"code":    403,
+				"message": "系统已安装，此接口不可用",
+			})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
 
 // InstallCheckMiddleware 安装检查中间件
 // 如果系统未安装，除豁免路径外的所有请求都将重定向到安装页面
