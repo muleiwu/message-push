@@ -1,4 +1,4 @@
-# 消息推送服务
+# 木雷消息服务
 
 [![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8.svg)](https://golang.org)
 [![Gin Framework](https://img.shields.io/badge/Gin-v1.10-00ADD8.svg)](https://github.com/gin-gonic/gin)
