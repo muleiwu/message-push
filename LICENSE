@@ -1,20 +1,233 @@
-The MIT License (MIT)
+软件授权协议 / Software License Agreement
+================================================================================
 
-Copyright (c) 2024-present, cnb.cool
+版权所有 (c) 2025 合肥木雷坞信息技术有限公司
+Copyright (c) 2025 Hefei Muleiwu(Mliev) Information Technology Co., Ltd.
+保留所有权利 / All Rights Reserved
 
-Permission is hereby granted, free of charge, to any person obtaining 
-a copy of this software and associated documentation files (the “Software”), 
-to deal in the Software without restriction, including without limitation 
-the rights to use, copy, modify, merge, publish, distribute, sublicense, 
-and/or sell copies of the Software, and to permit persons to whom 
-the Software is furnished to do so, subject to the following conditions:
+本协议适用于本软件的所有版本，包括已发布的历史版本及未来版本。
+This Agreement applies to all versions of this Software, including all 
+previously released historical versions and future versions.
 
-The above copyright notice and this permission notice shall be 
-included in all copies or substantial portions of the Software.
+================================================================================
+                              中文版本
+================================================================================
 
-THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS 
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL 
-THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, 
-WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+第一条 定义
+
+1.1 "本软件"指由合肥木雷坞信息技术有限公司（以下简称"本公司"）开发并提供的软件
+    产品，包括但不限于源代码、目标代码、文档、界面设计及相关资料。
+1.2 "您"指接受本协议条款的个人或组织。
+1.3 "商业用途"指任何以营利为目的或用于商业环境中的使用行为。
+1.4 "非商业用途"指个人学习、研究、测试等非营利性使用。
+
+第二条 授权许可
+
+2.1 在完全遵守本协议的前提下，本公司授予您以下权利：
+    a) 免费将本软件用于非商业用途或商业用途；
+    b) 在协议允许范围内修改本软件源代码或界面以适应您的需求；
+    c) 使用本软件构建和运营您的网站或应用。
+
+2.2 您对使用本软件构建的网站或应用中的全部内容拥有所有权，并独立承担相关的
+    审核义务和法律责任。
+
+第三条 使用限制
+
+3.1 您不得对本软件或与之关联的授权进行出租、出售、抵押或发放子许可证。
+
+3.2 无论用途如何、是否经过修改或美化、修改程度如何，只要使用本软件的整体或
+    任何部分，未经本公司书面许可，必须保留页面中的版权标识（包括但不限于
+    "Powered by" 标识及指向 https://www.mliev.com/ 的链接），不得清除、
+    修改或替换。
+
+3.3 禁止在本软件的整体或任何部分基础上开发任何派生版本、修改版本或第三方
+    版本用于重新分发。
+
+3.4 禁止对本软件进行反向工程、反向汇编、反向编译或其他试图获取源代码的行为
+    （本公司提供源代码的情况除外）。
+
+第四条 合规使用要求
+
+4.1 您必须遵守中华人民共和国及您所在地区的所有适用法律法规。
+
+4.2 严禁将本软件用于任何违法、违规活动，包括但不限于：
+    a) 侵犯他人知识产权、隐私权或其他合法权益；
+    b) 传播违法信息、有害内容或垃圾信息；
+    c) 从事欺诈、洗钱或其他违法犯罪活动；
+    d) 违反数据保护法规或未经授权收集、使用个人信息；
+    e) 任何其他违反法律法规或公序良俗的行为。
+
+4.3 因您违反本条规定而产生的一切法律责任和后果，由您自行承担，与本公司无关。
+    若因此给本公司或第三方造成损失，您应承担全部赔偿责任。
+
+第五条 免责声明
+
+5.1 本软件按"现状"提供，不提供任何明示或暗示的担保，包括但不限于适销性、
+    特定用途适用性和非侵权性的担保。
+
+5.2 本公司不对以下情况承担任何责任：
+    a) 使用本软件可能产生的任何直接、间接、附带、特殊或后果性损害；
+    b) 因不可抗力（包括但不限于自然灾害、战争、政府行为）导致的服务中断；
+    c) 因黑客攻击、病毒入侵、系统故障等本公司无法控制的因素造成的损失；
+    d) 您使用本软件构建的网站或应用中的任何内容及由此产生的责任。
+
+5.3 本公司保留随时修改、中止或终止本软件及相关服务的权利，无需事先通知。
+
+第六条 协议终止
+
+6.1 如您违反本协议任何条款，您的授权将自动终止，本公司有权要求您：
+    a) 立即停止使用本软件；
+    b) 删除本软件的所有副本；
+    c) 赔偿因您违约给本公司造成的全部损失。
+
+6.2 本公司保留追究相关法律责任的权利。
+
+第七条 法律适用与争议解决
+
+7.1 本协议的订立、效力、解释、履行及争议解决均适用中华人民共和国法律。
+
+7.2 因本协议产生的任何争议，双方应首先友好协商解决；协商不成的，任何一方
+    均可向本公司所在地有管辖权的人民法院提起诉讼。
+
+第八条 其他条款
+
+8.1 本协议构成您与本公司之间关于本软件使用的完整协议。
+
+8.2 本公司保留随时修改本协议的权利，修改后的协议将在本公司官方网站或代码
+    仓库公布后立即生效。
+
+8.3 本协议的任何条款被认定为无效或不可执行的，不影响其他条款的效力。
+
+8.4 本公司对本协议享有最终解释权。
+
+安装、复制或以其他方式使用本软件，即表示您已阅读、理解并同意接受本协议的
+全部条款。
+
+================================================================================
+                            ENGLISH VERSION
+================================================================================
+
+Article 1 - Definitions
+
+1.1 "Software" refers to the software products developed and provided by Hefei 
+    Muleiwu(Mliev) Information Technology Co., Ltd. (hereinafter "the Company"), 
+    including but not limited to source code, object code, documentation, 
+    interface designs, and related materials.
+1.2 "You" refers to any individual or organization that accepts the terms of 
+    this Agreement.
+1.3 "Commercial Use" refers to any use for profit or in a commercial environment.
+1.4 "Non-Commercial Use" refers to personal learning, research, testing, and 
+    other non-profit uses.
+
+Article 2 - License Grant
+
+2.1 Subject to full compliance with this Agreement, the Company grants You the 
+    following rights:
+    a) To use the Software free of charge for non-commercial or commercial purposes;
+    b) To modify the Software source code or interface within the scope permitted 
+       by this Agreement to meet Your needs;
+    c) To use the Software to build and operate Your websites or applications.
+
+2.2 You own all content in websites or applications built using the Software and 
+    shall independently assume all review obligations and legal responsibilities.
+
+Article 3 - Restrictions
+
+3.1 You shall not rent, sell, pledge, or sublicense the Software or any 
+    associated authorization.
+
+3.2 Regardless of purpose, modification, or degree of modification, as long as 
+    the Software or any part thereof is used, without written permission from 
+    the Company, You must retain copyright notices (including but not limited to 
+    "Powered by" marks and links to https://www.mliev.com/) and shall not remove, 
+    modify, or replace them.
+
+3.3 It is prohibited to develop any derivative versions, modified versions, or 
+    third-party versions based on the Software or any part thereof for 
+    redistribution.
+
+3.4 It is prohibited to reverse engineer, disassemble, decompile, or otherwise 
+    attempt to derive the source code of the Software (except where source code 
+    is provided by the Company).
+
+Article 4 - Compliance Requirements
+
+4.1 You must comply with all applicable laws and regulations of the People's 
+    Republic of China and Your jurisdiction.
+
+4.2 It is strictly prohibited to use the Software for any illegal or unlawful 
+    activities, including but not limited to:
+    a) Infringing upon intellectual property rights, privacy rights, or other 
+       legitimate rights of others;
+    b) Distributing illegal information, harmful content, or spam;
+    c) Engaging in fraud, money laundering, or other criminal activities;
+    d) Violating data protection regulations or collecting/using personal 
+       information without authorization;
+    e) Any other activities that violate laws, regulations, or public morals.
+
+4.3 You shall bear all legal liabilities and consequences arising from Your 
+    violation of this Article, which shall have no relation to the Company. 
+    If such violation causes losses to the Company or third parties, You shall 
+    bear full compensation liability.
+
+Article 5 - Disclaimer
+
+5.1 THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
+    IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS 
+    FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.
+
+5.2 The Company shall not be liable for:
+    a) Any direct, indirect, incidental, special, or consequential damages that 
+       may arise from use of the Software;
+    b) Service interruptions caused by force majeure (including but not limited 
+       to natural disasters, war, government actions);
+    c) Losses caused by factors beyond the Company's control, such as hacker 
+       attacks, virus intrusions, or system failures;
+    d) Any content in websites or applications built using the Software and any 
+       resulting liabilities.
+
+5.3 The Company reserves the right to modify, suspend, or terminate the Software 
+    and related services at any time without prior notice.
+
+Article 6 - Termination
+
+6.1 If You violate any term of this Agreement, Your license shall automatically 
+    terminate, and the Company may require You to:
+    a) Immediately cease using the Software;
+    b) Delete all copies of the Software;
+    c) Compensate the Company for all losses caused by Your breach.
+
+6.2 The Company reserves the right to pursue legal action.
+
+Article 7 - Governing Law and Dispute Resolution
+
+7.1 The formation, validity, interpretation, performance, and dispute resolution 
+    of this Agreement shall be governed by the laws of the People's Republic 
+    of China.
+
+7.2 Any disputes arising from this Agreement shall first be resolved through 
+    friendly negotiation. If negotiation fails, either party may file a lawsuit 
+    with a court of competent jurisdiction where the Company is located.
+
+Article 8 - Miscellaneous
+
+8.1 This Agreement constitutes the entire agreement between You and the Company 
+    regarding the use of the Software.
+
+8.2 The Company reserves the right to modify this Agreement at any time. Modified 
+    agreements shall take effect immediately upon publication on the Company's 
+    official website or code repository.
+
+8.3 If any provision of this Agreement is deemed invalid or unenforceable, it 
+    shall not affect the validity of other provisions.
+
+8.4 The Company reserves the right of final interpretation of this Agreement.
+
+BY INSTALLING, COPYING, OR OTHERWISE USING THE SOFTWARE, YOU ACKNOWLEDGE THAT 
+YOU HAVE READ, UNDERSTOOD, AND AGREED TO BE BOUND BY ALL TERMS OF THIS AGREEMENT.
+
+================================================================================
+
+合肥木雷坞信息技术有限公司
+Hefei Muleiwu(Mliev) Information Technology Co., Ltd.
+官方网站 / Official Website: https://www.mliev.com/
