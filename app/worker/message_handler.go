@@ -100,8 +100,7 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 	}
 
 	// 解析模板参数并进行映射转换
-	var mappedParams []string
-	var mappedParamsMap map[string]string
+	var mappedParams map[string]string
 	if task.TemplateParams != "" && node.ChannelTemplateBinding != nil {
 		// 解析任务的模板参数
 		var templateParams map[string]string
@@ -113,10 +112,9 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 			if err != nil {
 				h.logger.Warn(fmt.Sprintf("failed to get param mapping task_id=%s: %v", taskID, err))
 			} else if len(paramMapping) > 0 {
-				// 执行参数映射转换（有序数组和map两种格式）
+				// 执行参数映射转换
 				mappedParams = h.templateHelper.MapParams(templateParams, paramMapping)
-				mappedParamsMap = h.templateHelper.MapParamsToMap(templateParams, paramMapping)
-				h.logger.Info(fmt.Sprintf("params mapped task_id=%s original=%v mapped=%v mappedMap=%v", taskID, templateParams, mappedParams, mappedParamsMap))
+				h.logger.Info(fmt.Sprintf("params mapped task_id=%s original=%v mapped=%v", taskID, templateParams, mappedParams))
 			}
 		}
 	}
@@ -128,7 +126,6 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 		ChannelTemplateBinding: node.ChannelTemplateBinding,
 		Signature:              providerSignature,
 		MappedParams:           mappedParams,
-		MappedParamsMap:        mappedParamsMap,
 	}
 
 	resp, err := messageSender.Send(ctx, sendReq)

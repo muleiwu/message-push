@@ -131,9 +131,10 @@ func (s *ZrwinfoSMSSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 	}
 
 	// 3. 转换模板参数
-	content, err := s.convertTemplateParams(templateContent, req.Task.TemplateParams)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert template params: %w", err)
+	// 使用 MappedParams，按模板占位符顺序拼接
+	var content = ""
+	if len(req.MappedParams) > 0 {
+		content = s.buildContentFromMapping(templateContent, req.MappedParams)
 	}
 
 	// 4. 构造请求参数
@@ -221,7 +222,48 @@ func (s *ZrwinfoSMSSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 	}, nil
 }
 
-// convertTemplateParams 转换模板参数
+// buildContentFromMapping 从映射后的参数构建内容
+// 从模板内容解析占位符顺序，然后按顺序从 MappedParamsMap 中取值，用 ## 拼接
+func (s *ZrwinfoSMSSender) buildContentFromMapping(templateContent string, params map[string]string) string {
+	if len(params) == 0 {
+		return ""
+	}
+
+	// 如果没有模板内容，直接按 map 顺序拼接
+	if templateContent == "" {
+		var values []string
+		for _, v := range params {
+			values = append(values, v)
+		}
+		return strings.Join(values, "##")
+	}
+
+	// 从模板内容中提取占位符顺序
+	re := regexp.MustCompile(`\{(\w+)\}`)
+	matches := re.FindAllStringSubmatch(templateContent, -1)
+
+	if len(matches) == 0 {
+		return ""
+	}
+
+	// 按占位符出现顺序提取参数值
+	var values []string
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		key := match[1]
+		if v, ok := params[key]; ok {
+			values = append(values, v)
+		} else {
+			values = append(values, "")
+		}
+	}
+
+	return strings.Join(values, "##")
+}
+
+// convertTemplateParams 转换模板参数（兜底方法，用于没有 MappedParamsMap 的情况）
 // 从模板内容解析占位符顺序，然后按顺序从参数 JSON 中取值，用 ## 拼接
 // 例如：模板 "{user}您好，您的订单于{time}已发货"，参数 {"user":"张三","time":"9:40"}
 // 返回 "张三##9:40"
