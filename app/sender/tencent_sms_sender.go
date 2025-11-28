@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"time"
 
 	"cnb.cool/mliev/push/message-push/app/constants"
@@ -151,13 +152,7 @@ func (s *TencentSMSSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 	request.PhoneNumberSet = common.StringPtrs([]string{req.Task.Receiver})
 
 	// 模板参数
-	var params []string
-	if req.Task.TemplateParams != "" {
-		// 尝试解析为 []string
-		if err := json.Unmarshal([]byte(req.Task.TemplateParams), &params); err != nil {
-			return nil, fmt.Errorf("invalid template_params for tencent sms, expected json array: %v", err)
-		}
-	}
+	params := s.buildParamsFromMapping(req)
 	request.TemplateParamSet = common.StringPtrs(params)
 
 	// 4. 序列化请求数据用于日志
@@ -215,6 +210,108 @@ func (s *TencentSMSSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 		RequestData:  string(requestData),
 		ResponseData: string(responseData),
 	}, nil
+}
+
+// buildParamsFromMapping 从 MappedParams 构建有序参数数组
+// 腾讯云要求参数按模板占位符顺序排列
+func (s *TencentSMSSender) buildParamsFromMapping(req *SendRequest) []string {
+	if len(req.MappedParams) == 0 {
+		return []string{}
+	}
+
+	// 获取模板内容
+	templateContent := ""
+	if req.ChannelTemplateBinding != nil && req.ChannelTemplateBinding.ProviderTemplate != nil {
+		templateContent = req.ChannelTemplateBinding.ProviderTemplate.TemplateContent
+	}
+
+	// 如果没有模板内容，直接返回 map 的值
+	if templateContent == "" {
+		var values []string
+		for _, v := range req.MappedParams {
+			values = append(values, v)
+		}
+		return values
+	}
+
+	// 从模板内容中提取占位符顺序
+	// 腾讯云模板格式：{1}, {2}, {3} 或 {var1}, {var2}
+	re := regexp.MustCompile(`\{(\w+)\}`)
+	matches := re.FindAllStringSubmatch(templateContent, -1)
+
+	if len(matches) == 0 {
+		var values []string
+		for _, v := range req.MappedParams {
+			values = append(values, v)
+		}
+		return values
+	}
+
+	// 按占位符出现顺序提取参数值
+	var values []string
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		key := match[1]
+		if v, ok := req.MappedParams[key]; ok {
+			values = append(values, v)
+		} else {
+			values = append(values, "")
+		}
+	}
+
+	return values
+}
+
+// buildParamsFromBatchMapping 从批量请求的 MappedParams 构建有序参数数组
+func (s *TencentSMSSender) buildParamsFromBatchMapping(req *BatchSendRequest) []string {
+	if len(req.MappedParams) == 0 {
+		return []string{}
+	}
+
+	// 获取模板内容
+	templateContent := ""
+	if req.ChannelTemplateBinding != nil && req.ChannelTemplateBinding.ProviderTemplate != nil {
+		templateContent = req.ChannelTemplateBinding.ProviderTemplate.TemplateContent
+	}
+
+	// 如果没有模板内容，直接返回 map 的值
+	if templateContent == "" {
+		var values []string
+		for _, v := range req.MappedParams {
+			values = append(values, v)
+		}
+		return values
+	}
+
+	// 从模板内容中提取占位符顺序
+	re := regexp.MustCompile(`\{(\w+)\}`)
+	matches := re.FindAllStringSubmatch(templateContent, -1)
+
+	if len(matches) == 0 {
+		var values []string
+		for _, v := range req.MappedParams {
+			values = append(values, v)
+		}
+		return values
+	}
+
+	// 按占位符出现顺序提取参数值
+	var values []string
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		key := match[1]
+		if v, ok := req.MappedParams[key]; ok {
+			values = append(values, v)
+		} else {
+			values = append(values, "")
+		}
+	}
+
+	return values
 }
 
 // ==================== BatchSender 接口实现 ====================
@@ -294,12 +391,7 @@ func (s *TencentSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest)
 	request.PhoneNumberSet = common.StringPtrs(phoneNumbers)
 
 	// 模板参数（批量发送时所有号码使用相同模板参数）
-	var params []string
-	if len(req.Tasks) > 0 && req.Tasks[0].TemplateParams != "" {
-		if err := json.Unmarshal([]byte(req.Tasks[0].TemplateParams), &params); err != nil {
-			return nil, fmt.Errorf("invalid template_params for tencent sms: %v", err)
-		}
-	}
+	params := s.buildParamsFromBatchMapping(req)
 	request.TemplateParamSet = common.StringPtrs(params)
 
 	// 4. 序列化请求数据用于日志

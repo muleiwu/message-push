@@ -130,8 +130,11 @@ func (s *AliyunSMSSender) Send(ctx context.Context, req *SendRequest) (*SendResp
 	}
 
 	// 模板参数（阿里云要求JSON对象格式）
-	if req.Task.TemplateParams != "" {
-		sendRequest.TemplateParam = tea.String(req.Task.TemplateParams)
+	var templateParamStr string
+	if len(req.MappedParams) > 0 {
+		paramBytes, _ := json.Marshal(req.MappedParams)
+		templateParamStr = string(paramBytes)
+		sendRequest.TemplateParam = tea.String(templateParamStr)
 	}
 
 	// 4. 序列化请求数据用于日志
@@ -139,7 +142,7 @@ func (s *AliyunSMSSender) Send(ctx context.Context, req *SendRequest) (*SendResp
 		"phone_numbers":   req.Task.Receiver,
 		"sign_name":       signName,
 		"template_code":   templateCode,
-		"template_params": req.Task.TemplateParams,
+		"template_params": templateParamStr,
 	})
 
 	// 5. 发送
@@ -260,22 +263,17 @@ func (s *AliyunSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest) 
 	signNames := make([]string, len(req.Tasks))
 	templateParams := make([]string, len(req.Tasks))
 
+	// 批量发送时使用 MappedParams（所有任务共用相同参数）
+	var mappedParamStr = "{}"
+	if len(req.MappedParams) > 0 {
+		paramBytes, _ := json.Marshal(req.MappedParams)
+		mappedParamStr = string(paramBytes)
+	}
+
 	for i, task := range req.Tasks {
 		phoneNumbers[i] = task.Receiver
 		signNames[i] = signName // 批量发送时，每个号码需要对应一个签名
-
-		// 模板参数：阿里云批量发送要求每个号码对应一个JSON对象
-		if task.TemplateParams != "" {
-			// 验证参数是否为有效JSON
-			var params map[string]interface{}
-			if err := json.Unmarshal([]byte(task.TemplateParams), &params); err == nil {
-				templateParams[i] = task.TemplateParams
-			} else {
-				templateParams[i] = "{}"
-			}
-		} else {
-			templateParams[i] = "{}"
-		}
+		templateParams[i] = mappedParamStr
 	}
 
 	// 序列化为JSON数组
