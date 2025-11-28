@@ -256,16 +256,23 @@ message-push/
 
 ## Deployment
 
-### Docker
+### Docker Compose
+
+```yaml
+# docker-compose.yml
+services:
+  mliev-push:
+    container_name: mliev-push
+    image: docker.cnb.cool/mliev/open/mliev-push:develop
+    restart: always
+    ports:
+      - "8080:8080"
+    volumes:
+      - "./config/:/app/config/"
+```
 
 ```bash
-# Build image
-docker build -t message-push .
-
-# Run container
-docker run -d -p 8080:8080 \
-  -v $(pwd)/config.yaml:/app/config.yaml \
-  message-push
+docker compose up -d
 ```
 
 ### Kubernetes
@@ -284,6 +291,13 @@ For production deployment guide, see [Production Deployment](docs/PRODUCTION_DEP
 - [Installation Guide](docs/INSTALL_GUIDE.md)
 - [Production Deployment](docs/PRODUCTION_DEPLOYMENT.md)
 - [Project Specification](docs/PROJECT_SPECIFICATION.md)
+
+## SDKs
+
+| Language | Repository | Description |
+|----------|------------|-------------|
+| Go | [push-go](https://github.com/mliev-sdk/push-go) | Go SDK with context support and comprehensive error handling |
+| PHP | [push-php](https://github.com/mliev-sdk/push-php) | PHP SDK with PSR-18 HTTP client support |
 
 ## Tech Stack
 
