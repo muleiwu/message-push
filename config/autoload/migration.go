@@ -41,6 +41,9 @@ func (receiver Migration) Get() []any {
 		// 回调和通知日志
 		&model.CallbackLog{},
 		&model.WebhookLog{},
+
+		// 规则引擎
+		&model.FailureRule{},
 	}
 }
 

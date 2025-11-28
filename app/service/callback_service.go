@@ -22,6 +22,8 @@ type CallbackService struct {
 	callbackLogDao *dao.CallbackLogDAO
 	senderFactory  *sender.Factory
 	webhookService *WebhookService
+	ruleEngine     *RuleEngineService
+	actionExecutor *ActionExecutor
 }
 
 // NewCallbackService 创建回调服务
@@ -34,6 +36,8 @@ func NewCallbackService() *CallbackService {
 		callbackLogDao: dao.NewCallbackLogDAO(),
 		senderFactory:  sender.NewFactory(),
 		webhookService: NewWebhookService(),
+		ruleEngine:     GetRuleEngineService(),
+		actionExecutor: NewActionExecutor(),
 	}
 }
 
@@ -119,16 +123,50 @@ func (s *CallbackService) processCallbackResult(ctx context.Context, providerCod
 	switch result.Status {
 	case "delivered":
 		task.Status = constants.TaskStatusSuccess
+		// 更新任务
+		if err := s.taskDao.Update(task); err != nil {
+			return fmt.Errorf("failed to update task: %w", err)
+		}
 	case "failed", "rejected":
-		task.Status = constants.TaskStatusFailed
+		// 使用规则引擎评估回调失败
+		evalReq := &EvaluateRequest{
+			Scene:        model.RuleSceneCallbackFailure,
+			ProviderCode: providerCode,
+			MessageType:  task.MessageType,
+			ErrorCode:    result.ErrorCode,
+			ErrorMessage: result.ErrorMessage,
+			Task:         task,
+		}
+		evalResult := s.ruleEngine.Evaluate(ctx, evalReq)
+
+		// 构造执行上下文
+		execCtx := &ExecuteContext{
+			Task:              task,
+			ProviderAccountID: 0, // 回调时可能没有供应商账号ID
+			ProviderCode:      providerCode,
+			ErrorCode:         result.ErrorCode,
+			ErrorMessage:      result.ErrorMessage,
+			RequestData:       rawData,
+			ResponseData:      "",
+		}
+
+		// 执行规则动作
+		execResult := s.actionExecutor.Execute(ctx, evalResult, execCtx)
+		s.logger.Info(fmt.Sprintf("callback rule engine executed task_id=%s action=%s retry=%v",
+			task.TaskID, execResult.Action, execResult.ShouldRetry))
+
+		// 如果规则引擎决定重试，不更新状态为失败，等待重试
+		if execResult.ShouldRetry {
+			return nil
+		}
+		// 规则引擎已处理任务状态更新
 	default:
 		// 未知状态，记录回调状态但不更新任务主状态
 		s.logger.Warn(fmt.Sprintf("unknown callback status=%s for task_id=%s", result.Status, task.TaskID))
-	}
-
-	// 更新任务（回调状态已变化）
-	if err := s.taskDao.Update(task); err != nil {
-		return fmt.Errorf("failed to update task: %w", err)
+		// 更新任务（回调状态已变化）
+		if err := s.taskDao.Update(task); err != nil {
+			return fmt.Errorf("failed to update task: %w", err)
+		}
 	}
 
 	// 只有主状态发生变化时才触发 Webhook 通知

@@ -205,6 +205,18 @@ func (receiver Router) InitConfig(helper envInterface.HelperInterface) map[strin
 					providerTemplates.PUT("/:id", deps.WrapHandler(admin.TemplateController{}.UpdateProviderTemplate))
 					providerTemplates.DELETE("/:id", deps.WrapHandler(admin.TemplateController{}.DeleteProviderTemplate))
 				}
+
+				// 失败规则管理
+				failureRules := adminGroup.Group("/failure-rules")
+				{
+					failureRules.GET("/options", deps.WrapHandler(admin.FailureRuleController{}.GetFailureRuleOptions))
+					failureRules.POST("/refresh-cache", deps.WrapHandler(admin.FailureRuleController{}.RefreshRuleCache))
+					failureRules.GET("", deps.WrapHandler(admin.FailureRuleController{}.GetFailureRuleList))
+					failureRules.POST("", deps.WrapHandler(admin.FailureRuleController{}.CreateFailureRule))
+					failureRules.GET("/:id", deps.WrapHandler(admin.FailureRuleController{}.GetFailureRule))
+					failureRules.PUT("/:id", deps.WrapHandler(admin.FailureRuleController{}.UpdateFailureRule))
+					failureRules.DELETE("/:id", deps.WrapHandler(admin.FailureRuleController{}.DeleteFailureRule))
+				}
 			}
 
 		},

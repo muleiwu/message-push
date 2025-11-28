@@ -345,5 +345,137 @@ func seed(db *gorm.DB) {
 	}
 	db.Create(providerAccount)
 
+	// 创建默认失败规则
+	seedFailureRules(db)
+
 	log.Println("Seeding completed!")
+}
+
+// seedFailureRules 初始化默认失败规则
+func seedFailureRules(db *gorm.DB) {
+	log.Println("Seeding failure rules...")
+
+	rules := []*model.FailureRule{
+		// 发送失败场景规则
+		{
+			Name:         "余额不足告警",
+			Scene:        model.RuleSceneSendFailure,
+			ErrorKeyword: "余额不足,insufficient balance",
+			Action:       model.RuleActionAlert,
+			ActionConfig: `{"alert_level":"critical"}`,
+			Priority:     100,
+			Status:       1,
+			Remark:       "余额不足时发送告警通知，不重试",
+		},
+		{
+			Name:         "黑名单不重试",
+			Scene:        model.RuleSceneSendFailure,
+			ErrorKeyword: "黑名单,blacklist",
+			Action:       model.RuleActionFail,
+			Priority:     90,
+			Status:       1,
+			Remark:       "黑名单号码直接失败，不重试",
+		},
+		{
+			Name:         "签名未审核不重试",
+			Scene:        model.RuleSceneSendFailure,
+			ErrorKeyword: "签名未审核,signature not approved",
+			Action:       model.RuleActionFail,
+			Priority:     90,
+			Status:       1,
+			Remark:       "签名问题需要人工处理，不重试",
+		},
+		{
+			Name:         "模板未审核不重试",
+			Scene:        model.RuleSceneSendFailure,
+			ErrorKeyword: "模板未审核,template not approved",
+			Action:       model.RuleActionFail,
+			Priority:     90,
+			Status:       1,
+			Remark:       "模板问题需要人工处理，不重试",
+		},
+		{
+			Name:         "手机号无效不重试",
+			Scene:        model.RuleSceneSendFailure,
+			ErrorKeyword: "手机号无效,invalid phone,invalid mobile",
+			Action:       model.RuleActionFail,
+			Priority:     80,
+			Status:       1,
+			Remark:       "手机号格式错误，不重试",
+		},
+		{
+			Name:         "参数错误不重试",
+			Scene:        model.RuleSceneSendFailure,
+			ErrorKeyword: "参数错误,invalid parameter",
+			Action:       model.RuleActionFail,
+			Priority:     80,
+			Status:       1,
+			Remark:       "参数错误，不重试",
+		},
+		{
+			Name:         "网络超时切换供应商",
+			Scene:        model.RuleSceneSendFailure,
+			ErrorKeyword: "timeout,超时,network error",
+			Action:       model.RuleActionSwitchProvider,
+			ActionConfig: `{"exclude_current":true,"max_retry":2}`,
+			Priority:     70,
+			Status:       1,
+			Remark:       "网络超时时尝试切换供应商",
+		},
+		{
+			Name:         "发送失败默认重试",
+			Scene:        model.RuleSceneSendFailure,
+			Action:       model.RuleActionRetry,
+			ActionConfig: `{"max_retry":3,"delay_seconds":2,"backoff_rate":2,"max_delay":60}`,
+			Priority:     0,
+			Status:       1,
+			Remark:       "默认规则：其他发送失败情况重试3次",
+		},
+		// 回调失败场景规则
+		{
+			Name:         "用户关机切换供应商",
+			Scene:        model.RuleSceneCallbackFailure,
+			ErrorKeyword: "关机,power off,shutdown",
+			Action:       model.RuleActionSwitchProvider,
+			ActionConfig: `{"exclude_current":true,"max_retry":1}`,
+			Priority:     50,
+			Status:       1,
+			Remark:       "用户关机时尝试切换供应商重发",
+		},
+		{
+			Name:         "号码停机不重试",
+			Scene:        model.RuleSceneCallbackFailure,
+			ErrorKeyword: "停机,suspended,out of service",
+			Action:       model.RuleActionFail,
+			Priority:     80,
+			Status:       1,
+			Remark:       "号码停机直接失败",
+		},
+		{
+			Name:     "回调失败默认不重试",
+			Scene:    model.RuleSceneCallbackFailure,
+			Action:   model.RuleActionFail,
+			Priority: 0,
+			Status:   1,
+			Remark:   "默认规则：回调失败不重试",
+		},
+	}
+
+	for _, rule := range rules {
+		// 检查是否已存在同名规则
+		var count int64
+		db.Model(&model.FailureRule{}).Where("name = ?", rule.Name).Count(&count)
+		if count > 0 {
+			log.Printf("Rule already exists: %s, skipping...", rule.Name)
+			continue
+		}
+
+		if err := db.Create(rule).Error; err != nil {
+			log.Printf("Failed to create rule %s: %v", rule.Name, err)
+		} else {
+			log.Printf("Created rule: %s", rule.Name)
+		}
+	}
+
+	log.Println("Failure rules seeding completed!")
 }

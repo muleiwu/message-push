@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
-	"time"
 
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dao"
@@ -14,6 +13,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/queue"
 	"cnb.cool/mliev/push/message-push/app/selector"
 	"cnb.cool/mliev/push/message-push/app/sender"
+	"cnb.cool/mliev/push/message-push/app/service"
 	internalHelper "cnb.cool/mliev/push/message-push/internal/helper"
 	"github.com/muleiwu/gsr"
 )
@@ -28,6 +28,8 @@ type MessageHandler struct {
 	retryHelper         *helper.RetryHelper
 	signatureMappingDao *dao.ChannelSignatureMappingDAO
 	templateHelper      *helper.TemplateHelper
+	ruleEngine          *service.RuleEngineService
+	actionExecutor      *service.ActionExecutor
 }
 
 // NewMessageHandler 创建消息处理器
@@ -41,6 +43,8 @@ func NewMessageHandler() *MessageHandler {
 		retryHelper:         helper.NewRetryHelper(),
 		signatureMappingDao: dao.NewChannelSignatureMappingDAO(internalHelper.GetHelper().GetDatabase()),
 		templateHelper:      helper.NewTemplateHelper(),
+		ruleEngine:          service.GetRuleEngineService(),
+		actionExecutor:      service.NewActionExecutor(),
 	}
 }
 
@@ -189,64 +193,49 @@ func (h *MessageHandler) handleSuccess(task *model.PushTask, providerAccountID u
 	h.logger.Info(fmt.Sprintf("message sent successfully task_id=%s provider_id=%s status=%s", task.TaskID, resp.ProviderID, resp.Status))
 }
 
-// handleSendError 处理发送错误
+// handleSendError 处理发送错误（使用规则引擎）
 func (h *MessageHandler) handleSendError(task *model.PushTask, providerAccountID uint, resp *sender.SendResponse) {
 	// 通知选择器失败
 	h.selector.ReportFailure(providerAccountID)
 
-	// 判断是否需要重试
-	shouldRetry, delay := h.retryHelper.ShouldRetry(resp.ErrorMessage, task.RetryCount, task.MaxRetry)
-
-	if shouldRetry {
-		task.RetryCount++
-		h.taskDao.Update(task)
-
-		// 记录重试日志（每次新增，便于观测请求链路）
-		h.logDao.Create(&model.PushLog{
-			TaskID:            task.TaskID,
-			AppID:             task.AppID,
-			ProviderAccountID: providerAccountID,
-			Status:            "retry",
-			RequestData:       resp.RequestData,
-			ResponseData:      resp.ResponseData,
-			ErrorMessage:      resp.ErrorMessage,
-		})
-
-		// 重新推送到队列
-		go func() {
-			time.Sleep(delay)
-			producer := queue.NewProducer(internalHelper.GetHelper().GetRedis())
-			producer.Push(context.Background(), task)
-		}()
-
-		h.logger.Info(fmt.Sprintf("message will retry task_id=%s retry_count=%d delay=%v", task.TaskID, task.RetryCount, delay))
-	} else {
-		h.handleFailure(task, providerAccountID, resp)
-	}
-}
-
-// handleFailure 处理失败（有供应商响应数据）
-func (h *MessageHandler) handleFailure(task *model.PushTask, providerAccountID uint, resp *sender.SendResponse) {
-	task.Status = constants.TaskStatusFailed
-	h.taskDao.Update(task)
-
-	// 记录日志（每次新增，便于观测请求链路）
-	if providerAccountID > 0 {
-		h.logDao.Create(&model.PushLog{
-			TaskID:            task.TaskID,
-			AppID:             task.AppID,
-			ProviderAccountID: providerAccountID,
-			Status:            "failed",
-			RequestData:       resp.RequestData,
-			ResponseData:      resp.ResponseData,
-			ErrorMessage:      resp.ErrorMessage,
-		})
+	// 获取供应商代码
+	providerCode := ""
+	providerAccountDao := dao.NewProviderAccountDAO()
+	if account, err := providerAccountDao.GetByID(providerAccountID); err == nil {
+		providerCode = account.ProviderCode
 	}
 
-	h.logger.Error(fmt.Sprintf("message failed task_id=%s error=%s", task.TaskID, resp.ErrorMessage))
+	// 使用规则引擎评估
+	evalReq := &service.EvaluateRequest{
+		Scene:        model.RuleSceneSendFailure,
+		ProviderCode: providerCode,
+		MessageType:  task.MessageType,
+		ErrorCode:    resp.ErrorCode,
+		ErrorMessage: resp.ErrorMessage,
+		Task:         task,
+	}
+	evalResult := h.ruleEngine.Evaluate(context.Background(), evalReq)
+
+	// 构造执行上下文
+	execCtx := &service.ExecuteContext{
+		Task:              task,
+		ProviderAccountID: providerAccountID,
+		ProviderCode:      providerCode,
+		ErrorCode:         resp.ErrorCode,
+		ErrorMessage:      resp.ErrorMessage,
+		RequestData:       resp.RequestData,
+		ResponseData:      resp.ResponseData,
+	}
+
+	// 执行规则动作
+	execResult := h.actionExecutor.Execute(context.Background(), evalResult, execCtx)
+
+	h.logger.Info(fmt.Sprintf("rule engine executed task_id=%s action=%s retry=%v",
+		task.TaskID, execResult.Action, execResult.ShouldRetry))
 }
 
 // handleEarlyFailure 处理早期失败（发送前的错误，无供应商响应数据）
+// 早期失败不使用规则引擎，直接标记失败
 func (h *MessageHandler) handleEarlyFailure(task *model.PushTask, providerAccountID uint, errorMsg string) {
 	task.Status = constants.TaskStatusFailed
 	h.taskDao.Update(task)
