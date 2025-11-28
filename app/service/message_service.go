@@ -84,6 +84,15 @@ func (s *MessageService) Send(ctx context.Context, req *dto.SendRequest) (*dto.S
 		return nil, fmt.Errorf("message template is not active")
 	}
 
+	// 验证模板参数
+	templateVars, err := messageTemplate.GetVariables()
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse template variables: %w", err)
+	}
+	if err := s.validateTemplateParams(templateVars, req.TemplateParams); err != nil {
+		return nil, err
+	}
+
 	content, err := s.templateHelper.RenderSimple(messageTemplate.Content, req.TemplateParams)
 	if err != nil {
 		return nil, fmt.Errorf("failed to render template: %w", err)
@@ -166,6 +175,15 @@ func (s *MessageService) BatchSend(ctx context.Context, req *dto.BatchSendReques
 		return nil, fmt.Errorf("message template is not active")
 	}
 
+	// 验证模板参数
+	templateVars, err := messageTemplate.GetVariables()
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse template variables: %w", err)
+	}
+	if err := s.validateTemplateParams(templateVars, req.TemplateParams); err != nil {
+		return nil, err
+	}
+
 	batchID := uuid.New().String()
 	var tasks []*model.PushTask
 	successCount := 0
@@ -228,6 +246,20 @@ func (s *MessageService) QueryTask(ctx context.Context, taskID string) (*model.P
 		return nil, fmt.Errorf("task not found: %w", err)
 	}
 	return task, nil
+}
+
+// validateTemplateParams 验证模板参数是否完整
+func (s *MessageService) validateTemplateParams(templateVars []string, params map[string]interface{}) error {
+	var missingVars []string
+	for _, v := range templateVars {
+		if _, ok := params[v]; !ok {
+			missingVars = append(missingVars, v)
+		}
+	}
+	if len(missingVars) > 0 {
+		return fmt.Errorf("missing template params: %v", missingVars)
+	}
+	return nil
 }
 
 // isValidMessageType 验证消息类型
