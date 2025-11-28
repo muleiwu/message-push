@@ -10,7 +10,6 @@ type PushTask struct {
 	TaskID         string     `gorm:"type:varchar(36);uniqueIndex:uk_task_id;not null;comment:任务UUID" json:"task_id"`
 	AppID          string     `gorm:"type:varchar(32);not null;index:idx_app_id_status;comment:应用ID" json:"app_id"`
 	ChannelID      uint       `gorm:"type:bigint unsigned;not null;index:idx_channel;comment:通道ID" json:"channel_id"`
-	ProviderMsgID  string     `gorm:"type:varchar(100);index:idx_provider_msg_id;comment:服务商返回的消息ID" json:"provider_msg_id"`
 	MessageType    string     `gorm:"type:varchar(20);not null;comment:消息类型：sms, email等" json:"message_type"`
 	Receiver       string     `gorm:"type:varchar(100);not null;comment:接收者（手机号/邮箱/UserID等）" json:"receiver"`
 	Title          string     `gorm:"type:varchar(200);comment:标题（邮件、企微、钉钉使用）" json:"title"`

@@ -102,23 +102,6 @@ func (d *PushTaskDAO) IncrementRetryCount(taskID string) error {
 		UpdateColumn("retry_count", gorm.Expr("retry_count + 1")).Error
 }
 
-// GetByProviderID 根据服务商消息ID获取任务
-func (d *PushTaskDAO) GetByProviderID(providerMsgID string) (*model.PushTask, error) {
-	var task model.PushTask
-	err := d.db.Where("provider_msg_id = ?", providerMsgID).First(&task).Error
-	if err != nil {
-		return nil, err
-	}
-	return &task, nil
-}
-
-// UpdateProviderMsgID 更新服务商消息ID
-func (d *PushTaskDAO) UpdateProviderMsgID(taskID, providerMsgID string) error {
-	return d.db.Model(&model.PushTask{}).
-		Where("task_id = ?", taskID).
-		Update("provider_msg_id", providerMsgID).Error
-}
-
 // GetTimeoutSentTasks 获取超时的 sent 状态短信任务
 func (d *PushTaskDAO) GetTimeoutSentTasks(timeout time.Duration, limit int) ([]*model.PushTask, error) {
 	var tasks []*model.PushTask

@@ -45,6 +45,16 @@ func (d *PushLogDAO) GetByID(id uint) (*model.PushLog, error) {
 	return &log, nil
 }
 
+// GetByProviderMsgID 根据服务商消息ID获取日志
+func (d *PushLogDAO) GetByProviderMsgID(providerMsgID string) (*model.PushLog, error) {
+	var log model.PushLog
+	err := d.db.Where("provider_msg_id = ?", providerMsgID).First(&log).Error
+	if err != nil {
+		return nil, err
+	}
+	return &log, nil
+}
+
 // List 获取日志列表（支持筛选）
 func (d *PushLogDAO) List(req *dto.LogListRequest) ([]*model.PushLog, int64, error) {
 	var logs []*model.PushLog

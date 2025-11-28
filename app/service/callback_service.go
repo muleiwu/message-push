@@ -79,10 +79,10 @@ func (s *CallbackService) HandleCallback(ctx context.Context, providerCode strin
 
 // processCallbackResult 处理单个回调结果
 func (s *CallbackService) processCallbackResult(ctx context.Context, providerCode string, result *sender.CallbackResult, rawData string) error {
-	// 1. 通过 ProviderID 查找任务
-	task, err := s.taskDao.GetByProviderID(result.ProviderID)
+	// 1. 通过 ProviderID 在 push_logs 中查找日志，再关联任务
+	pushLog, err := s.logDao.GetByProviderMsgID(result.ProviderID)
 	if err != nil {
-		// 如果找不到任务，可能是回调延迟或者任务已被清理
+		// 如果找不到日志，可能是回调延迟或者日志已被清理
 		// 仍然记录回调日志（无任务关联）
 		s.callbackLogDao.Create(&model.CallbackLog{
 			ProviderCode:   providerCode,
@@ -92,7 +92,22 @@ func (s *CallbackService) processCallbackResult(ctx context.Context, providerCod
 			ErrorMessage:   result.ErrorMessage,
 			RawData:        rawData,
 		})
-		s.logger.Warn(fmt.Sprintf("task not found for provider_id=%s", result.ProviderID))
+		s.logger.Warn(fmt.Sprintf("push_log not found for provider_id=%s", result.ProviderID))
+		return nil
+	}
+
+	// 通过日志的 TaskID 查找任务
+	task, err := s.taskDao.GetByTaskID(pushLog.TaskID)
+	if err != nil {
+		s.callbackLogDao.Create(&model.CallbackLog{
+			ProviderCode:   providerCode,
+			ProviderID:     result.ProviderID,
+			CallbackStatus: result.Status,
+			ErrorCode:      result.ErrorCode,
+			ErrorMessage:   result.ErrorMessage,
+			RawData:        rawData,
+		})
+		s.logger.Warn(fmt.Sprintf("task not found for task_id=%s (provider_id=%s)", pushLog.TaskID, result.ProviderID))
 		return nil
 	}
 
