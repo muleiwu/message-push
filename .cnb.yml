@@ -210,7 +210,7 @@ $:
     - <<: *build-amd64
     - <<: *build-arm
     #    - <<: *build-loong64
-    #    - <<: *build-bin
+    - <<: *build-bin
     - services:
         - docker
       name: "push"
