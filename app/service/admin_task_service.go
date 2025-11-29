@@ -14,6 +14,7 @@ type AdminTaskService struct {
 	pushTaskDAO  *dao.PushTaskDAO
 	batchTaskDAO *dao.PushBatchTaskDAO
 	appDAO       *dao.ApplicationDAO
+	pushLogDAO   *dao.PushLogDAO
 }
 
 // NewAdminTaskService 创建服务
@@ -22,6 +23,7 @@ func NewAdminTaskService() *AdminTaskService {
 		pushTaskDAO:  dao.NewPushTaskDAO(),
 		batchTaskDAO: dao.NewPushBatchTaskDAO(),
 		appDAO:       dao.NewApplicationDAO(),
+		pushLogDAO:   dao.NewPushLogDAO(),
 	}
 }
 
@@ -77,12 +79,18 @@ func (s *AdminTaskService) GetPushTaskList(req *dto.PushTaskListRequest) (*dto.P
 			}
 		}
 
+		// 从最新的 push_log 获取 ProviderMsgID
+		providerMsgID := ""
+		if logs, err := s.pushLogDAO.GetByTaskID(task.TaskID); err == nil && len(logs) > 0 {
+			providerMsgID = logs[0].ProviderMsgID // 最新的日志
+		}
+
 		items = append(items, &dto.PushTaskItem{
 			ID:             task.ID,
 			TaskID:         task.TaskID,
 			AppID:          task.AppID,
 			ChannelID:      task.ChannelID,
-			ProviderMsgID:  task.ProviderMsgID,
+			ProviderMsgID:  providerMsgID,
 			MessageType:    task.MessageType,
 			Receiver:       task.Receiver,
 			Title:          task.Title,
@@ -206,12 +214,18 @@ func (s *AdminTaskService) convertPushTaskToItem(task *model.PushTask) *dto.Push
 		}
 	}
 
+	// 从最新的 push_log 获取 ProviderMsgID
+	providerMsgID := ""
+	if logs, err := s.pushLogDAO.GetByTaskID(task.TaskID); err == nil && len(logs) > 0 {
+		providerMsgID = logs[0].ProviderMsgID // 最新的日志
+	}
+
 	return &dto.PushTaskItem{
 		ID:             task.ID,
 		TaskID:         task.TaskID,
 		AppID:          task.AppID,
 		ChannelID:      task.ChannelID,
-		ProviderMsgID:  task.ProviderMsgID,
+		ProviderMsgID:  providerMsgID,
 		MessageType:    task.MessageType,
 		Receiver:       task.Receiver,
 		Title:          task.Title,

@@ -162,8 +162,12 @@ func (h *MessageHandler) selectChannel(ctx context.Context, task *model.PushTask
 		return nil, fmt.Errorf("invalid channel_id: %w", err)
 	}
 
+	// 获取需要排除的供应商ID列表（规则引擎切换供应商时设置）
+	excludeProviderIDs := task.GetExcludeProviderIDs()
+
 	// 传入 appID 和 receiver 用于 5 分钟内同一接收者切换供应商策略
-	node, err := h.selector.Select(ctx, channelID, task.MessageType, task.AppID, task.Receiver)
+	// 同时传入排除列表用于规则引擎的切换供应商功能
+	node, err := h.selector.SelectWithExcludes(ctx, channelID, task.MessageType, task.AppID, task.Receiver, excludeProviderIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -173,15 +177,15 @@ func (h *MessageHandler) selectChannel(ctx context.Context, task *model.PushTask
 
 // handleSuccess 处理成功
 func (h *MessageHandler) handleSuccess(task *model.PushTask, providerAccountID uint, resp *sender.SendResponse) {
-	task.ProviderMsgID = resp.ProviderID // 保存服务商消息ID，用于回调匹配
-	task.Status = resp.Status            // 使用发送器返回的状态（processing=等待回调, success=直接成功）
+	task.Status = resp.Status // 使用发送器返回的状态（processing=等待回调, success=直接成功）
 	h.taskDao.Update(task)
 
-	// 记录日志（每次新增，便于观测请求链路）
+	// 记录日志（每次新增，便于观测请求链路），ProviderMsgID 保存在日志中用于回调匹配
 	h.logDao.Create(&model.PushLog{
 		TaskID:            task.TaskID,
 		AppID:             task.AppID,
 		ProviderAccountID: providerAccountID,
+		ProviderMsgID:     resp.ProviderID,
 		Status:            "success",
 		RequestData:       resp.RequestData,
 		ResponseData:      resp.ResponseData,

@@ -92,6 +92,11 @@ func preMigrationCleanup(db *gorm.DB) error {
 		return fmt.Errorf("failed to remove template_code from message_templates: %w", err)
 	}
 
+	// 将 provider_msg_id 从 push_tasks 迁移到 push_logs
+	if err := migrateProviderMsgIDToPushLogs(db); err != nil {
+		return fmt.Errorf("failed to migrate provider_msg_id to push_logs: %w", err)
+	}
+
 	log.Println("Pre-migration cleanup completed!")
 	return nil
 }
@@ -260,6 +265,95 @@ func removeMessageTemplateCodeColumn(db *gorm.DB) error {
 	}
 
 	log.Println("Successfully removed template_code column from message_templates table")
+	return nil
+}
+
+// migrateProviderMsgIDToPushLogs 将 provider_msg_id 从 push_tasks 迁移到 push_logs
+func migrateProviderMsgIDToPushLogs(db *gorm.DB) error {
+	// 检查 push_tasks 表是否存在
+	if !db.Migrator().HasTable("push_tasks") {
+		log.Println("Table push_tasks does not exist, skipping provider_msg_id migration...")
+		return nil
+	}
+
+	// 检查 push_tasks 表是否有 provider_msg_id 列
+	if !db.Migrator().HasColumn(&model.PushTask{}, "provider_msg_id") {
+		log.Println("Column provider_msg_id does not exist in push_tasks, skipping migration...")
+		return nil
+	}
+
+	log.Println("Migrating provider_msg_id from push_tasks to push_logs...")
+
+	// 检查 push_logs 表是否存在
+	if !db.Migrator().HasTable("push_logs") {
+		log.Println("Table push_logs does not exist, will be created by AutoMigrate...")
+		// 先创建 push_logs 表（如果不存在），以便添加 provider_msg_id 列
+		if err := db.AutoMigrate(&model.PushLog{}); err != nil {
+			return fmt.Errorf("failed to create push_logs table: %w", err)
+		}
+	}
+
+	// 检查 push_logs 表是否已有 provider_msg_id 列
+	if !db.Migrator().HasColumn(&model.PushLog{}, "provider_msg_id") {
+		log.Println("Adding provider_msg_id column to push_logs...")
+		if err := db.Exec("ALTER TABLE push_logs ADD COLUMN provider_msg_id VARCHAR(100) DEFAULT NULL COMMENT '服务商返回的消息ID'").Error; err != nil {
+			return fmt.Errorf("failed to add provider_msg_id column to push_logs: %w", err)
+		}
+
+		// 添加索引
+		log.Println("Adding index idx_provider_msg_id on push_logs...")
+		if err := db.Exec("ALTER TABLE push_logs ADD INDEX idx_provider_msg_id (provider_msg_id)").Error; err != nil {
+			log.Printf("Warning: Failed to add index idx_provider_msg_id: %v", err)
+		}
+	}
+
+	// 迁移数据：将 push_tasks 中的 provider_msg_id 更新到对应的 push_logs 记录
+	// 策略：对于每个有 provider_msg_id 的 task，更新其最新的 push_log 记录
+	log.Println("Migrating provider_msg_id data...")
+	result := db.Exec(`
+		UPDATE push_logs pl
+		INNER JOIN (
+			SELECT task_id, provider_msg_id 
+			FROM push_tasks 
+			WHERE provider_msg_id IS NOT NULL AND provider_msg_id != ''
+		) pt ON pl.task_id = pt.task_id
+		INNER JOIN (
+			SELECT task_id, MAX(id) as max_id
+			FROM push_logs
+			GROUP BY task_id
+		) latest ON pl.task_id = latest.task_id AND pl.id = latest.max_id
+		SET pl.provider_msg_id = pt.provider_msg_id
+		WHERE pl.provider_msg_id IS NULL OR pl.provider_msg_id = ''
+	`)
+	if result.Error != nil {
+		return fmt.Errorf("failed to migrate provider_msg_id data: %w", result.Error)
+	}
+	log.Printf("Migrated %d push_log records with provider_msg_id", result.RowsAffected)
+
+	// 删除 push_tasks 表的 provider_msg_id 索引（如果存在）
+	var indexExists int64
+	db.Raw(`
+		SELECT COUNT(*) 
+		FROM INFORMATION_SCHEMA.STATISTICS 
+		WHERE TABLE_SCHEMA = DATABASE()
+		  AND TABLE_NAME = 'push_tasks'
+		  AND INDEX_NAME = 'idx_provider_msg_id'
+	`).Scan(&indexExists)
+
+	if indexExists > 0 {
+		log.Println("Dropping index idx_provider_msg_id from push_tasks...")
+		if err := db.Exec("ALTER TABLE push_tasks DROP INDEX idx_provider_msg_id").Error; err != nil {
+			log.Printf("Warning: Failed to drop index idx_provider_msg_id: %v", err)
+		}
+	}
+
+	// 删除 push_tasks 表的 provider_msg_id 列
+	log.Println("Dropping provider_msg_id column from push_tasks...")
+	if err := db.Exec("ALTER TABLE push_tasks DROP COLUMN provider_msg_id").Error; err != nil {
+		return fmt.Errorf("failed to drop provider_msg_id column from push_tasks: %w", err)
+	}
+
+	log.Println("Successfully migrated provider_msg_id from push_tasks to push_logs")
 	return nil
 }
 

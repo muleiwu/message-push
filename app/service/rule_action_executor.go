@@ -18,21 +18,23 @@ import (
 
 // ActionExecutor 规则动作执行器
 type ActionExecutor struct {
-	logger     gsr.Logger
-	taskDAO    *dao.PushTaskDAO
-	logDAO     *dao.PushLogDAO
-	producer   *queue.Producer
-	httpClient *http.Client
+	logger            gsr.Logger
+	taskDAO           *dao.PushTaskDAO
+	logDAO            *dao.PushLogDAO
+	producer          *queue.Producer
+	httpClient        *http.Client
+	defaultWebhookURL string // 系统默认告警 Webhook URL
 }
 
 // NewActionExecutor 创建动作执行器
 func NewActionExecutor() *ActionExecutor {
 	h := internalHelper.GetHelper()
 	return &ActionExecutor{
-		logger:   h.GetLogger(),
-		taskDAO:  dao.NewPushTaskDAO(),
-		logDAO:   dao.NewPushLogDAO(),
-		producer: queue.NewProducer(h.GetRedis()),
+		logger:            h.GetLogger(),
+		taskDAO:           dao.NewPushTaskDAO(),
+		logDAO:            dao.NewPushLogDAO(),
+		producer:          queue.NewProducer(h.GetRedis()),
+		defaultWebhookURL: h.GetEnv().GetString("alert.default_webhook_url", ""),
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -188,7 +190,14 @@ func (e *ActionExecutor) executeSwitchProvider(ctx context.Context, result *Eval
 		return e.executeFail(ctx, result, execCtx)
 	}
 
-	// 更新任务重试次数
+	// 如果配置了排除当前供应商，将当前供应商添加到排除列表
+	if config.ExcludeCurrent && execCtx.ProviderAccountID > 0 {
+		task.AddExcludeProviderID(execCtx.ProviderAccountID)
+		e.logger.Info(fmt.Sprintf("added provider to exclude list task_id=%s provider_id=%d exclude_list=%v",
+			task.TaskID, execCtx.ProviderAccountID, task.GetExcludeProviderIDs()))
+	}
+
+	// 更新任务重试次数和排除列表
 	task.RetryCount++
 	if err := e.taskDAO.Update(task); err != nil {
 		e.logger.Error(fmt.Sprintf("failed to update task for switch provider: %v", err))
@@ -202,10 +211,10 @@ func (e *ActionExecutor) executeSwitchProvider(ctx context.Context, result *Eval
 		Status:            "switch_provider",
 		RequestData:       execCtx.RequestData,
 		ResponseData:      execCtx.ResponseData,
-		ErrorMessage:      fmt.Sprintf("switching provider, exclude current: %v", config.ExcludeCurrent),
+		ErrorMessage:      fmt.Sprintf("switching provider, exclude current: %v, excluded providers: %v", config.ExcludeCurrent, task.GetExcludeProviderIDs()),
 	})
 
-	// 重新推送到队列（选择器会自动选择其他供应商）
+	// 重新推送到队列（选择器会根据 ExcludeProviderIDs 选择其他供应商）
 	go func() {
 		// 稍微延迟一下再推送
 		time.Sleep(1 * time.Second)
@@ -214,8 +223,8 @@ func (e *ActionExecutor) executeSwitchProvider(ctx context.Context, result *Eval
 		}
 	}()
 
-	e.logger.Info(fmt.Sprintf("task scheduled for switch provider retry task_id=%s exclude_current=%v",
-		task.TaskID, config.ExcludeCurrent))
+	e.logger.Info(fmt.Sprintf("task scheduled for switch provider retry task_id=%s exclude_current=%v excluded_providers=%v",
+		task.TaskID, config.ExcludeCurrent, task.GetExcludeProviderIDs()))
 
 	return &ExecuteResult{
 		Action:      model.RuleActionSwitchProvider,
@@ -285,6 +294,12 @@ func (e *ActionExecutor) executeAlert(ctx context.Context, result *EvaluateResul
 		}
 	}
 
+	// 如果规则未配置 webhook URL，使用系统默认配置
+	if config.WebhookURL == "" && e.defaultWebhookURL != "" {
+		config.WebhookURL = e.defaultWebhookURL
+		e.logger.Info(fmt.Sprintf("using default alert webhook URL for task_id=%s", task.TaskID))
+	}
+
 	// 发送告警
 	alertSent := false
 	if config.WebhookURL != "" {
@@ -294,6 +309,8 @@ func (e *ActionExecutor) executeAlert(ctx context.Context, result *EvaluateResul
 		} else {
 			alertSent = true
 		}
+	} else {
+		e.logger.Warn(fmt.Sprintf("no alert webhook configured for task_id=%s, skipping alert", task.TaskID))
 	}
 
 	// 记录告警日志
