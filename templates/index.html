@@ -272,7 +272,7 @@
             <nav class="nav-links">
                 <a href="#features">特性</a>
                 <a href="#architecture">架构</a>
-                <a href="https://github.com/cnb-cool/mliev/push/message-push" target="_blank">GitHub</a>
+                <a href="https://github.com/muleiwu/message-push" target="_blank">GitHub</a>
                 <a href="/admin" class="nav-btn">进入控制台</a>
             </nav>
         </div>
@@ -282,10 +282,10 @@
         <section class="hero">
             <div class="container">
                 <h1>木雷企业级消息服务平台</h1>
-                <p>基于 Go + Gin 构建的高性能消息服务。支持多渠道分发、流量控制、实时监控，助力企业构建稳定可靠的消息触达能力。</p>
+                <p>基于 Go + Gin 构建的高性能消息服务。支持短信（阿里云/腾讯云/助通）、邮件、企业微信、钉钉等多渠道分发。内置规则引擎、流量控制与实时监控，助力企业构建稳定可靠的消息触达能力。</p>
                 <div class="cta-group">
                     <a href="/admin" class="btn btn-primary">立即开始</a>
-                    <a href="https://github.com/cnb-cool/mliev/push/message-push" target="_blank"
+                    <a href="https://github.com/muleiwu/message-push" target="_blank"
                         class="btn btn-outline">查看源码</a>
                 </div>
             </div>
@@ -301,17 +301,27 @@
                     <div class="card">
                         <div class="icon">🚀</div>
                         <h3>高性能架构</h3>
-                        <p>基于 Go 语言开发，采用 Gin 框架，内置连接池与协程池，轻松应对高并发场景。</p>
+                        <p>基于 Go 1.23+ 开发，采用 Gin 框架，内置连接池与协程池，轻松应对高并发场景。</p>
                     </div>
                     <div class="card">
                         <div class="icon">📡</div>
                         <h3>多渠道支持</h3>
-                        <p>统一接口适配阿里云 SMS、邮件等多种渠道，支持权重配置与智能路由。</p>
+                        <p>统一接口适配阿里云/腾讯云/助通 SMS、邮件、企业微信、钉钉等多种渠道，支持权重配置与智能路由。</p>
+                    </div>
+                    <div class="card">
+                        <div class="icon">⚙️</div>
+                        <h3>规则引擎</h3>
+                        <p>内置智能规则引擎，支持失败重试、自动切换渠道、熔断降级等策略，确保消息高可靠送达。</p>
                     </div>
                     <div class="card">
                         <div class="icon">🛡️</div>
                         <h3>稳定性保障</h3>
                         <p>内置熔断降级、重试机制、QPS 限流与每日配额控制，保障系统稳健运行。</p>
+                    </div>
+                    <div class="card">
+                        <div class="icon">🔄</div>
+                        <h3>回调处理</h3>
+                        <p>支持供应商状态回调处理与 Webhook 通知，实时掌握消息投递状态。</p>
                     </div>
                     <div class="card">
                         <div class="icon">📊</div>
@@ -322,6 +332,11 @@
                         <div class="icon">🔐</div>
                         <h3>安全可靠</h3>
                         <p>支持 AppSecret 签名验证、防重放攻击，确保 API 调用的安全性。</p>
+                    </div>
+                    <div class="card">
+                        <div class="icon">🖥️</div>
+                        <h3>管理后台</h3>
+                        <p>提供基于 Vue.js + Ant Design 的可视化管理后台，方便进行配置管理与数据监控。</p>
                     </div>
                     <div class="card">
                         <div class="icon">📦</div>
@@ -346,6 +361,7 @@
                     <span class="badge">MySQL / PostgreSQL</span>
                     <span class="badge">Viper</span>
                     <span class="badge">Zap Logger</span>
+                    <span class="badge">Vue.js + Ant Design</span>
                     <span class="badge">Docker</span>
                 </div>
             </div>

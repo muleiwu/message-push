@@ -56,7 +56,7 @@ A high-performance, highly available multi-channel message service built with Go
 │         (Failure Handling / Retry / Switch Provider)            │
 ├─────────────────────────────────────────────────────────────────┤
 │                    Provider Senders                             │
-│        (Aliyun / Tencent / Zrwinfo / SMTP / WeChatWork)        │
+│        (Aliyun / Tencent / Zrwinfo / SMTP / WeChatWork)         │
 ├─────────────────────────────────────────────────────────────────┤
 │                   Callback Processing                           │
 │          (Status Callbacks / Webhook Notifications)             │
@@ -65,6 +65,8 @@ A high-performance, highly available multi-channel message service built with Go
 │         (Failure Handling / Retry / Switch Provider)            │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+![Architecture](https://static.1ms.run/image/message-push/mermaid-20251130%20005951.jpeg)
 
 ## Quick Start
 
