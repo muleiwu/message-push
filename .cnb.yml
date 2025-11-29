@@ -226,14 +226,14 @@ $:
           type: cnb:await
           options:
             key: build-arm64
-        #        - name: await the loong64
-        #          type: cnb:await
-        #          options:
-        #            key: build-loong64
-        #        - name: await the build-bin
-        #          type: cnb:await
-        #          options:
-        #            key: build-bin
+#        - name: await the loong64
+#          type: cnb:await
+#          options:
+#            key: build-loong64
+        - name: await the build-bin
+          type: cnb:await
+          options:
+            key: build-bin
         - name: manifest latest private
           image: cnbcool/manifest
           settings:
