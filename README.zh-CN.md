@@ -4,7 +4,7 @@
 [![Gin Framework](https://img.shields.io/badge/Gin-v1.10-00ADD8.svg)](https://github.com/gin-gonic/gin)
 [![License](https://img.shields.io/badge/License-Proprietary-blue.svg)](LICENSE)
 
-一个基于 Go 语言构建的高性能多通道消息推送服务。支持短信、邮件、企业微信、钉钉和 Webhook，具备队列处理、熔断器、限流和配额管理等企业级特性。
+一个基于 Go 语言构建的高性能、高可用多通道消息推送服务。支持短信（阿里云、腾讯云、掌榕网）、邮件、企业微信、钉钉等多种通道，内置智能规则引擎实现发送失败自动重试与供应商切换，配合服务商回调处理确保消息可靠投递。具备异步队列、熔断器、限流、配额管理等企业级特性，提供完善的管理后台和 API。
 
 [English](README.md)
 
