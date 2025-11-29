@@ -4,7 +4,7 @@
 [![Gin Framework](https://img.shields.io/badge/Gin-v1.10-00ADD8.svg)](https://github.com/gin-gonic/gin)
 [![License](https://img.shields.io/badge/License-Proprietary-blue.svg)](LICENSE)
 
-A high-performance, multi-channel message service built with Go. Supports SMS, Email, WeChatWork, DingTalk, and Webhook with enterprise-grade features including queue processing, circuit breaker, rate limiting, and quota management.
+A high-performance, highly available multi-channel message service built with Go. Supports SMS (Aliyun, Tencent Cloud, Zrwinfo), Email, WeChatWork, DingTalk and more. Features an intelligent rule engine for automatic retry and provider switching on failures, combined with provider callback processing to ensure reliable message delivery. Includes enterprise-grade features such as async queue processing, circuit breaker, rate limiting, quota management, and a comprehensive admin dashboard.
 
 [中文文档](README.zh-cn.md)
 
@@ -14,6 +14,9 @@ A high-performance, multi-channel message service built with Go. Supports SMS, E
 - **Multiple SMS Providers** - Aliyun, Tencent Cloud, Zrwinfo with automatic failover
 - **Async Processing** - Redis Stream based message queue with worker pool
 - **High Availability** - Circuit breaker pattern, smooth weighted round-robin load balancing
+- **Rule Engine** - Flexible failure handling rules with customizable actions
+- **Provider Auto-Switching** - Automatically switch to alternative providers on failure
+- **Callback Processing** - Handle provider status callbacks with webhook notifications
 - **Enterprise Ready** - Rate limiting, quota management, retry with exponential backoff
 - **Flexible Delivery** - Single, batch, and scheduled message sending
 - **Secure API** - HMAC-SHA256 signature authentication
@@ -49,8 +52,17 @@ A high-performance, multi-channel message service built with Go. Supports SMS, E
 │                     Channel Selector                            │
 │            (Smooth Weighted Round-Robin / Failover)             │
 ├─────────────────────────────────────────────────────────────────┤
+│                        Rule Engine                              │
+│         (Failure Handling / Retry / Switch Provider)            │
+├─────────────────────────────────────────────────────────────────┤
 │                    Provider Senders                             │
 │        (Aliyun / Tencent / Zrwinfo / SMTP / WeChatWork)        │
+├─────────────────────────────────────────────────────────────────┤
+│                   Callback Processing                           │
+│          (Status Callbacks / Webhook Notifications)             │
+├─────────────────────────────────────────────────────────────────┤
+│                        Rule Engine                              │
+│         (Failure Handling / Retry / Switch Provider)            │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -183,6 +195,54 @@ curl http://localhost:8080/api/v1/messages/{task_id} \
 ```
 
 For complete API documentation, see [API Guide](docs/API_GUIDE.md).
+
+## Rule Engine
+
+The Rule Engine provides intelligent failure handling with customizable rules:
+
+### Supported Scenes
+
+| Scene | Description |
+|-------|-------------|
+| `send_failure` | Triggered when message sending fails |
+| `callback_failure` | Triggered when provider callback reports failure |
+
+### Supported Actions
+
+| Action | Description |
+|--------|-------------|
+| `retry` | Retry with configurable delay and exponential backoff |
+| `switch_provider` | Switch to an alternative provider and retry |
+| `fail` | Mark the task as failed immediately |
+| `alert` | Send alert notification via webhook |
+
+### Matching Conditions
+
+Rules can be configured with multiple matching conditions:
+
+- **Provider Code** - Match specific provider (e.g., `aliyun`, `tencent`)
+- **Message Type** - Match message type (e.g., `sms`, `email`)
+- **Error Code** - Match specific error codes (supports comma-separated list)
+- **Error Keyword** - Fuzzy match on error message content
+
+### Example Rule Configuration
+
+```json
+{
+  "name": "Retry on network timeout",
+  "scene": "send_failure",
+  "provider_code": "",
+  "message_type": "sms",
+  "error_keyword": "timeout,network",
+  "action": "retry",
+  "action_config": {
+    "max_retry": 3,
+    "delay_seconds": 5,
+    "backoff_rate": 2
+  },
+  "priority": 100
+}
+```
 
 ## Configuration
 
