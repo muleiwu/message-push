@@ -97,8 +97,7 @@
     - name: build-web
       script:
         - cd ./admin-webui
-        - pnpm config set registry https://mirrors.cloud.tencent.com/npm/ && pnpm install && pnpm run build:antd && pnpm run build:oidc && pnpm run build:install
-        - cd .. && mkdir -p ./static/admin && cp -a ./admin-webui/apps/web-antd/dist ./static/admin
+        - pnpm config set registry https://mirrors.cloud.tencent.com/npm/ && pnpm install && pnpm run build:antd && pnpm run build:install
     - name: changelog
       image: cnbcool/changelog
       exports:
