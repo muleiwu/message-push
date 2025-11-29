@@ -6,7 +6,7 @@
 
 A high-performance, highly available multi-channel message service built with Go. Supports SMS (Aliyun, Tencent Cloud, Zrwinfo), Email, WeChatWork, DingTalk and more. Features an intelligent rule engine for automatic retry and provider switching on failures, combined with provider callback processing to ensure reliable message delivery. Includes enterprise-grade features such as async queue processing, circuit breaker, rate limiting, quota management, and a comprehensive admin dashboard.
 
-[中文文档](README.zh-cn.md)
+[中文文档](README.zh-CN.md)
 
 ## Features
 
