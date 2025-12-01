@@ -97,6 +97,11 @@ func preMigrationCleanup(db *gorm.DB) error {
 		return fmt.Errorf("failed to migrate provider_msg_id to push_logs: %w", err)
 	}
 
+	// 添加 content_type 字段到模板表
+	if err := addContentTypeToTemplates(db); err != nil {
+		return fmt.Errorf("failed to add content_type to templates: %w", err)
+	}
+
 	log.Println("Pre-migration cleanup completed!")
 	return nil
 }
@@ -354,6 +359,38 @@ func migrateProviderMsgIDToPushLogs(db *gorm.DB) error {
 	}
 
 	log.Println("Successfully migrated provider_msg_id from push_tasks to push_logs")
+	return nil
+}
+
+// addContentTypeToTemplates 为模板表添加 content_type 字段
+func addContentTypeToTemplates(db *gorm.DB) error {
+	log.Println("Adding content_type column to template tables...")
+
+	// 为 message_templates 表添加 content_type 字段
+	if db.Migrator().HasTable("message_templates") {
+		if !db.Migrator().HasColumn(&model.MessageTemplate{}, "content_type") {
+			log.Println("Adding content_type column to message_templates...")
+			if err := db.Exec("ALTER TABLE message_templates ADD COLUMN content_type VARCHAR(20) DEFAULT 'text' COMMENT '内容类型：text=纯文本, html=HTML富文本, markdown=Markdown' AFTER message_type").Error; err != nil {
+				return fmt.Errorf("failed to add content_type to message_templates: %w", err)
+			}
+		} else {
+			log.Println("Column content_type already exists in message_templates, skipping...")
+		}
+	}
+
+	// 为 provider_templates 表添加 content_type 字段
+	if db.Migrator().HasTable("provider_templates") {
+		if !db.Migrator().HasColumn(&model.ProviderTemplate{}, "content_type") {
+			log.Println("Adding content_type column to provider_templates...")
+			if err := db.Exec("ALTER TABLE provider_templates ADD COLUMN content_type VARCHAR(20) DEFAULT 'text' COMMENT '内容类型：text=纯文本, html=HTML富文本, markdown=Markdown' AFTER template_name").Error; err != nil {
+				return fmt.Errorf("failed to add content_type to provider_templates: %w", err)
+			}
+		} else {
+			log.Println("Column content_type already exists in provider_templates, skipping...")
+		}
+	}
+
+	log.Println("Successfully added content_type column to template tables")
 	return nil
 }
 

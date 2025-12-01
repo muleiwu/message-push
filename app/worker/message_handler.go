@@ -18,6 +18,14 @@ import (
 	"github.com/muleiwu/gsr"
 )
 
+// sanitizeJSONData 确保 JSON 数据有效，空字符串转换为 "{}"
+func sanitizeJSONData(data string) string {
+	if data == "" {
+		return "{}"
+	}
+	return data
+}
+
 // MessageHandler 消息处理器
 type MessageHandler struct {
 	logger              gsr.Logger
@@ -187,8 +195,8 @@ func (h *MessageHandler) handleSuccess(task *model.PushTask, providerAccountID u
 		ProviderAccountID: providerAccountID,
 		ProviderMsgID:     resp.ProviderID,
 		Status:            "success",
-		RequestData:       resp.RequestData,
-		ResponseData:      resp.ResponseData,
+		RequestData:       sanitizeJSONData(resp.RequestData),
+		ResponseData:      sanitizeJSONData(resp.ResponseData),
 	})
 
 	// 通知选择器成功

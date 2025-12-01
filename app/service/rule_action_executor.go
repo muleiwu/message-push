@@ -16,6 +16,14 @@ import (
 	"github.com/muleiwu/gsr"
 )
 
+// sanitizeJSONData 确保 JSON 数据有效，空字符串转换为 "{}"
+func sanitizeJSONData(data string) string {
+	if data == "" {
+		return "{}"
+	}
+	return data
+}
+
 // ActionExecutor 规则动作执行器
 type ActionExecutor struct {
 	logger            gsr.Logger
@@ -136,8 +144,8 @@ func (e *ActionExecutor) executeRetry(ctx context.Context, result *EvaluateResul
 		AppID:             task.AppID,
 		ProviderAccountID: execCtx.ProviderAccountID,
 		Status:            "retry",
-		RequestData:       execCtx.RequestData,
-		ResponseData:      execCtx.ResponseData,
+		RequestData:       sanitizeJSONData(execCtx.RequestData),
+		ResponseData:      sanitizeJSONData(execCtx.ResponseData),
 		ErrorMessage:      execCtx.ErrorMessage,
 	})
 
@@ -209,8 +217,8 @@ func (e *ActionExecutor) executeSwitchProvider(ctx context.Context, result *Eval
 		AppID:             task.AppID,
 		ProviderAccountID: execCtx.ProviderAccountID,
 		Status:            "switch_provider",
-		RequestData:       execCtx.RequestData,
-		ResponseData:      execCtx.ResponseData,
+		RequestData:       sanitizeJSONData(execCtx.RequestData),
+		ResponseData:      sanitizeJSONData(execCtx.ResponseData),
 		ErrorMessage:      fmt.Sprintf("switching provider, exclude current: %v, excluded providers: %v", config.ExcludeCurrent, task.GetExcludeProviderIDs()),
 	})
 
@@ -251,8 +259,8 @@ func (e *ActionExecutor) executeFail(ctx context.Context, result *EvaluateResult
 			AppID:             task.AppID,
 			ProviderAccountID: execCtx.ProviderAccountID,
 			Status:            "failed",
-			RequestData:       execCtx.RequestData,
-			ResponseData:      execCtx.ResponseData,
+			RequestData:       sanitizeJSONData(execCtx.RequestData),
+			ResponseData:      sanitizeJSONData(execCtx.ResponseData),
 			ErrorMessage:      execCtx.ErrorMessage,
 		})
 	}
@@ -319,8 +327,8 @@ func (e *ActionExecutor) executeAlert(ctx context.Context, result *EvaluateResul
 		AppID:             task.AppID,
 		ProviderAccountID: execCtx.ProviderAccountID,
 		Status:            "alert",
-		RequestData:       execCtx.RequestData,
-		ResponseData:      execCtx.ResponseData,
+		RequestData:       sanitizeJSONData(execCtx.RequestData),
+		ResponseData:      sanitizeJSONData(execCtx.ResponseData),
 		ErrorMessage:      fmt.Sprintf("alert sent: %v, level: %s, error: %s", alertSent, config.AlertLevel, execCtx.ErrorMessage),
 	})
 

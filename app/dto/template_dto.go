@@ -8,6 +8,7 @@ import "time"
 type CreateMessageTemplateRequest struct {
 	TemplateName string   `json:"template_name" binding:"required"`
 	MessageType  string   `json:"message_type" binding:"required"`
+	ContentType  string   `json:"content_type"` // text, html, markdown
 	Content      string   `json:"content" binding:"required"`
 	Variables    []string `json:"variables"`
 	Description  string   `json:"description"`
@@ -18,6 +19,7 @@ type CreateMessageTemplateRequest struct {
 type UpdateMessageTemplateRequest struct {
 	TemplateName string   `json:"template_name"`
 	MessageType  string   `json:"message_type"`
+	ContentType  string   `json:"content_type"` // text, html, markdown
 	Content      string   `json:"content"`
 	Variables    []string `json:"variables"`
 	Description  string   `json:"description"`
@@ -29,6 +31,7 @@ type MessageTemplateResponse struct {
 	ID           uint      `json:"id"`
 	TemplateName string    `json:"template_name"`
 	MessageType  string    `json:"message_type"`
+	ContentType  string    `json:"content_type"`
 	Content      string    `json:"content"`
 	Variables    []string  `json:"variables"`
 	Description  string    `json:"description"`
@@ -60,6 +63,7 @@ type CreateProviderTemplateRequest struct {
 	ProviderID      uint     `json:"provider_id" binding:"required"`
 	TemplateCode    string   `json:"template_code" binding:"required"`
 	TemplateName    string   `json:"template_name" binding:"required"`
+	ContentType     string   `json:"content_type"` // text, html, markdown
 	TemplateContent string   `json:"template_content"`
 	Variables       []string `json:"variables"`
 	Status          *int8    `json:"status"`
@@ -69,6 +73,7 @@ type CreateProviderTemplateRequest struct {
 // UpdateProviderTemplateRequest 更新供应商模板请求
 type UpdateProviderTemplateRequest struct {
 	TemplateName    string   `json:"template_name"`
+	ContentType     string   `json:"content_type"` // text, html, markdown
 	TemplateContent string   `json:"template_content"`
 	Variables       []string `json:"variables"`
 	Status          *int8    `json:"status"`
@@ -81,6 +86,7 @@ type ProviderTemplateResponse struct {
 	ProviderID      uint                    `json:"provider_id"`
 	TemplateCode    string                  `json:"template_code"`
 	TemplateName    string                  `json:"template_name"`
+	ContentType     string                  `json:"content_type"`
 	TemplateContent string                  `json:"template_content"`
 	Variables       []string                `json:"variables"`
 	Status          int8                    `json:"status"`

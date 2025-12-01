@@ -153,18 +153,25 @@ type AvailableProviderResponse struct {
 	Deprecated bool     `json:"deprecated"`
 }
 
+// FieldOptionResponse 下拉选项响应
+type FieldOptionResponse struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
+}
+
 // ConfigFieldResponse 配置字段响应
 type ConfigFieldResponse struct {
-	Key            string `json:"key"`
-	Label          string `json:"label"`
-	Description    string `json:"description"`
-	Type           string `json:"type"`
-	Required       bool   `json:"required"`
-	Example        string `json:"example"`
-	Placeholder    string `json:"placeholder"`
-	ValidationRule string `json:"validation_rule"`
-	HelpLink       string `json:"help_link"`
-	DefaultValue   string `json:"default_value"`
+	Key            string                `json:"key"`
+	Label          string                `json:"label"`
+	Description    string                `json:"description"`
+	Type           string                `json:"type"`
+	Required       bool                  `json:"required"`
+	Example        string                `json:"example"`
+	Placeholder    string                `json:"placeholder"`
+	ValidationRule string                `json:"validation_rule"`
+	HelpLink       string                `json:"help_link"`
+	DefaultValue   string                `json:"default_value"`
+	Options        []FieldOptionResponse `json:"options"`
 }
 
 // CreateChannelRequest 创建通道请求

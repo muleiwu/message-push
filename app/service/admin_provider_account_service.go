@@ -52,6 +52,14 @@ func (s *AdminProviderAccountService) GetAvailableProviders(providerType string)
 	for _, p := range providers {
 		configFields := make([]dto.ConfigFieldResponse, 0, len(p.ConfigFields))
 		for _, field := range p.ConfigFields {
+			// 转换下拉选项
+			options := make([]dto.FieldOptionResponse, 0, len(field.Options))
+			for _, opt := range field.Options {
+				options = append(options, dto.FieldOptionResponse{
+					Value: opt.Value,
+					Label: opt.Label,
+				})
+			}
 			configFields = append(configFields, dto.ConfigFieldResponse{
 				Key:            field.Key,
 				Label:          field.Label,
@@ -63,6 +71,7 @@ func (s *AdminProviderAccountService) GetAvailableProviders(providerType string)
 				ValidationRule: field.ValidationRule,
 				HelpLink:       field.HelpLink,
 				DefaultValue:   field.DefaultValue,
+				Options:        options,
 			})
 		}
 
@@ -100,6 +109,14 @@ func (s *AdminProviderAccountService) GetProviderConfigFields(providerCode strin
 
 	result := make([]dto.ConfigFieldResponse, 0, len(meta.ConfigFields))
 	for _, field := range meta.ConfigFields {
+		// 转换下拉选项
+		options := make([]dto.FieldOptionResponse, 0, len(field.Options))
+		for _, opt := range field.Options {
+			options = append(options, dto.FieldOptionResponse{
+				Value: opt.Value,
+				Label: opt.Label,
+			})
+		}
 		result = append(result, dto.ConfigFieldResponse{
 			Key:            field.Key,
 			Label:          field.Label,
@@ -111,6 +128,7 @@ func (s *AdminProviderAccountService) GetProviderConfigFields(providerCode strin
 			ValidationRule: field.ValidationRule,
 			HelpLink:       field.HelpLink,
 			DefaultValue:   field.DefaultValue,
+			Options:        options,
 		})
 	}
 

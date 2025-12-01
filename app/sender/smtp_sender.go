@@ -2,8 +2,10 @@ package sender
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/smtp"
 	"strings"
 	"time"
@@ -66,6 +68,19 @@ func init() {
 				Example:     "noreply@example.com",
 				Placeholder: "请输入发件人地址",
 			},
+			{
+				Key:          "encryption",
+				Label:        "加密方式",
+				Description:  "邮件传输加密方式",
+				Type:         registry.FieldTypeSelect,
+				Required:     false,
+				DefaultValue: "starttls",
+				Options: []registry.FieldOption{
+					{Value: "none", Label: "无加密"},
+					{Value: "starttls", Label: "STARTTLS (端口587)"},
+					{Value: "ssl", Label: "SSL/TLS (端口465)"},
+				},
+			},
 		},
 		// 能力声明
 		SupportsSend:      true,
@@ -88,9 +103,41 @@ func init() {
 type SMTPSender struct {
 }
 
+// smtpConfig SMTP配置
+type smtpConfig struct {
+	Host       string `json:"host"`
+	Port       int    `json:"port"`
+	Username   string `json:"username"`
+	Password   string `json:"password"`
+	From       string `json:"from"`
+	Encryption string `json:"encryption"`
+}
+
 // NewSMTPSender 创建SMTP发送器
 func NewSMTPSender() *SMTPSender {
 	return &SMTPSender{}
+}
+
+// getEmailContentType 根据供应商模板的内容类型获取邮件 MIME 类型
+func getEmailContentType(req *SendRequest) string {
+	// 默认为纯文本
+	contentType := "text/plain; charset=UTF-8"
+
+	// 从 ChannelTemplateBinding -> ProviderTemplate 获取内容类型
+	if req.ChannelTemplateBinding != nil &&
+		req.ChannelTemplateBinding.ProviderTemplate != nil {
+		switch req.ChannelTemplateBinding.ProviderTemplate.ContentType {
+		case "html":
+			contentType = "text/html; charset=UTF-8"
+		case "markdown":
+			// Markdown 暂时作为纯文本处理，后续可考虑转换为 HTML
+			contentType = "text/plain; charset=UTF-8"
+		default:
+			contentType = "text/plain; charset=UTF-8"
+		}
+	}
+
+	return contentType
 }
 
 // GetProviderCode 获取服务商代码
@@ -98,17 +145,138 @@ func (s *SMTPSender) GetProviderCode() string {
 	return constants.ProviderSMTP
 }
 
+// sendMail 根据加密方式发送邮件
+func (s *SMTPSender) sendMail(config *smtpConfig, to []string, msg []byte) error {
+	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
+	auth := smtp.PlainAuth("", config.Username, config.Password, config.Host)
+
+	switch config.Encryption {
+	case "ssl":
+		// 隐式 SSL/TLS (端口465): 直接建立加密连接
+		return s.sendMailWithSSL(config, addr, auth, to, msg)
+	case "none":
+		// 无加密: 直接建立普通连接
+		return s.sendMailWithoutEncryption(config, addr, auth, to, msg)
+	default:
+		// STARTTLS (端口587): 使用标准库 smtp.SendMail（已内置 STARTTLS 支持）
+		return smtp.SendMail(addr, auth, config.From, to, msg)
+	}
+}
+
+// sendMailWithSSL 使用隐式SSL发送邮件（端口465）
+func (s *SMTPSender) sendMailWithSSL(config *smtpConfig, addr string, auth smtp.Auth, to []string, msg []byte) error {
+	tlsConfig := &tls.Config{
+		ServerName: config.Host,
+	}
+
+	// 建立TLS连接
+	conn, err := tls.Dial("tcp", addr, tlsConfig)
+	if err != nil {
+		return fmt.Errorf("failed to connect with SSL: %w", err)
+	}
+	defer conn.Close()
+
+	// 创建SMTP客户端
+	client, err := smtp.NewClient(conn, config.Host)
+	if err != nil {
+		return fmt.Errorf("failed to create SMTP client: %w", err)
+	}
+	defer client.Close()
+
+	// 认证
+	if err = client.Auth(auth); err != nil {
+		return fmt.Errorf("SMTP auth failed: %w", err)
+	}
+
+	// 设置发件人
+	if err = client.Mail(config.From); err != nil {
+		return fmt.Errorf("failed to set sender: %w", err)
+	}
+
+	// 设置收件人
+	for _, recipient := range to {
+		if err = client.Rcpt(recipient); err != nil {
+			return fmt.Errorf("failed to set recipient %s: %w", recipient, err)
+		}
+	}
+
+	// 写入邮件内容
+	w, err := client.Data()
+	if err != nil {
+		return fmt.Errorf("failed to get data writer: %w", err)
+	}
+
+	_, err = w.Write(msg)
+	if err != nil {
+		return fmt.Errorf("failed to write message: %w", err)
+	}
+
+	err = w.Close()
+	if err != nil {
+		return fmt.Errorf("failed to close data writer: %w", err)
+	}
+
+	return client.Quit()
+}
+
+// sendMailWithoutEncryption 不使用加密发送邮件
+func (s *SMTPSender) sendMailWithoutEncryption(config *smtpConfig, addr string, auth smtp.Auth, to []string, msg []byte) error {
+	// 建立普通TCP连接
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("failed to connect: %w", err)
+	}
+	defer conn.Close()
+
+	// 创建SMTP客户端
+	client, err := smtp.NewClient(conn, config.Host)
+	if err != nil {
+		return fmt.Errorf("failed to create SMTP client: %w", err)
+	}
+	defer client.Close()
+
+	// 认证（如果服务器支持）
+	if auth != nil {
+		if err = client.Auth(auth); err != nil {
+			return fmt.Errorf("SMTP auth failed: %w", err)
+		}
+	}
+
+	// 设置发件人
+	if err = client.Mail(config.From); err != nil {
+		return fmt.Errorf("failed to set sender: %w", err)
+	}
+
+	// 设置收件人
+	for _, recipient := range to {
+		if err = client.Rcpt(recipient); err != nil {
+			return fmt.Errorf("failed to set recipient %s: %w", recipient, err)
+		}
+	}
+
+	// 写入邮件内容
+	w, err := client.Data()
+	if err != nil {
+		return fmt.Errorf("failed to get data writer: %w", err)
+	}
+
+	_, err = w.Write(msg)
+	if err != nil {
+		return fmt.Errorf("failed to write message: %w", err)
+	}
+
+	err = w.Close()
+	if err != nil {
+		return fmt.Errorf("failed to close data writer: %w", err)
+	}
+
+	return client.Quit()
+}
+
 // Send 发送邮件
 func (s *SMTPSender) Send(ctx context.Context, req *SendRequest) (*SendResponse, error) {
 	// 解析服务商配置
-	var config struct {
-		Host     string `json:"host"`
-		Port     int    `json:"port"`
-		Username string `json:"username"`
-		Password string `json:"password"`
-		From     string `json:"from"`
-	}
-
+	var config smtpConfig
 	if err := json.Unmarshal([]byte(req.ProviderAccount.Config), &config); err != nil {
 		return nil, fmt.Errorf("invalid provider config: %w", err)
 	}
@@ -119,38 +287,53 @@ func (s *SMTPSender) Send(ctx context.Context, req *SendRequest) (*SendResponse,
 		subject = "通知"
 	}
 
+	// 获取邮件内容类型
+	contentType := getEmailContentType(req)
+
 	message := fmt.Sprintf("From: %s\r\n", config.From)
 	message += fmt.Sprintf("To: %s\r\n", req.Task.Receiver)
 	message += fmt.Sprintf("Subject: %s\r\n", subject)
-	message += "Content-Type: text/plain; charset=UTF-8\r\n"
+	message += fmt.Sprintf("Content-Type: %s\r\n", contentType)
 	message += "\r\n"
 	message += req.Task.Content
 
-	// 发送邮件
-	auth := smtp.PlainAuth("", config.Username, config.Password, config.Host)
-	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
+	// 构建请求数据用于调试（不包含密码）
+	requestData, _ := json.Marshal(map[string]interface{}{
+		"host":        config.Host,
+		"port":        config.Port,
+		"from":        config.From,
+		"to":          req.Task.Receiver,
+		"subject":     subject,
+		"encryption":  config.Encryption,
+		"contentType": contentType,
+	})
 
-	err := smtp.SendMail(
-		addr,
-		auth,
-		config.From,
-		[]string{req.Task.Receiver},
-		[]byte(message),
-	)
+	// 发送邮件
+	err := s.sendMail(&config, []string{req.Task.Receiver}, []byte(message))
 
 	if err != nil {
 		return &SendResponse{
 			Success:      false,
 			ErrorMessage: err.Error(),
 			TaskID:       req.Task.TaskID,
+			RequestData:  string(requestData),
+			ResponseData: "{}",
 		}, nil
 	}
 
+	// 构建响应数据
+	responseData, _ := json.Marshal(map[string]interface{}{
+		"status":  "sent",
+		"message": "Email sent successfully",
+	})
+
 	return &SendResponse{
-		Success:    true,
-		ProviderID: fmt.Sprintf("smtp_%s", req.Task.TaskID),
-		TaskID:     req.Task.TaskID,
-		Status:     constants.TaskStatusSuccess, // 邮件发送成功即完成
+		Success:      true,
+		ProviderID:   fmt.Sprintf("smtp_%s", req.Task.TaskID),
+		TaskID:       req.Task.TaskID,
+		Status:       constants.TaskStatusSuccess, // 邮件发送成功即完成
+		RequestData:  string(requestData),
+		ResponseData: string(responseData),
 	}, nil
 }
 
@@ -168,22 +351,24 @@ func (s *SMTPSender) BatchSend(ctx context.Context, req *BatchSendRequest) (*Bat
 	}
 
 	// 解析服务商配置
-	var config struct {
-		Host     string `json:"host"`
-		Port     int    `json:"port"`
-		Username string `json:"username"`
-		Password string `json:"password"`
-		From     string `json:"from"`
-	}
-
+	var config smtpConfig
 	if err := json.Unmarshal([]byte(req.ProviderAccount.Config), &config); err != nil {
 		return nil, fmt.Errorf("invalid provider config: %w", err)
 	}
 
-	auth := smtp.PlainAuth("", config.Username, config.Password, config.Host)
-	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
-
 	results := make([]*SendResponse, len(req.Tasks))
+
+	// 获取邮件内容类型
+	contentType := "text/plain; charset=UTF-8"
+	if req.ChannelTemplateBinding != nil &&
+		req.ChannelTemplateBinding.ProviderTemplate != nil {
+		switch req.ChannelTemplateBinding.ProviderTemplate.ContentType {
+		case "html":
+			contentType = "text/html; charset=UTF-8"
+		case "markdown":
+			contentType = "text/plain; charset=UTF-8"
+		}
+	}
 
 	// 逐个发送邮件（SMTP 批量发送时每个收件人内容可能不同）
 	for i, task := range req.Tasks {
@@ -195,30 +380,44 @@ func (s *SMTPSender) BatchSend(ctx context.Context, req *BatchSendRequest) (*Bat
 		message := fmt.Sprintf("From: %s\r\n", config.From)
 		message += fmt.Sprintf("To: %s\r\n", task.Receiver)
 		message += fmt.Sprintf("Subject: %s\r\n", subject)
-		message += "Content-Type: text/plain; charset=UTF-8\r\n"
+		message += fmt.Sprintf("Content-Type: %s\r\n", contentType)
 		message += "\r\n"
 		message += task.Content
 
-		err := smtp.SendMail(
-			addr,
-			auth,
-			config.From,
-			[]string{task.Receiver},
-			[]byte(message),
-		)
+		// 构建请求数据用于调试（不包含密码）
+		requestData, _ := json.Marshal(map[string]interface{}{
+			"host":        config.Host,
+			"port":        config.Port,
+			"from":        config.From,
+			"to":          task.Receiver,
+			"subject":     subject,
+			"encryption":  config.Encryption,
+			"contentType": contentType,
+		})
+
+		err := s.sendMail(&config, []string{task.Receiver}, []byte(message))
 
 		if err != nil {
 			results[i] = &SendResponse{
 				Success:      false,
 				ErrorMessage: err.Error(),
 				TaskID:       task.TaskID,
+				RequestData:  string(requestData),
+				ResponseData: "{}",
 			}
 		} else {
+			// 构建响应数据
+			responseData, _ := json.Marshal(map[string]interface{}{
+				"status":  "sent",
+				"message": "Email sent successfully",
+			})
 			results[i] = &SendResponse{
-				Success:    true,
-				ProviderID: fmt.Sprintf("smtp_%s", task.TaskID),
-				TaskID:     task.TaskID,
-				Status:     constants.TaskStatusSuccess, // 邮件发送成功即完成
+				Success:      true,
+				ProviderID:   fmt.Sprintf("smtp_%s", task.TaskID),
+				TaskID:       task.TaskID,
+				Status:       constants.TaskStatusSuccess, // 邮件发送成功即完成
+				RequestData:  string(requestData),
+				ResponseData: string(responseData),
 			}
 		}
 	}

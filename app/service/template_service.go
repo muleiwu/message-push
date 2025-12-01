@@ -30,10 +30,17 @@ func NewTemplateService() *TemplateService {
 
 // CreateMessageTemplate 创建系统模板
 func (s *TemplateService) CreateMessageTemplate(req *dto.CreateMessageTemplateRequest) (*dto.MessageTemplateResponse, error) {
+	// 设置默认内容类型
+	contentType := req.ContentType
+	if contentType == "" {
+		contentType = "text"
+	}
+
 	// 创建模板
 	template := &model.MessageTemplate{
 		TemplateName: req.TemplateName,
 		MessageType:  req.MessageType,
+		ContentType:  contentType,
 		Content:      req.Content,
 		Description:  req.Description,
 		Status:       1,
@@ -73,6 +80,9 @@ func (s *TemplateService) UpdateMessageTemplate(id uint, req *dto.UpdateMessageT
 	}
 	if req.MessageType != "" {
 		template.MessageType = req.MessageType
+	}
+	if req.ContentType != "" {
+		template.ContentType = req.ContentType
 	}
 	if req.Content != "" {
 		template.Content = req.Content
@@ -160,11 +170,18 @@ func (s *TemplateService) CreateProviderTemplate(req *dto.CreateProviderTemplate
 		return nil, errors.New("template code already exists for this provider")
 	}
 
+	// 设置默认内容类型
+	contentType := req.ContentType
+	if contentType == "" {
+		contentType = "text"
+	}
+
 	// 创建模板
 	template := &model.ProviderTemplate{
 		ProviderID:      req.ProviderID,
 		TemplateCode:    req.TemplateCode,
 		TemplateName:    req.TemplateName,
+		ContentType:     contentType,
 		TemplateContent: req.TemplateContent,
 		Remark:          req.Remark,
 		Status:          1,
@@ -207,6 +224,9 @@ func (s *TemplateService) UpdateProviderTemplate(id uint, req *dto.UpdateProvide
 	// 更新字段
 	if req.TemplateName != "" {
 		template.TemplateName = req.TemplateName
+	}
+	if req.ContentType != "" {
+		template.ContentType = req.ContentType
 	}
 	if req.TemplateContent != "" {
 		template.TemplateContent = req.TemplateContent
@@ -281,10 +301,17 @@ func (s *TemplateService) buildMessageTemplateResponse(template *model.MessageTe
 		variables = []string{}
 	}
 
+	// 处理内容类型默认值
+	contentType := template.ContentType
+	if contentType == "" {
+		contentType = "text"
+	}
+
 	return &dto.MessageTemplateResponse{
 		ID:           template.ID,
 		TemplateName: template.TemplateName,
 		MessageType:  template.MessageType,
+		ContentType:  contentType,
 		Content:      template.Content,
 		Variables:    variables,
 		Description:  template.Description,
@@ -301,11 +328,18 @@ func (s *TemplateService) buildProviderTemplateResponse(template *model.Provider
 		variables = []string{}
 	}
 
+	// 处理内容类型默认值
+	contentType := template.ContentType
+	if contentType == "" {
+		contentType = "text"
+	}
+
 	resp := &dto.ProviderTemplateResponse{
 		ID:              template.ID,
 		ProviderID:      template.ProviderID,
 		TemplateCode:    template.TemplateCode,
 		TemplateName:    template.TemplateName,
+		ContentType:     contentType,
 		TemplateContent: template.TemplateContent,
 		Variables:       variables,
 		Status:          template.Status,

@@ -12,6 +12,7 @@ type MessageTemplate struct {
 	ID           uint           `gorm:"primaryKey;autoIncrement" json:"id"`
 	TemplateName string         `gorm:"type:varchar(200);not null;comment:模板名称" json:"template_name"`
 	MessageType  string         `gorm:"type:varchar(20);not null;index:idx_type_status;comment:消息类型：sms, email, wechat_work, dingtalk, webhook, push" json:"message_type"`
+	ContentType  string         `gorm:"type:varchar(20);default:text;comment:内容类型：text=纯文本, html=HTML富文本, markdown=Markdown" json:"content_type"`
 	Content      string         `gorm:"type:text;not null;comment:模板内容，使用{variable}占位符" json:"content"`
 	Variables    string         `gorm:"type:json;comment:模板变量列表，JSON数组格式" json:"variables"`
 	Description  string         `gorm:"type:text;comment:模板描述" json:"description"`

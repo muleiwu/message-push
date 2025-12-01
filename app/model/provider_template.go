@@ -13,6 +13,7 @@ type ProviderTemplate struct {
 	ProviderID      uint             `gorm:"type:bigint unsigned;not null;index:idx_provider_status;comment:供应商账号ID（关联provider_accounts表）" json:"provider_id"`
 	TemplateCode    string           `gorm:"type:varchar(100);not null;comment:供应商模板代码（如阿里云SMS_123456789）" json:"template_code"`
 	TemplateName    string           `gorm:"type:varchar(200);not null;comment:供应商模板名称" json:"template_name"`
+	ContentType     string           `gorm:"type:varchar(20);default:text;comment:内容类型：text=纯文本, html=HTML富文本, markdown=Markdown" json:"content_type"`
 	TemplateContent string           `gorm:"type:text;comment:供应商模板内容（如：验证码$${code}）" json:"template_content"`
 	Variables       string           `gorm:"type:json;comment:供应商模板变量列表，JSON数组格式" json:"variables"`
 	Status          int8             `gorm:"type:tinyint;default:1;index:idx_provider_status;comment:状态：1=启用 0=禁用" json:"status"`
