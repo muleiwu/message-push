@@ -56,6 +56,12 @@ func (s *MessageService) Send(ctx context.Context, req *dto.SendRequest) (*dto.S
 		return nil, fmt.Errorf("channel is not active")
 	}
 
+	// 2. 校验接收者格式
+	validator := helper.GetReceiverValidator(channel.Type)
+	if err := validator.Validate(req.Receiver); err != nil {
+		return nil, fmt.Errorf("invalid receiver: %w", err)
+	}
+
 	// 检查通道是否有可用的模板绑定
 	// GetActiveByChannelID 查询条件：is_active=1 AND status=1（只查可用的绑定）
 	channelBindingDao := dao.NewChannelTemplateBindingDAO()
@@ -150,6 +156,12 @@ func (s *MessageService) BatchSend(ctx context.Context, req *dto.BatchSendReques
 	// 检查通道状态
 	if channel.Status != 1 {
 		return nil, fmt.Errorf("channel is not active")
+	}
+
+	// 2. 批量校验接收者格式
+	validator := helper.GetReceiverValidator(channel.Type)
+	if err := validator.ValidateBatch(req.Receivers); err != nil {
+		return nil, fmt.Errorf("invalid receivers: %w", err)
 	}
 
 	// 检查通道是否有可用的模板绑定
