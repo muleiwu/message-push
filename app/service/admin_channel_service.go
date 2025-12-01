@@ -866,3 +866,98 @@ func (s *AdminChannelService) GetAvailableProviderSignatures(channelID uint) ([]
 
 	return items, nil
 }
+
+// TestChannel 测试通道发送
+func (s *AdminChannelService) TestChannel(channelID uint, req *dto.TestChannelRequest) (*dto.TestChannelResponse, error) {
+	logger := helper.GetHelper().GetLogger()
+	db := helper.GetHelper().GetDatabase()
+
+	// 1. 验证通道是否存在
+	var channel model.Channel
+	if err := db.Preload("MessageTemplate").First(&channel, channelID).Error; err != nil {
+		return nil, fmt.Errorf("channel not found: %w", err)
+	}
+
+	// 2. 检查通道状态
+	if channel.Status != 1 {
+		return &dto.TestChannelResponse{
+			Success: false,
+			Message: "通道未启用",
+		}, nil
+	}
+
+	// 3. 检查通道是否有可用的模板绑定
+	bindings, err := s.bindingDAO.GetActiveByChannelID(channelID)
+	if err != nil {
+		logger.Error(fmt.Sprintf("failed to check channel bindings channel_id=%d: %v", channelID, err))
+		return &dto.TestChannelResponse{
+			Success: false,
+			Message: fmt.Sprintf("检查通道绑定失败: %v", err),
+		}, nil
+	}
+	if len(bindings) == 0 {
+		return &dto.TestChannelResponse{
+			Success: false,
+			Message: "通道没有可用的模板绑定配置",
+		}, nil
+	}
+
+	// 4. 验证系统模板
+	if channel.MessageTemplate == nil {
+		return &dto.TestChannelResponse{
+			Success: false,
+			Message: "通道未绑定系统模板",
+		}, nil
+	}
+
+	if channel.MessageTemplate.Status != 1 {
+		return &dto.TestChannelResponse{
+			Success: false,
+			Message: "系统模板未启用",
+		}, nil
+	}
+
+	// 5. 验证模板参数
+	templateVars, err := channel.MessageTemplate.GetVariables()
+	if err != nil {
+		return &dto.TestChannelResponse{
+			Success: false,
+			Message: fmt.Sprintf("解析模板变量失败: %v", err),
+		}, nil
+	}
+
+	for _, v := range templateVars {
+		if _, ok := req.TemplateParams[v]; !ok {
+			return &dto.TestChannelResponse{
+				Success: false,
+				Message: fmt.Sprintf("缺少模板参数: %s", v),
+			}, nil
+		}
+	}
+
+	// 6. 使用消息服务发送测试消息
+	messageService := NewMessageService()
+	sendReq := &dto.SendRequest{
+		AppID:          "admin_test", // 管理后台测试使用特殊的 AppID
+		ChannelID:      channelID,
+		Receiver:       req.Receiver,
+		TemplateParams: req.TemplateParams,
+		SignatureName:  req.SignatureName,
+	}
+
+	resp, err := messageService.Send(db.Statement.Context, sendReq)
+	if err != nil {
+		logger.Error(fmt.Sprintf("test channel send failed channel_id=%d: %v", channelID, err))
+		return &dto.TestChannelResponse{
+			Success: false,
+			Message: fmt.Sprintf("发送失败: %v", err),
+		}, nil
+	}
+
+	logger.Info(fmt.Sprintf("test channel send success channel_id=%d task_id=%s", channelID, resp.TaskID))
+	return &dto.TestChannelResponse{
+		Success: true,
+		Message: "发送成功，任务已创建",
+		TaskID:  resp.TaskID,
+	}, nil
+}

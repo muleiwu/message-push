@@ -371,3 +371,28 @@ func (c ChannelController) GetAvailableProviderSignatures(ctx *gin.Context, help
 
 	controller.SuccessResponse(ctx, resp)
 }
+
+// TestChannel 测试通道发送
+func (c ChannelController) TestChannel(ctx *gin.Context, helper interfaces.HelperInterface) {
+	adminService := service.NewAdminChannelService()
+	idStr := ctx.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		controller.ErrorResponse(ctx, 400, "invalid id")
+		return
+	}
+
+	var req dto.TestChannelRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		controller.ErrorResponse(ctx, 400, "invalid request: "+err.Error())
+		return
+	}
+
+	resp, err := adminService.TestChannel(uint(id), &req)
+	if err != nil {
+		controller.ErrorResponse(ctx, 500, "test channel failed: "+err.Error())
+		return
+	}
+
+	controller.SuccessResponse(ctx, resp)
+}

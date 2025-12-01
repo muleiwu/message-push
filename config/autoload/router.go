@@ -137,6 +137,7 @@ func (receiver Router) InitConfig(helper envInterface.HelperInterface) map[strin
 					channels.GET("/:id", deps.WrapHandler(admin.ChannelController{}.GetChannel))
 					channels.PUT("/:id", deps.WrapHandler(admin.ChannelController{}.UpdateChannel))
 					channels.DELETE("/:id", deps.WrapHandler(admin.ChannelController{}.DeleteChannel))
+					channels.POST("/:id/test", deps.WrapHandler(admin.ChannelController{}.TestChannel))                               // 测试通道发送
 					channels.GET("/:id/available-bindings", deps.WrapHandler(admin.ChannelController{}.GetAvailableTemplateBindings)) // 先注册具体路径
 					channels.GET("/:id/bindings", deps.WrapHandler(admin.ChannelController{}.GetChannelBindings))
 					channels.POST("/:id/bindings", deps.WrapHandler(admin.ChannelController{}.CreateChannelBinding))
