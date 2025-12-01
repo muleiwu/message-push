@@ -32,7 +32,6 @@ type PushTaskItem struct {
 	ProviderMsgID  string     `json:"provider_msg_id"`
 	MessageType    string     `json:"message_type"`
 	Receiver       string     `json:"receiver"`
-	Title          string     `json:"title"`
 	Content        string     `json:"content"`
 	TemplateCode   string     `json:"template_code"`
 	TemplateParams string     `json:"template_params"`

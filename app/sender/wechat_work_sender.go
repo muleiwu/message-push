@@ -114,11 +114,7 @@ func (s *WeChatWorkSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 		toUser = "@all"
 	}
 
-	// 使用 Content 字段，如果为空则尝试使用 Title
 	content := req.Task.Content
-	if content == "" {
-		content = req.Task.Title
-	}
 
 	payload := map[string]interface{}{
 		"touser":  toUser,
@@ -263,9 +259,6 @@ func (s *WeChatWorkSender) BatchSend(ctx context.Context, req *BatchSendRequest)
 	}
 
 	content := firstTask.Content
-	if content == "" {
-		content = firstTask.Title
-	}
 
 	payload := map[string]interface{}{
 		"touser":  toUser,

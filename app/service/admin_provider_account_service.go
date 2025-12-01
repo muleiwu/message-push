@@ -375,7 +375,7 @@ func (s *AdminProviderAccountService) TestProviderAccount(id uint, req *dto.Test
 		}
 		task.Receiver = req.Email
 		task.Content = req.Message
-		task.Title = "测试邮件"
+		task.Signature = "测试邮件"
 	default:
 		task.Content = req.Message
 	}

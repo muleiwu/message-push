@@ -282,7 +282,7 @@ func (s *SMTPSender) Send(ctx context.Context, req *SendRequest) (*SendResponse,
 	}
 
 	// 构建邮件内容
-	subject := req.Task.Title
+	subject := req.Task.Signature
 	if subject == "" {
 		subject = "通知"
 	}
@@ -372,7 +372,7 @@ func (s *SMTPSender) BatchSend(ctx context.Context, req *BatchSendRequest) (*Bat
 
 	// 逐个发送邮件（SMTP 批量发送时每个收件人内容可能不同）
 	for i, task := range req.Tasks {
-		subject := task.Title
+		subject := task.Signature
 		if subject == "" {
 			subject = "通知"
 		}
