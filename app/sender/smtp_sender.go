@@ -14,6 +14,11 @@ import (
 	"cnb.cool/mliev/push/message-push/app/registry"
 )
 
+const (
+	// smtpDialTimeout SMTP连接超时时间
+	smtpDialTimeout = 30 * time.Second
+)
+
 func init() {
 	// 注册SMTP邮件服务商
 	registry.Register(&registry.ProviderMeta{
@@ -158,9 +163,71 @@ func (s *SMTPSender) sendMail(config *smtpConfig, to []string, msg []byte) error
 		// 无加密: 直接建立普通连接
 		return s.sendMailWithoutEncryption(config, addr, auth, to, msg)
 	default:
-		// STARTTLS (端口587): 使用标准库 smtp.SendMail（已内置 STARTTLS 支持）
-		return smtp.SendMail(addr, auth, config.From, to, msg)
+		// STARTTLS (端口587): 使用带超时的连接
+		return s.sendMailWithStartTLS(config, addr, auth, to, msg)
 	}
+}
+
+// sendMailWithStartTLS 使用STARTTLS发送邮件（端口587），带超时控制
+func (s *SMTPSender) sendMailWithStartTLS(config *smtpConfig, addr string, auth smtp.Auth, to []string, msg []byte) error {
+	// 使用带超时的连接
+	conn, err := net.DialTimeout("tcp", addr, smtpDialTimeout)
+	if err != nil {
+		return fmt.Errorf("failed to connect: %w", err)
+	}
+	defer conn.Close()
+
+	// 创建SMTP客户端
+	client, err := smtp.NewClient(conn, config.Host)
+	if err != nil {
+		return fmt.Errorf("failed to create SMTP client: %w", err)
+	}
+	defer client.Close()
+
+	// 尝试STARTTLS
+	if ok, _ := client.Extension("STARTTLS"); ok {
+		tlsConfig := &tls.Config{ServerName: config.Host}
+		if err = client.StartTLS(tlsConfig); err != nil {
+			return fmt.Errorf("STARTTLS failed: %w", err)
+		}
+	}
+
+	// 认证
+	if auth != nil {
+		if err = client.Auth(auth); err != nil {
+			return fmt.Errorf("SMTP auth failed: %w", err)
+		}
+	}
+
+	// 设置发件人
+	if err = client.Mail(config.From); err != nil {
+		return fmt.Errorf("failed to set sender: %w", err)
+	}
+
+	// 设置收件人
+	for _, recipient := range to {
+		if err = client.Rcpt(recipient); err != nil {
+			return fmt.Errorf("failed to set recipient %s: %w", recipient, err)
+		}
+	}
+
+	// 写入邮件内容
+	w, err := client.Data()
+	if err != nil {
+		return fmt.Errorf("failed to get data writer: %w", err)
+	}
+
+	_, err = w.Write(msg)
+	if err != nil {
+		return fmt.Errorf("failed to write message: %w", err)
+	}
+
+	err = w.Close()
+	if err != nil {
+		return fmt.Errorf("failed to close data writer: %w", err)
+	}
+
+	return client.Quit()
 }
 
 // sendMailWithSSL 使用隐式SSL发送邮件（端口465）
@@ -169,8 +236,9 @@ func (s *SMTPSender) sendMailWithSSL(config *smtpConfig, addr string, auth smtp.
 		ServerName: config.Host,
 	}
 
-	// 建立TLS连接
-	conn, err := tls.Dial("tcp", addr, tlsConfig)
+	// 使用带超时的 Dialer 建立TLS连接
+	dialer := &net.Dialer{Timeout: smtpDialTimeout}
+	conn, err := tls.DialWithDialer(dialer, "tcp", addr, tlsConfig)
 	if err != nil {
 		return fmt.Errorf("failed to connect with SSL: %w", err)
 	}
@@ -221,8 +289,8 @@ func (s *SMTPSender) sendMailWithSSL(config *smtpConfig, addr string, auth smtp.
 
 // sendMailWithoutEncryption 不使用加密发送邮件
 func (s *SMTPSender) sendMailWithoutEncryption(config *smtpConfig, addr string, auth smtp.Auth, to []string, msg []byte) error {
-	// 建立普通TCP连接
-	conn, err := net.Dial("tcp", addr)
+	// 使用带超时的连接
+	conn, err := net.DialTimeout("tcp", addr, smtpDialTimeout)
 	if err != nil {
 		return fmt.Errorf("failed to connect: %w", err)
 	}

@@ -59,14 +59,9 @@ func (s *AdminProviderSignatureService) GetSignatureList(providerAccountID uint,
 // CreateSignature 创建签名
 func (s *AdminProviderSignatureService) CreateSignature(providerAccountID uint, req *dto.CreateProviderSignatureRequest) (*dto.ProviderSignatureResponse, error) {
 	// 验证账号是否存在
-	account, err := s.accountDAO.GetByID(providerAccountID)
+	_, err := s.accountDAO.GetByID(providerAccountID)
 	if err != nil {
 		return nil, fmt.Errorf("provider account not found")
-	}
-
-	// 验证账号类型是否为SMS
-	if account.ProviderType != "sms" {
-		return nil, fmt.Errorf("only SMS provider accounts can have signatures")
 	}
 
 	// 检查签名代码是否已存在

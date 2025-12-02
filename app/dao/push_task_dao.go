@@ -116,6 +116,20 @@ func (d *PushTaskDAO) GetTimeoutSentTasks(timeout time.Duration, limit int) ([]*
 	return tasks, nil
 }
 
+// GetTimeoutProcessingTasks 获取超时的 processing 状态任务（所有消息类型）
+func (d *PushTaskDAO) GetTimeoutProcessingTasks(timeout time.Duration, limit int) ([]*model.PushTask, error) {
+	var tasks []*model.PushTask
+	cutoff := time.Now().Add(-timeout)
+	err := d.db.Where("status = ? AND updated_at < ?",
+		"processing", cutoff).
+		Limit(limit).
+		Find(&tasks).Error
+	if err != nil {
+		return nil, err
+	}
+	return tasks, nil
+}
+
 // List 获取任务列表（分页）
 func (d *PushTaskDAO) List(page, pageSize int, filters map[string]interface{}) ([]*model.PushTask, int64, error) {
 	var tasks []*model.PushTask
