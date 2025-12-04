@@ -3,10 +3,16 @@ package sender
 import (
 	"bytes"
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/sha1"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -51,6 +57,22 @@ func init() {
 				Required:    true,
 				Example:     "123456789",
 				Placeholder: "请输入AgentId",
+			},
+			{
+				Key:         "callback_token",
+				Label:       "回调Token",
+				Description: "事件订阅的Token，用于签名验证",
+				Type:        registry.FieldTypeText,
+				Required:    false,
+				Placeholder: "请输入回调Token",
+			},
+			{
+				Key:         "callback_aes_key",
+				Label:       "回调AESKey",
+				Description: "事件订阅的EncodingAESKey（43位字符）",
+				Type:        registry.FieldTypePassword,
+				Required:    false,
+				Placeholder: "请输入43位AESKey",
 			},
 		},
 		// 能力声明
@@ -102,33 +124,58 @@ func (s *DingTalkSender) Send(ctx context.Context, req *SendRequest) (*SendRespo
 	}
 
 	// 2. 构造消息
-	// 支持 text, markdown
+	// 根据 MessageType 判断消息类型，支持 text 和 markdown
 	msgType := "text"
-	// 这里简单起见，默认text
+	if req.Task.MessageType == "markdown" {
+		msgType = "markdown"
+	}
 
 	// 接收者 user_id_list
 	receiver := req.Task.Receiver // userId1,userId2...
-
 	content := req.Task.Content
 
-	payload := map[string]interface{}{
-		"agent_id":    agentID, // API might assume int
-		"userid_list": receiver,
-		"msg": map[string]interface{}{
-			"msgtype": msgType,
+	// 获取标题（用于 markdown），从签名字段获取，默认为"消息"
+	title := req.Task.Signature
+	if title == "" {
+		title = "消息"
+	}
+
+	// 构造消息体
+	var msgContent map[string]interface{}
+	if msgType == "markdown" {
+		msgContent = map[string]interface{}{
+			"msgtype": "markdown",
+			"markdown": map[string]string{
+				"title": title,
+				"text":  content,
+			},
+		}
+	} else {
+		msgContent = map[string]interface{}{
+			"msgtype": "text",
 			"text": map[string]string{
 				"content": content,
 			},
-		},
+		}
 	}
 
-	// 如果是markdown...
+	payload := map[string]interface{}{
+		"agent_id":    agentID,
+		"userid_list": receiver,
+		"msg":         msgContent,
+	}
 
 	body, _ := json.Marshal(payload)
 
-	// 3. 发送请求
+	// 3. 发送请求（使用 context）
 	apiURL := fmt.Sprintf("https://oapi.dingtalk.com/topapi/message/corpconversation/asyncsend_v2?access_token=%s", token)
-	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(body))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
 		return nil, err
 	}
@@ -152,14 +199,18 @@ func (s *DingTalkSender) Send(ctx context.Context, req *SendRequest) (*SendRespo
 			ErrorCode:    fmt.Sprintf("%d", respData.ErrCode),
 			ErrorMessage: respData.ErrMsg,
 			TaskID:       req.Task.TaskID,
+			RequestData:  string(body),
+			ResponseData: string(respBody),
 		}, nil
 	}
 
 	return &SendResponse{
-		Success:    true,
-		ProviderID: fmt.Sprintf("%d", respData.TaskID),
-		TaskID:     req.Task.TaskID,
-		Status:     constants.TaskStatusSuccess, // 钉钉消息发送成功即完成
+		Success:      true,
+		ProviderID:   fmt.Sprintf("%d", respData.TaskID),
+		TaskID:       req.Task.TaskID,
+		Status:       constants.TaskStatusSuccess, // 钉钉消息发送成功即完成
+		RequestData:  string(body),
+		ResponseData: string(respBody),
 	}, nil
 }
 
@@ -173,9 +224,14 @@ func (s *DingTalkSender) getAccessToken(ctx context.Context, appKey, appSecret s
 		return token, nil
 	}
 
-	// 从API获取
+	// 从API获取（使用 context）
 	apiURL := fmt.Sprintf("https://oapi.dingtalk.com/gettoken?appkey=%s&appsecret=%s", appKey, appSecret)
-	resp, err := http.Get(apiURL)
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
 		return "", err
 	}
@@ -245,26 +301,57 @@ func (s *DingTalkSender) BatchSend(ctx context.Context, req *BatchSendRequest) (
 
 	// 构造消息（批量发送时使用第一个任务的内容）
 	firstTask := req.Tasks[0]
+
+	// 根据 MessageType 判断消息类型
 	msgType := "text"
+	if firstTask.MessageType == "markdown" {
+		msgType = "markdown"
+	}
 
 	content := firstTask.Content
+
+	// 获取标题（用于 markdown），从签名字段获取，默认为"消息"
+	title := firstTask.Signature
+	if title == "" {
+		title = "消息"
+	}
+
+	// 构造消息体
+	var msgContent map[string]interface{}
+	if msgType == "markdown" {
+		msgContent = map[string]interface{}{
+			"msgtype": "markdown",
+			"markdown": map[string]string{
+				"title": title,
+				"text":  content,
+			},
+		}
+	} else {
+		msgContent = map[string]interface{}{
+			"msgtype": "text",
+			"text": map[string]string{
+				"content": content,
+			},
+		}
+	}
 
 	payload := map[string]interface{}{
 		"agent_id":    agentID,
 		"userid_list": userIDList,
-		"msg": map[string]interface{}{
-			"msgtype": msgType,
-			"text": map[string]string{
-				"content": content,
-			},
-		},
+		"msg":         msgContent,
 	}
 
 	body, _ := json.Marshal(payload)
 
-	// 发送请求
+	// 发送请求（使用 context）
 	apiURL := fmt.Sprintf("https://oapi.dingtalk.com/topapi/message/corpconversation/asyncsend_v2?access_token=%s", token)
-	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(body))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
 		return nil, err
 	}
@@ -293,13 +380,17 @@ func (s *DingTalkSender) BatchSend(ctx context.Context, req *BatchSendRequest) (
 				ErrorCode:    fmt.Sprintf("%d", respData.ErrCode),
 				ErrorMessage: respData.ErrMsg,
 				TaskID:       task.TaskID,
+				RequestData:  string(body),
+				ResponseData: string(respBody),
 			}
 		} else {
 			results[i] = &SendResponse{
-				Success:    true,
-				ProviderID: providerID,
-				TaskID:     task.TaskID,
-				Status:     constants.TaskStatusSuccess, // 钉钉消息发送成功即完成
+				Success:      true,
+				ProviderID:   providerID,
+				TaskID:       task.TaskID,
+				Status:       constants.TaskStatusSuccess, // 钉钉消息发送成功即完成
+				RequestData:  string(body),
+				ResponseData: string(respBody),
 			}
 		}
 	}
@@ -317,30 +408,97 @@ func (s *DingTalkSender) SupportsCallback() bool {
 // HandleCallback 处理钉钉回调
 // 钉钉工作通知消息发送结果回调
 func (s *DingTalkSender) HandleCallback(ctx context.Context, req *CallbackRequest) (CallbackResponse, []*CallbackResult, error) {
-	// 默认响应（钉钉期望返回 "success"）
+	// 默认响应（钉钉期望返回加密后的 "success"）
 	resp := CallbackResponse{
 		StatusCode: 200,
 		Body:       "success",
 	}
 
-	// 钉钉回调数据格式（需要在钉钉开放平台配置回调URL）
+	// 解析请求体获取加密数据
+	var encryptedReq struct {
+		Encrypt string `json:"encrypt"`
+	}
+	if err := json.Unmarshal(req.RawBody, &encryptedReq); err != nil {
+		return resp, nil, fmt.Errorf("invalid callback request: %w", err)
+	}
+
+	// 获取回调签名验证参数
+	signature := req.QueryParams["signature"]
+	timestamp := req.QueryParams["timestamp"]
+	nonce := req.QueryParams["nonce"]
+
+	// 从 Headers 获取配置信息（需要上层服务注入）
+	token := req.Headers["X-Callback-Token"]
+	aesKey := req.Headers["X-Callback-AesKey"]
+	corpID := req.Headers["X-Callback-CorpId"]
+
+	// 如果没有加密配置，尝试直接解析（兼容旧版本）
+	if aesKey == "" || encryptedReq.Encrypt == "" {
+		return s.handlePlainCallback(req.RawBody)
+	}
+
+	// 验证签名
+	if !s.verifyCallbackSignature(token, timestamp, nonce, encryptedReq.Encrypt, signature) {
+		return resp, nil, fmt.Errorf("invalid callback signature")
+	}
+
+	// 解密回调数据
+	plaintext, err := s.decryptCallback(encryptedReq.Encrypt, aesKey)
+	if err != nil {
+		return resp, nil, fmt.Errorf("failed to decrypt callback: %w", err)
+	}
+
+	// 解析解密后的数据
+	result, err := s.parseCallbackData(plaintext)
+	if err != nil {
+		return resp, nil, err
+	}
+
+	// 构造加密响应
+	encryptedResp, err := s.encryptCallback("success", aesKey, corpID)
+	if err != nil {
+		// 加密失败时返回明文
+		return resp, result, nil
+	}
+
+	// 生成响应签名
+	respTimestamp := fmt.Sprintf("%d", time.Now().Unix())
+	respNonce := nonce
+	respSignature := s.generateSignature(token, respTimestamp, respNonce, encryptedResp)
+
+	respBody, _ := json.Marshal(map[string]string{
+		"msg_signature": respSignature,
+		"timeStamp":     respTimestamp,
+		"nonce":         respNonce,
+		"encrypt":       encryptedResp,
+	})
+
+	resp.Body = string(respBody)
+	return resp, result, nil
+}
+
+// handlePlainCallback 处理明文回调（兼容旧版本）
+func (s *DingTalkSender) handlePlainCallback(rawBody []byte) (CallbackResponse, []*CallbackResult, error) {
+	resp := CallbackResponse{
+		StatusCode: 200,
+		Body:       "success",
+	}
+
 	var callbackData struct {
-		EventType string `json:"EventType"` // bpms_task_change, check_url, etc.
+		EventType string `json:"EventType"`
 		TaskID    int64  `json:"task_id"`
 		CorpID    string `json:"corpid"`
 		UserID    string `json:"userid"`
-		Status    string `json:"status"` // 0:未读, 1:已读, 2:已使用
+		Status    string `json:"status"`
 		ErrCode   int    `json:"errcode"`
 		ErrMsg    string `json:"errmsg"`
 		Timestamp int64  `json:"timestamp"`
 	}
 
-	if err := json.Unmarshal(req.RawBody, &callbackData); err != nil {
-		// 即使解析失败也返回成功响应，避免服务商重复推送
+	if err := json.Unmarshal(rawBody, &callbackData); err != nil {
 		return resp, nil, fmt.Errorf("invalid callback data: %w", err)
 	}
 
-	// 钉钉的消息状态：0-未读, 1-已读, 2-已使用
 	status := constants.CallbackStatusDelivered
 	if callbackData.ErrCode != 0 {
 		status = constants.CallbackStatusFailed
@@ -358,4 +516,183 @@ func (s *DingTalkSender) HandleCallback(ctx context.Context, req *CallbackReques
 		ErrorMessage: callbackData.ErrMsg,
 		ReportTime:   reportTime,
 	}}, nil
+}
+
+// parseCallbackData 解析回调数据
+func (s *DingTalkSender) parseCallbackData(plaintext []byte) ([]*CallbackResult, error) {
+	var callbackData struct {
+		EventType string `json:"EventType"`
+		TaskID    int64  `json:"task_id"`
+		CorpID    string `json:"corpid"`
+		UserID    string `json:"userid"`
+		Status    string `json:"status"`
+		ErrCode   int    `json:"errcode"`
+		ErrMsg    string `json:"errmsg"`
+		Timestamp int64  `json:"TimeStamp"`
+	}
+
+	if err := json.Unmarshal(plaintext, &callbackData); err != nil {
+		return nil, fmt.Errorf("invalid callback data: %w", err)
+	}
+
+	// check_url 事件不需要处理
+	if callbackData.EventType == "check_url" {
+		return nil, nil
+	}
+
+	status := constants.CallbackStatusDelivered
+	if callbackData.ErrCode != 0 {
+		status = constants.CallbackStatusFailed
+	}
+
+	reportTime := time.Unix(callbackData.Timestamp/1000, 0)
+	if callbackData.Timestamp == 0 {
+		reportTime = time.Now()
+	}
+
+	return []*CallbackResult{{
+		ProviderID:   fmt.Sprintf("%d", callbackData.TaskID),
+		Status:       status,
+		ErrorCode:    fmt.Sprintf("%d", callbackData.ErrCode),
+		ErrorMessage: callbackData.ErrMsg,
+		ReportTime:   reportTime,
+	}}, nil
+}
+
+// verifyCallbackSignature 验证回调签名
+func (s *DingTalkSender) verifyCallbackSignature(token, timestamp, nonce, encrypt, signature string) bool {
+	return s.generateSignature(token, timestamp, nonce, encrypt) == signature
+}
+
+// generateSignature 生成签名
+func (s *DingTalkSender) generateSignature(token, timestamp, nonce, encrypt string) string {
+	params := []string{token, timestamp, nonce, encrypt}
+	sort.Strings(params)
+	joined := strings.Join(params, "")
+
+	h := sha1.New()
+	h.Write([]byte(joined))
+	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
+// decryptCallback 解密回调数据
+// 钉钉使用 AES-CBC 加密，密钥为 EncodingAESKey + "=" base64解码后的32字节
+func (s *DingTalkSender) decryptCallback(encrypted, aesKey string) ([]byte, error) {
+	// AESKey = Base64_Decode(EncodingAESKey + "=")
+	key, err := base64.StdEncoding.DecodeString(aesKey + "=")
+	if err != nil {
+		return nil, fmt.Errorf("invalid aes key: %w", err)
+	}
+
+	// 解码密文
+	ciphertext, err := base64.StdEncoding.DecodeString(encrypted)
+	if err != nil {
+		return nil, fmt.Errorf("invalid encrypted data: %w", err)
+	}
+
+	// AES-CBC 解密
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cipher: %w", err)
+	}
+
+	if len(ciphertext) < aes.BlockSize {
+		return nil, fmt.Errorf("ciphertext too short")
+	}
+
+	// IV 是密钥的前16字节
+	iv := key[:aes.BlockSize]
+	mode := cipher.NewCBCDecrypter(block, iv)
+	mode.CryptBlocks(ciphertext, ciphertext)
+
+	// 去除 PKCS7 填充
+	plaintext, err := s.pkcs7Unpad(ciphertext)
+	if err != nil {
+		return nil, err
+	}
+
+	// 钉钉消息格式: random(16bytes) + msg_len(4bytes) + msg + corp_id
+	if len(plaintext) < 20 {
+		return nil, fmt.Errorf("plaintext too short")
+	}
+
+	// 跳过16字节随机数
+	plaintext = plaintext[16:]
+
+	// 读取消息长度（4字节大端序）
+	msgLen := int(binary.BigEndian.Uint32(plaintext[:4]))
+	plaintext = plaintext[4:]
+
+	if msgLen > len(plaintext) {
+		return nil, fmt.Errorf("invalid message length")
+	}
+
+	// 提取消息内容
+	return plaintext[:msgLen], nil
+}
+
+// encryptCallback 加密响应数据
+func (s *DingTalkSender) encryptCallback(msg, aesKey, corpID string) (string, error) {
+	// AESKey = Base64_Decode(EncodingAESKey + "=")
+	key, err := base64.StdEncoding.DecodeString(aesKey + "=")
+	if err != nil {
+		return "", fmt.Errorf("invalid aes key: %w", err)
+	}
+
+	// 构造消息: random(16bytes) + msg_len(4bytes) + msg + corp_id
+	msgBytes := []byte(msg)
+	corpIDBytes := []byte(corpID)
+
+	// 16字节随机数
+	random := make([]byte, 16)
+	for i := range random {
+		random[i] = byte(i)
+	}
+
+	// 4字节消息长度（大端序）
+	msgLen := make([]byte, 4)
+	binary.BigEndian.PutUint32(msgLen, uint32(len(msgBytes)))
+
+	// 拼接
+	plaintext := append(random, msgLen...)
+	plaintext = append(plaintext, msgBytes...)
+	plaintext = append(plaintext, corpIDBytes...)
+
+	// PKCS7 填充
+	plaintext = s.pkcs7Pad(plaintext, aes.BlockSize)
+
+	// AES-CBC 加密
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", fmt.Errorf("failed to create cipher: %w", err)
+	}
+
+	// IV 是密钥的前16字节
+	iv := key[:aes.BlockSize]
+	mode := cipher.NewCBCEncrypter(block, iv)
+
+	ciphertext := make([]byte, len(plaintext))
+	mode.CryptBlocks(ciphertext, plaintext)
+
+	return base64.StdEncoding.EncodeToString(ciphertext), nil
+}
+
+// pkcs7Pad PKCS7填充
+func (s *DingTalkSender) pkcs7Pad(data []byte, blockSize int) []byte {
+	padding := blockSize - len(data)%blockSize
+	padtext := bytes.Repeat([]byte{byte(padding)}, padding)
+	return append(data, padtext...)
+}
+
+// pkcs7Unpad PKCS7去填充
+func (s *DingTalkSender) pkcs7Unpad(data []byte) ([]byte, error) {
+	length := len(data)
+	if length == 0 {
+		return nil, fmt.Errorf("empty data")
+	}
+	padding := int(data[length-1])
+	if padding > length || padding > aes.BlockSize {
+		return nil, fmt.Errorf("invalid padding")
+	}
+	return data[:length-padding], nil
 }

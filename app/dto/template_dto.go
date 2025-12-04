@@ -7,7 +7,6 @@ import "time"
 // CreateMessageTemplateRequest 创建系统模板请求
 type CreateMessageTemplateRequest struct {
 	TemplateName string   `json:"template_name" binding:"required"`
-	MessageType  string   `json:"message_type" binding:"required"`
 	ContentType  string   `json:"content_type"` // text, html, markdown
 	Content      string   `json:"content" binding:"required"`
 	Variables    []string `json:"variables"`
@@ -18,7 +17,6 @@ type CreateMessageTemplateRequest struct {
 // UpdateMessageTemplateRequest 更新系统模板请求
 type UpdateMessageTemplateRequest struct {
 	TemplateName string   `json:"template_name"`
-	MessageType  string   `json:"message_type"`
 	ContentType  string   `json:"content_type"` // text, html, markdown
 	Content      string   `json:"content"`
 	Variables    []string `json:"variables"`
@@ -30,7 +28,6 @@ type UpdateMessageTemplateRequest struct {
 type MessageTemplateResponse struct {
 	ID           uint      `json:"id"`
 	TemplateName string    `json:"template_name"`
-	MessageType  string    `json:"message_type"`
 	ContentType  string    `json:"content_type"`
 	Content      string    `json:"content"`
 	Variables    []string  `json:"variables"`
@@ -42,10 +39,9 @@ type MessageTemplateResponse struct {
 
 // MessageTemplateListRequest 系统模板列表查询请求
 type MessageTemplateListRequest struct {
-	MessageType string `form:"message_type"`
-	Status      *int8  `form:"status"`
-	Page        int    `form:"page" binding:"required,min=1"`
-	PageSize    int    `form:"page_size" binding:"required,min=1,max=100"`
+	Status   *int8 `form:"status"`
+	Page     int   `form:"page" binding:"required,min=1"`
+	PageSize int   `form:"page_size" binding:"required,min=1,max=100"`
 }
 
 // MessageTemplateListResponse 系统模板列表响应
@@ -160,7 +156,6 @@ type TemplateBindingResponse struct {
 type SimpleMessageTemplateInfo struct {
 	ID           uint   `json:"id"`
 	TemplateName string `json:"template_name"`
-	MessageType  string `json:"message_type"`
 }
 
 // SimpleProviderTemplateInfo 简单供应商模板信息

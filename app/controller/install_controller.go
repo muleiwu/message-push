@@ -5,10 +5,11 @@ import (
 
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dto"
-	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/app/service"
 	"cnb.cool/mliev/push/message-push/internal/interfaces"
 	"cnb.cool/mliev/push/message-push/internal/pkg/reload"
+	"cnb.cool/mliev/push/message-push/internal/service/migration"
+	"cnb.cool/mliev/push/message-push/migrations"
 	"github.com/gin-gonic/gin"
 )
 
@@ -139,25 +140,23 @@ func (ic InstallController) SubmitInstall(c *gin.Context, helper interfaces.Help
 		return
 	}
 
-	// 7. 执行数据库迁移（自动创建表）
-	if err := testDB.AutoMigrate(
-		&model.AdminUser{},
-		&model.Application{},
-		&model.ProviderAccount{},
-		&model.ProviderSignature{},
-		&model.Channel{},
-		&model.MessageTemplate{},
-		&model.ProviderTemplate{},
-		&model.ChannelTemplateBinding{},
-		&model.ChannelSignatureMapping{},
-		&model.PushTask{},
-		&model.PushBatchTask{},
-		&model.PushLog{},
-		&model.ChannelHealthHistory{},
-		&model.AppQuotaStat{},
-		&model.ProviderQuotaStat{},
-		&model.WebhookConfig{},
-	); err != nil {
+	// 7. 执行数据库迁移（使用 goose 版本化迁移）
+	sqlDB, err := testDB.DB()
+	if err != nil {
+		ic.Error(c, constants.CodeInternalError, "获取数据库连接失败: "+err.Error())
+		return
+	}
+
+	// 设置外部数据库连接供 initial_schema 迁移使用
+	migrations.SetExternalDB(testDB)
+	defer migrations.ClearExternalDB()
+
+	// 执行 goose 迁移，使用用户选择的数据库驱动作为方言
+	dialect := req.Database.Driver
+	if dialect == "" {
+		dialect = "mysql" // 默认 MySQL
+	}
+	if err := migration.RunGooseMigrations(sqlDB, dialect, nil); err != nil {
 		ic.Error(c, constants.CodeInternalError, "数据库迁移失败: "+err.Error())
 		return
 	}

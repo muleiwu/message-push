@@ -41,15 +41,12 @@ func (d *MessageTemplateDAO) Delete(id uint) error {
 }
 
 // List 查询系统模板列表
-func (d *MessageTemplateDAO) List(messageType string, status *int8, page, pageSize int) ([]*model.MessageTemplate, int64, error) {
+func (d *MessageTemplateDAO) List(status *int8, page, pageSize int) ([]*model.MessageTemplate, int64, error) {
 	var templates []*model.MessageTemplate
 	var total int64
 
 	query := d.db.Model(&model.MessageTemplate{})
 
-	if messageType != "" {
-		query = query.Where("message_type = ?", messageType)
-	}
 	if status != nil {
 		query = query.Where("status = ?", *status)
 	}

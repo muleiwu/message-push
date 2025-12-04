@@ -11,12 +11,11 @@ import (
 type MessageTemplate struct {
 	ID           uint           `gorm:"primaryKey;autoIncrement" json:"id"`
 	TemplateName string         `gorm:"type:varchar(200);not null;comment:模板名称" json:"template_name"`
-	MessageType  string         `gorm:"type:varchar(20);not null;index:idx_type_status;comment:消息类型：sms, email, wechat_work, dingtalk, webhook, push" json:"message_type"`
 	ContentType  string         `gorm:"type:varchar(20);default:text;comment:内容类型：text=纯文本, html=HTML富文本, markdown=Markdown" json:"content_type"`
 	Content      string         `gorm:"type:text;not null;comment:模板内容，使用{variable}占位符" json:"content"`
 	Variables    string         `gorm:"type:json;comment:模板变量列表，JSON数组格式" json:"variables"`
 	Description  string         `gorm:"type:text;comment:模板描述" json:"description"`
-	Status       int8           `gorm:"type:tinyint;default:1;index:idx_type_status;comment:状态：1=启用 0=禁用" json:"status"`
+	Status       int8           `gorm:"type:tinyint;default:1;index:idx_status;comment:状态：1=启用 0=禁用" json:"status"`
 	CreatedAt    time.Time      `gorm:"type:timestamp;default:CURRENT_TIMESTAMP" json:"created_at"`
 	UpdatedAt    time.Time      `gorm:"type:timestamp;default:CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" json:"updated_at"`
 	DeletedAt    gorm.DeletedAt `gorm:"index" json:"deleted_at"`

@@ -39,7 +39,6 @@ func (s *TemplateService) CreateMessageTemplate(req *dto.CreateMessageTemplateRe
 	// 创建模板
 	template := &model.MessageTemplate{
 		TemplateName: req.TemplateName,
-		MessageType:  req.MessageType,
 		ContentType:  contentType,
 		Content:      req.Content,
 		Description:  req.Description,
@@ -77,9 +76,6 @@ func (s *TemplateService) UpdateMessageTemplate(id uint, req *dto.UpdateMessageT
 	// 更新字段
 	if req.TemplateName != "" {
 		template.TemplateName = req.TemplateName
-	}
-	if req.MessageType != "" {
-		template.MessageType = req.MessageType
 	}
 	if req.ContentType != "" {
 		template.ContentType = req.ContentType
@@ -126,7 +122,7 @@ func (s *TemplateService) DeleteMessageTemplate(id uint) error {
 
 // ListMessageTemplates 查询系统模板列表
 func (s *TemplateService) ListMessageTemplates(req *dto.MessageTemplateListRequest) (*dto.MessageTemplateListResponse, error) {
-	templates, total, err := s.messageTemplateDAO.List(req.MessageType, req.Status, req.Page, req.PageSize)
+	templates, total, err := s.messageTemplateDAO.List(req.Status, req.Page, req.PageSize)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list templates: %w", err)
 	}
@@ -310,7 +306,6 @@ func (s *TemplateService) buildMessageTemplateResponse(template *model.MessageTe
 	return &dto.MessageTemplateResponse{
 		ID:           template.ID,
 		TemplateName: template.TemplateName,
-		MessageType:  template.MessageType,
 		ContentType:  contentType,
 		Content:      template.Content,
 		Variables:    variables,

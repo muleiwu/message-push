@@ -87,11 +87,6 @@ func (s *AdminChannelService) CreateChannel(req *dto.CreateChannelRequest) (*dto
 		return nil, fmt.Errorf("message template not found: %w", err)
 	}
 
-	// 验证通道类型与模板类型是否匹配
-	if messageTemplate.MessageType != req.Type {
-		return nil, fmt.Errorf("channel type '%s' does not match template type '%s'", req.Type, messageTemplate.MessageType)
-	}
-
 	status := int8(req.Status)
 	if status == 0 {
 		status = 1 // 默认启用
