@@ -363,7 +363,7 @@ func (s *SMTPSender) Send(ctx context.Context, req *SendRequest) (*SendResponse,
 	message += fmt.Sprintf("Subject: %s\r\n", subject)
 	message += fmt.Sprintf("Content-Type: %s\r\n", contentType)
 	message += "\r\n"
-	message += req.Task.Content
+	message += req.RenderedContent
 
 	// 构建请求数据用于调试（不包含密码）
 	requestData, _ := json.Marshal(map[string]interface{}{
@@ -450,7 +450,7 @@ func (s *SMTPSender) BatchSend(ctx context.Context, req *BatchSendRequest) (*Bat
 		message += fmt.Sprintf("Subject: %s\r\n", subject)
 		message += fmt.Sprintf("Content-Type: %s\r\n", contentType)
 		message += "\r\n"
-		message += task.Content
+		message += req.RenderedContent
 
 		// 构建请求数据用于调试（不包含密码）
 		requestData, _ := json.Marshal(map[string]interface{}{

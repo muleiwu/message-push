@@ -15,7 +15,6 @@ type PushTask struct {
 	ChannelID          uint       `gorm:"type:bigint unsigned;not null;index:idx_channel;comment:通道ID" json:"channel_id"`
 	MessageType        string     `gorm:"type:varchar(20);not null;comment:消息类型：sms, email等" json:"message_type"`
 	Receiver           string     `gorm:"type:varchar(100);not null;comment:接收者（手机号/邮箱/UserID等）" json:"receiver"`
-	Content            string     `gorm:"type:text;comment:内容（直接发送或模板渲染后内容）" json:"content"`
 	TemplateCode       string     `gorm:"type:varchar(50);comment:模板代码" json:"template_code"`
 	TemplateParams     string     `gorm:"type:json;comment:模板参数" json:"template_params"`
 	Signature          string     `gorm:"type:varchar(50);comment:签名" json:"signature"`

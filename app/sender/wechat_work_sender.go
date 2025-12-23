@@ -114,7 +114,7 @@ func (s *WeChatWorkSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 		toUser = "@all"
 	}
 
-	content := req.Task.Content
+	content := req.RenderedContent
 
 	payload := map[string]interface{}{
 		"touser":  toUser,
@@ -258,7 +258,7 @@ func (s *WeChatWorkSender) BatchSend(ctx context.Context, req *BatchSendRequest)
 		msgType = "markdown"
 	}
 
-	content := firstTask.Content
+	content := req.RenderedContent
 
 	payload := map[string]interface{}{
 		"touser":  toUser,

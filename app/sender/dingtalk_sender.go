@@ -132,7 +132,7 @@ func (s *DingTalkSender) Send(ctx context.Context, req *SendRequest) (*SendRespo
 
 	// 接收者 user_id_list
 	receiver := req.Task.Receiver // userId1,userId2...
-	content := req.Task.Content
+	content := req.RenderedContent
 
 	// 获取标题（用于 markdown），从签名字段获取，默认为"消息"
 	title := req.Task.Signature
@@ -308,7 +308,7 @@ func (s *DingTalkSender) BatchSend(ctx context.Context, req *BatchSendRequest) (
 		msgType = "markdown"
 	}
 
-	content := firstTask.Content
+	content := req.RenderedContent
 
 	// 获取标题（用于 markdown），从签名字段获取，默认为"消息"
 	title := firstTask.Signature

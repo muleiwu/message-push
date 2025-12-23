@@ -31,6 +31,7 @@ type SendRequest struct {
 	ChannelTemplateBinding *model.ChannelTemplateBinding // 通道模板绑定配置
 	Signature              *model.ProviderSignature      // 签名配置（用于SMS类型）
 	MappedParams           map[string]string             // 映射后的模板参数（供应商变量名到值的映射）
+	RenderedContent        string                        // 供应商模板渲染后的内容
 }
 
 // SendResponse 发送响应
@@ -65,6 +66,7 @@ type BatchSendRequest struct {
 	ChannelTemplateBinding *model.ChannelTemplateBinding
 	Signature              *model.ProviderSignature
 	MappedParams           map[string]string // 映射后的模板参数（供应商变量名到值的映射）
+	RenderedContent        string            // 供应商模板渲染后的内容（批量发送时所有任务共用）
 }
 
 // BatchSendResponse 批量发送响应

@@ -131,6 +131,23 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 		}
 	}
 
+	// 渲染供应商模板内容
+	renderedContent := ""
+	if node.ChannelTemplateBinding != nil &&
+		node.ChannelTemplateBinding.ProviderTemplate != nil &&
+		node.ChannelTemplateBinding.ProviderTemplate.TemplateContent != "" {
+		renderedContent, err = h.templateHelper.RenderSimple(
+			node.ChannelTemplateBinding.ProviderTemplate.TemplateContent,
+			mappedParams,
+		)
+		if err != nil {
+			h.logger.Warn(fmt.Sprintf("failed to render provider template task_id=%s: %v", taskID, err))
+			renderedContent = ""
+		} else {
+			h.logger.Info(fmt.Sprintf("provider template rendered task_id=%s content_length=%d", taskID, len(renderedContent)))
+		}
+	}
+
 	// 发送消息
 	sendReq := &sender.SendRequest{
 		Task:                   task,
@@ -138,6 +155,7 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 		ChannelTemplateBinding: node.ChannelTemplateBinding,
 		Signature:              providerSignature,
 		MappedParams:           mappedParams,
+		RenderedContent:        renderedContent,
 	}
 
 	resp, err := messageSender.Send(ctx, sendReq)
