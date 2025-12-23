@@ -99,11 +99,6 @@ func (s *MessageService) Send(ctx context.Context, req *dto.SendRequest) (*dto.S
 		return nil, err
 	}
 
-	content, err := s.templateHelper.RenderSimple(messageTemplate.Content, req.TemplateParams)
-	if err != nil {
-		return nil, fmt.Errorf("failed to render template: %w", err)
-	}
-
 	// 4. 创建任务
 	taskID := uuid.New().String()
 	templateParamsJSON, _ := s.templateHelper.RenderJSON(req.TemplateParams)
@@ -113,7 +108,6 @@ func (s *MessageService) Send(ctx context.Context, req *dto.SendRequest) (*dto.S
 		ChannelID:      req.ChannelID,
 		MessageType:    channel.Type,
 		Receiver:       req.Receiver,
-		Content:        content,
 		TemplateCode:   "", // 将由 worker 更新为实际使用的供应商模板代码
 		TemplateParams: templateParamsJSON,
 		Signature:      req.SignatureName, // 用户自定义签名名称
@@ -200,11 +194,6 @@ func (s *MessageService) BatchSend(ctx context.Context, req *dto.BatchSendReques
 	var tasks []*model.PushTask
 	successCount := 0
 
-	// 渲染模板内容（所有接收者共用相同的模板参数）
-	content, err := s.templateHelper.RenderSimple(messageTemplate.Content, req.TemplateParams)
-	if err != nil {
-		return nil, fmt.Errorf("failed to render template: %w", err)
-	}
 	templateParamsJSON, _ := s.templateHelper.RenderJSON(req.TemplateParams)
 
 	for _, receiver := range req.Receivers {
@@ -215,7 +204,6 @@ func (s *MessageService) BatchSend(ctx context.Context, req *dto.BatchSendReques
 			ChannelID:      req.ChannelID,
 			MessageType:    channel.Type,
 			Receiver:       receiver,
-			Content:        content,
 			TemplateCode:   "", // 将由 worker 更新为实际使用的供应商模板代码
 			TemplateParams: templateParamsJSON,
 			Signature:      req.SignatureName, // 用户自定义签名名称

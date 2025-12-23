@@ -93,7 +93,7 @@ func (s *AdminTaskService) GetPushTaskList(req *dto.PushTaskListRequest) (*dto.P
 			ProviderMsgID:  providerMsgID,
 			MessageType:    task.MessageType,
 			Receiver:       task.Receiver,
-			Content:        task.Content,
+			Content:        "", // Content 字段已删除，前端可根据 TemplateParams 动态渲染
 			TemplateCode:   task.TemplateCode,
 			TemplateParams: task.TemplateParams,
 			Signature:      task.Signature,
@@ -227,7 +227,7 @@ func (s *AdminTaskService) convertPushTaskToItem(task *model.PushTask) *dto.Push
 		ProviderMsgID:  providerMsgID,
 		MessageType:    task.MessageType,
 		Receiver:       task.Receiver,
-		Content:        task.Content,
+		Content:        "", // Content 字段已删除，前端可根据 TemplateParams 动态渲染
 		TemplateCode:   task.TemplateCode,
 		TemplateParams: task.TemplateParams,
 		Signature:      task.Signature,

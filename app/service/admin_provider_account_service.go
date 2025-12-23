@@ -368,22 +368,19 @@ func (s *AdminProviderAccountService) TestProviderAccount(id uint, req *dto.Test
 			return nil, fmt.Errorf("phone number is required for sms")
 		}
 		task.Receiver = req.Phone
-		task.Content = req.Message
 	case "email":
 		if req.Email == "" {
 			return nil, fmt.Errorf("email is required for email")
 		}
 		task.Receiver = req.Email
-		task.Content = req.Message
 		task.Signature = "测试邮件"
-	default:
-		task.Content = req.Message
 	}
 
 	sendReq := &sender.SendRequest{
 		Task:            task,
 		ProviderAccount: account,
 		Signature:       nil, // 测试时不加载签名，由服务商返回错误
+		RenderedContent: req.Message, // 测试消息直接作为渲染内容
 	}
 
 	// 3. 获取发送器（使用服务商代码）
