@@ -6,7 +6,7 @@ import (
 	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
 	"cnb.cool/mliev/push/message-push/app/controller"
 	"cnb.cool/mliev/push/message-push/app/dto"
-	"cnb.cool/mliev/push/message-push/app/service"
+	"cnb.cool/mliev/push/message-push/modules/template"
 )
 
 // TemplateController 模板管理控制器
@@ -17,7 +17,7 @@ type TemplateController struct {
 
 // CreateMessageTemplate 创建系统模板
 func (c TemplateController) CreateMessageTemplate(ctx httpInterfaces.RouterContextInterface) {
-	templateService := service.NewTemplateService()
+	templateService := template.GetService()
 	var req dto.CreateMessageTemplateRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		controller.ErrorResponse(ctx, 400, "invalid request: "+err.Error())
@@ -35,7 +35,7 @@ func (c TemplateController) CreateMessageTemplate(ctx httpInterfaces.RouterConte
 
 // UpdateMessageTemplate 更新系统模板
 func (c TemplateController) UpdateMessageTemplate(ctx httpInterfaces.RouterContextInterface) {
-	templateService := service.NewTemplateService()
+	templateService := template.GetService()
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
 		controller.ErrorResponse(ctx, 400, "invalid id")
@@ -59,7 +59,7 @@ func (c TemplateController) UpdateMessageTemplate(ctx httpInterfaces.RouterConte
 
 // GetMessageTemplate 获取系统模板详情
 func (c TemplateController) GetMessageTemplate(ctx httpInterfaces.RouterContextInterface) {
-	templateService := service.NewTemplateService()
+	templateService := template.GetService()
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
 		controller.ErrorResponse(ctx, 400, "invalid id")
@@ -77,7 +77,7 @@ func (c TemplateController) GetMessageTemplate(ctx httpInterfaces.RouterContextI
 
 // DeleteMessageTemplate 删除系统模板
 func (c TemplateController) DeleteMessageTemplate(ctx httpInterfaces.RouterContextInterface) {
-	templateService := service.NewTemplateService()
+	templateService := template.GetService()
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
 		controller.ErrorResponse(ctx, 400, "invalid id")
@@ -94,7 +94,7 @@ func (c TemplateController) DeleteMessageTemplate(ctx httpInterfaces.RouterConte
 
 // ListMessageTemplates 查询系统模板列表
 func (c TemplateController) ListMessageTemplates(ctx httpInterfaces.RouterContextInterface) {
-	templateService := service.NewTemplateService()
+	templateService := template.GetService()
 	var req dto.MessageTemplateListRequest
 	if err := ctx.ShouldBindQuery(&req); err != nil {
 		controller.ErrorResponse(ctx, 400, "invalid request: "+err.Error())
@@ -122,7 +122,7 @@ func (c TemplateController) ListMessageTemplates(ctx httpInterfaces.RouterContex
 
 // CreateProviderTemplate 创建供应商模板
 func (c TemplateController) CreateProviderTemplate(ctx httpInterfaces.RouterContextInterface) {
-	templateService := service.NewTemplateService()
+	templateService := template.GetService()
 	var req dto.CreateProviderTemplateRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		controller.ErrorResponse(ctx, 400, "invalid request: "+err.Error())
@@ -140,7 +140,7 @@ func (c TemplateController) CreateProviderTemplate(ctx httpInterfaces.RouterCont
 
 // UpdateProviderTemplate 更新供应商模板
 func (c TemplateController) UpdateProviderTemplate(ctx httpInterfaces.RouterContextInterface) {
-	templateService := service.NewTemplateService()
+	templateService := template.GetService()
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
 		controller.ErrorResponse(ctx, 400, "invalid id")
@@ -164,7 +164,7 @@ func (c TemplateController) UpdateProviderTemplate(ctx httpInterfaces.RouterCont
 
 // GetProviderTemplate 获取供应商模板详情
 func (c TemplateController) GetProviderTemplate(ctx httpInterfaces.RouterContextInterface) {
-	templateService := service.NewTemplateService()
+	templateService := template.GetService()
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
 		controller.ErrorResponse(ctx, 400, "invalid id")
@@ -182,7 +182,7 @@ func (c TemplateController) GetProviderTemplate(ctx httpInterfaces.RouterContext
 
 // DeleteProviderTemplate 删除供应商模板
 func (c TemplateController) DeleteProviderTemplate(ctx httpInterfaces.RouterContextInterface) {
-	templateService := service.NewTemplateService()
+	templateService := template.GetService()
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
 		controller.ErrorResponse(ctx, 400, "invalid id")
@@ -199,7 +199,7 @@ func (c TemplateController) DeleteProviderTemplate(ctx httpInterfaces.RouterCont
 
 // ListProviderTemplates 查询供应商模板列表
 func (c TemplateController) ListProviderTemplates(ctx httpInterfaces.RouterContextInterface) {
-	templateService := service.NewTemplateService()
+	templateService := template.GetService()
 	var req dto.ProviderTemplateListRequest
 	if err := ctx.ShouldBindQuery(&req); err != nil {
 		controller.ErrorResponse(ctx, 400, "invalid request: "+err.Error())

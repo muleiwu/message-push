@@ -1,4 +1,4 @@
-package service
+package infrastructure
 
 import (
 	"errors"
@@ -7,8 +7,12 @@ import (
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/modules/template/domain"
 	"gorm.io/gorm"
 )
+
+// 确保 TemplateService 实现 domain.Service 端口
+var _ domain.Service = (*TemplateService)(nil)
 
 // TemplateService 模板管理服务
 type TemplateService struct {

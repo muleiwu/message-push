@@ -8,6 +8,7 @@ import (
 	messagingAssembly "cnb.cool/mliev/push/message-push/modules/messaging/assembly"
 	ruleengineAssembly "cnb.cool/mliev/push/message-push/modules/ruleengine/assembly"
 	senderAssembly "cnb.cool/mliev/push/message-push/modules/sender/assembly"
+	templateAssembly "cnb.cool/mliev/push/message-push/modules/template/assembly"
 )
 
 // pushAssemblies 返回 message-push 专属的 Assembly 列表。
@@ -20,6 +21,8 @@ func pushAssemblies() []interfaces.AssemblyInterface {
 		&channelAssembly.Channel{},
 		&ruleengineAssembly.RuleEngine{},
 		&deliveryAssembly.Producer{},
+		&templateAssembly.Renderer{},
+		&templateAssembly.Service{},
 		&messagingAssembly.Messaging{},
 	}
 }

@@ -14,6 +14,7 @@ import (
 	"cnb.cool/mliev/push/message-push/modules/channel"
 	"cnb.cool/mliev/push/message-push/modules/delivery"
 	"cnb.cool/mliev/push/message-push/modules/messaging/domain"
+	"cnb.cool/mliev/push/message-push/modules/template"
 	"github.com/google/uuid"
 	"github.com/muleiwu/gsr"
 )
@@ -29,7 +30,7 @@ type MessageService struct {
 	taskDao            *dao.PushTaskDAO
 	appDao             *dao.ApplicationDAO
 	messageTemplateDao *dao.MessageTemplateDAO
-	templateHelper     *helper.TemplateHelper
+	templateHelper     template.Renderer
 }
 
 // NewMessageService 创建消息服务
@@ -41,7 +42,7 @@ func NewMessageService() *MessageService {
 		taskDao:            dao.NewPushTaskDAO(),
 		appDao:             dao.NewApplicationDAO(),
 		messageTemplateDao: dao.NewMessageTemplateDAO(),
-		templateHelper:     helper.NewTemplateHelper(),
+		templateHelper:     template.GetRenderer(),
 	}
 }
 

@@ -1,4 +1,4 @@
-package helper
+package infrastructure
 
 import (
 	"bytes"
@@ -9,7 +9,11 @@ import (
 	"text/template"
 
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/modules/template/domain"
 )
+
+// 确保 TemplateHelper 实现 domain.Renderer 端口
+var _ domain.Renderer = (*TemplateHelper)(nil)
 
 // TemplateHelper 模板助手
 type TemplateHelper struct {

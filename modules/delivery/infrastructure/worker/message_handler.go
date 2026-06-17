@@ -16,6 +16,7 @@ import (
 	"cnb.cool/mliev/push/message-push/modules/delivery/infrastructure/queue"
 	"cnb.cool/mliev/push/message-push/modules/ruleengine"
 	"cnb.cool/mliev/push/message-push/modules/sender"
+	"cnb.cool/mliev/push/message-push/modules/template"
 	"github.com/muleiwu/gsr"
 )
 
@@ -36,7 +37,7 @@ type MessageHandler struct {
 	senderResolver      sender.Resolver
 	retryHelper         *helper.RetryHelper
 	signatureMappingDao *dao.ChannelSignatureMappingDAO
-	templateHelper      *helper.TemplateHelper
+	templateHelper      template.Renderer
 	ruleEngine          ruleengine.Engine
 	actionExecutor      *service.ActionExecutor
 }
@@ -51,7 +52,7 @@ func NewMessageHandler() *MessageHandler {
 		senderResolver:      sender.GetResolver(),
 		retryHelper:         helper.NewRetryHelper(),
 		signatureMappingDao: dao.NewChannelSignatureMappingDAO(internalHelper.GetDatabase()),
-		templateHelper:      helper.NewTemplateHelper(),
+		templateHelper:      template.GetRenderer(),
 		ruleEngine:          ruleengine.GetEngine(),
 		actionExecutor:      service.NewActionExecutor(),
 	}
