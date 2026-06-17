@@ -8,7 +8,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/model"
-	"cnb.cool/mliev/push/message-push/app/selector"
+	"cnb.cool/mliev/push/message-push/modules/channel"
 )
 
 // convertModelParamMappingToDTO 将 model.ParamMappingItem 转换为 dto.ParamMappingItem
@@ -52,7 +52,7 @@ type AdminChannelService struct {
 	providerTemplateDAO  *dao.ProviderTemplateDAO
 	signatureMappingDAO  *dao.ChannelSignatureMappingDAO
 	providerSignatureDAO *dao.ProviderSignatureDAO
-	channelSelector      *selector.ChannelSelector // 用于在配置变更时重置缓存和权重
+	channelSelector      channel.Selector // 用于在配置变更时重置缓存和权重
 }
 
 // NewAdminChannelService 创建通道管理服务实例
@@ -64,7 +64,7 @@ func NewAdminChannelService() *AdminChannelService {
 		providerTemplateDAO:  dao.NewProviderTemplateDAO(),
 		signatureMappingDAO:  dao.NewChannelSignatureMappingDAO(db),
 		providerSignatureDAO: dao.NewProviderSignatureDAO(db),
-		channelSelector:      selector.NewChannelSelector(),
+		channelSelector:      channel.GetSelector(),
 	}
 }
 

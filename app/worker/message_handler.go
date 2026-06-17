@@ -12,8 +12,8 @@ import (
 	"cnb.cool/mliev/push/message-push/app/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/app/queue"
-	"cnb.cool/mliev/push/message-push/app/selector"
 	"cnb.cool/mliev/push/message-push/app/service"
+	"cnb.cool/mliev/push/message-push/modules/channel"
 	"cnb.cool/mliev/push/message-push/modules/sender"
 	"github.com/muleiwu/gsr"
 )
@@ -31,7 +31,7 @@ type MessageHandler struct {
 	logger              gsr.Logger
 	taskDao             *dao.PushTaskDAO
 	logDao              *dao.PushLogDAO
-	selector            *selector.ChannelSelector
+	selector            channel.Selector
 	senderResolver      sender.Resolver
 	retryHelper         *helper.RetryHelper
 	signatureMappingDao *dao.ChannelSignatureMappingDAO
@@ -46,7 +46,7 @@ func NewMessageHandler() *MessageHandler {
 		logger:              internalHelper.GetLogger(),
 		taskDao:             dao.NewPushTaskDAO(),
 		logDao:              dao.NewPushLogDAO(),
-		selector:            selector.NewChannelSelector(),
+		selector:            channel.GetSelector(),
 		senderResolver:      sender.GetResolver(),
 		retryHelper:         helper.NewRetryHelper(),
 		signatureMappingDao: dao.NewChannelSignatureMappingDAO(internalHelper.GetDatabase()),
@@ -181,7 +181,7 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 }
 
 // selectChannel 选择发送通道
-func (h *MessageHandler) selectChannel(ctx context.Context, task *model.PushTask) (*selector.ChannelNode, error) {
+func (h *MessageHandler) selectChannel(ctx context.Context, task *model.PushTask) (*channel.ChannelNode, error) {
 	// 使用选择器选择通道
 	channelID, err := parseUint(task.ChannelID)
 	if err != nil {

@@ -1,4 +1,4 @@
-package selector
+package infrastructure
 
 import (
 	"context"
@@ -10,9 +10,12 @@ import (
 
 	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/dao"
-	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/modules/channel/domain"
 	"github.com/muleiwu/gsr"
 )
+
+// 确保 ChannelSelector 实现 domain.Selector 端口
+var _ domain.Selector = (*ChannelSelector)(nil)
 
 // 缓存 key 前缀
 const (
@@ -28,14 +31,6 @@ const (
 	// 上次供应商记录 TTL（5分钟内同一接收者切换供应商）
 	lastProviderTTL = 5 * time.Minute
 )
-
-// ChannelNode 通道节点（带权重）
-type ChannelNode struct {
-	ChannelTemplateBinding *model.ChannelTemplateBinding // 通道模板绑定配置
-	ProviderAccount        *model.ProviderAccount        // 服务商账号配置
-	CurrentWeight          int                           // 当前权重
-	EffectiveWeight        int                           // 有效权重
-}
 
 // ChannelSelector 通道选择器
 type ChannelSelector struct {
@@ -65,13 +60,13 @@ func buildCacheKey(channelID uint, messageType string) string {
 
 // Select 选择通道（平滑加权轮询，权重状态持久化到 Redis）
 // appID 和 receiver 用于 5 分钟内同一接收者切换供应商策略
-func (s *ChannelSelector) Select(ctx context.Context, channelID uint, messageType string, appID string, receiver string) (*ChannelNode, error) {
+func (s *ChannelSelector) Select(ctx context.Context, channelID uint, messageType string, appID string, receiver string) (*domain.ChannelNode, error) {
 	return s.SelectWithExcludes(ctx, channelID, messageType, appID, receiver, nil)
 }
 
 // SelectWithExcludes 选择通道，支持排除指定供应商
 // excludeProviderIDs: 需要排除的供应商账号ID列表（规则引擎切换供应商时使用）
-func (s *ChannelSelector) SelectWithExcludes(ctx context.Context, channelID uint, messageType string, appID string, receiver string, excludeProviderIDs []uint) (*ChannelNode, error) {
+func (s *ChannelSelector) SelectWithExcludes(ctx context.Context, channelID uint, messageType string, appID string, receiver string, excludeProviderIDs []uint) (*domain.ChannelNode, error) {
 	nodes, err := s.getChannelNodes(ctx, channelID, messageType)
 	if err != nil {
 		return nil, err
@@ -108,7 +103,7 @@ func (s *ChannelSelector) SelectWithExcludes(ctx context.Context, channelID uint
 }
 
 // filterExcludedProviders 过滤排除的供应商
-func (s *ChannelSelector) filterExcludedProviders(nodes []*ChannelNode, excludeIDs []uint) []*ChannelNode {
+func (s *ChannelSelector) filterExcludedProviders(nodes []*domain.ChannelNode, excludeIDs []uint) []*domain.ChannelNode {
 	if len(excludeIDs) == 0 {
 		return nodes
 	}
@@ -119,7 +114,7 @@ func (s *ChannelSelector) filterExcludedProviders(nodes []*ChannelNode, excludeI
 		excludeMap[id] = true
 	}
 
-	var filtered []*ChannelNode
+	var filtered []*domain.ChannelNode
 	for _, node := range nodes {
 		if node.ProviderAccount != nil && !excludeMap[node.ProviderAccount.ID] {
 			filtered = append(filtered, node)
@@ -129,11 +124,11 @@ func (s *ChannelSelector) filterExcludedProviders(nodes []*ChannelNode, excludeI
 }
 
 // getChannelNodes 获取通道节点列表（使用新的ChannelTemplateBinding）
-func (s *ChannelSelector) getChannelNodes(ctx context.Context, channelID uint, messageType string) ([]*ChannelNode, error) {
+func (s *ChannelSelector) getChannelNodes(ctx context.Context, channelID uint, messageType string) ([]*domain.ChannelNode, error) {
 	cacheKey := buildCacheKey(channelID, messageType)
 
 	// 使用 GetSet 方法，自带缓存穿透保护
-	var nodes []*ChannelNode
+	var nodes []*domain.ChannelNode
 	err := s.cache.GetSet(ctx, cacheKey, s.cacheTTL, &nodes, func(key string, obj any) error {
 		// 缓存未命中，从数据库加载
 		loadedNodes, loadErr := s.loadChannelNodesFromDB(channelID)
@@ -142,7 +137,7 @@ func (s *ChannelSelector) getChannelNodes(ctx context.Context, channelID uint, m
 		}
 
 		// 将结果赋值给 obj
-		nodesPtr := obj.(*[]*ChannelNode)
+		nodesPtr := obj.(*[]*domain.ChannelNode)
 		*nodesPtr = loadedNodes
 		return nil
 	})
@@ -156,7 +151,7 @@ func (s *ChannelSelector) getChannelNodes(ctx context.Context, channelID uint, m
 }
 
 // loadChannelNodesFromDB 从数据库加载通道节点
-func (s *ChannelSelector) loadChannelNodesFromDB(channelID uint) ([]*ChannelNode, error) {
+func (s *ChannelSelector) loadChannelNodesFromDB(channelID uint) ([]*domain.ChannelNode, error) {
 	// 获取通道的所有模板绑定配置
 	channelBindings, err := s.channelTemplateBindingDao.GetActiveByChannelID(channelID)
 	if err != nil {
@@ -168,7 +163,7 @@ func (s *ChannelSelector) loadChannelNodesFromDB(channelID uint) ([]*ChannelNode
 	}
 
 	// 构建节点列表
-	var nodes []*ChannelNode
+	var nodes []*domain.ChannelNode
 	for _, ctb := range channelBindings {
 		if ctb.ProviderTemplate == nil {
 			s.logger.Warn(fmt.Sprintf("incomplete channel template binding id=%d", ctb.ID))
@@ -187,7 +182,7 @@ func (s *ChannelSelector) loadChannelNodesFromDB(channelID uint) ([]*ChannelNode
 			}
 		}
 
-		node := &ChannelNode{
+		node := &domain.ChannelNode{
 			ChannelTemplateBinding: ctb,
 			ProviderAccount:        providerAccount,
 			CurrentWeight:          0,
@@ -202,8 +197,8 @@ func (s *ChannelSelector) loadChannelNodesFromDB(channelID uint) ([]*ChannelNode
 
 // filterAvailableNodes 过滤可用节点
 // 同时检查 status（管理员手动控制）和 is_active（系统熔断控制）
-func (s *ChannelSelector) filterAvailableNodes(nodes []*ChannelNode) []*ChannelNode {
-	var available []*ChannelNode
+func (s *ChannelSelector) filterAvailableNodes(nodes []*domain.ChannelNode) []*domain.ChannelNode {
+	var available []*domain.ChannelNode
 	for _, node := range nodes {
 		if node.ChannelTemplateBinding != nil &&
 			node.ChannelTemplateBinding.Status == 1 &&
@@ -216,7 +211,7 @@ func (s *ChannelSelector) filterAvailableNodes(nodes []*ChannelNode) []*ChannelN
 
 // smoothWeightedRoundRobin 平滑加权轮询算法（权重状态持久化到 Redis）
 // lastProviderID: 上次使用的供应商 ID，用于 5 分钟内同一接收者切换供应商
-func (s *ChannelSelector) smoothWeightedRoundRobin(ctx context.Context, channelID uint, nodes []*ChannelNode, lastProviderID uint) *ChannelNode {
+func (s *ChannelSelector) smoothWeightedRoundRobin(ctx context.Context, channelID uint, nodes []*domain.ChannelNode, lastProviderID uint) *domain.ChannelNode {
 	if len(nodes) == 0 {
 		return nil
 	}
@@ -226,7 +221,7 @@ func (s *ChannelSelector) smoothWeightedRoundRobin(ctx context.Context, channelI
 	}
 
 	// 按优先级分组
-	priorityGroups := make(map[int][]*ChannelNode)
+	priorityGroups := make(map[int][]*domain.ChannelNode)
 	minPriority := -1
 
 	for _, node := range nodes {
@@ -254,7 +249,7 @@ func (s *ChannelSelector) smoothWeightedRoundRobin(ctx context.Context, channelI
 
 	// 5 分钟内同一接收者切换供应商：如果有上次使用的供应商记录且有其他可用供应商，排除上次的
 	if lastProviderID > 0 && len(candidates) > 1 {
-		var filteredCandidates []*ChannelNode
+		var filteredCandidates []*domain.ChannelNode
 		for _, node := range candidates {
 			if node.ProviderAccount != nil && node.ProviderAccount.ID != lastProviderID {
 				filteredCandidates = append(filteredCandidates, node)
@@ -281,7 +276,7 @@ func (s *ChannelSelector) smoothWeightedRoundRobin(ctx context.Context, channelI
 
 	// 在同优先级组内使用加权轮询
 	var totalWeight int
-	var selected *ChannelNode
+	var selected *domain.ChannelNode
 
 	for _, node := range candidates {
 		// 当前权重 += 有效权重
@@ -311,7 +306,7 @@ func buildWeightKey(channelID uint, bindingID uint) string {
 }
 
 // loadWeightStates 从 Redis 批量加载权重状态
-func (s *ChannelSelector) loadWeightStates(ctx context.Context, channelID uint, nodes []*ChannelNode) {
+func (s *ChannelSelector) loadWeightStates(ctx context.Context, channelID uint, nodes []*domain.ChannelNode) {
 	for _, node := range nodes {
 		if node.ChannelTemplateBinding == nil {
 			continue
@@ -330,7 +325,7 @@ func (s *ChannelSelector) loadWeightStates(ctx context.Context, channelID uint, 
 }
 
 // saveWeightStates 批量保存权重状态到 Redis
-func (s *ChannelSelector) saveWeightStates(ctx context.Context, channelID uint, nodes []*ChannelNode) {
+func (s *ChannelSelector) saveWeightStates(ctx context.Context, channelID uint, nodes []*domain.ChannelNode) {
 	for _, node := range nodes {
 		if node.ChannelTemplateBinding == nil {
 			continue

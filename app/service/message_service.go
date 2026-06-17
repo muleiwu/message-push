@@ -12,7 +12,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/app/queue"
-	"cnb.cool/mliev/push/message-push/app/selector"
+	"cnb.cool/mliev/push/message-push/modules/channel"
 	"github.com/google/uuid"
 	"github.com/muleiwu/gsr"
 )
@@ -21,7 +21,7 @@ import (
 type MessageService struct {
 	logger             gsr.Logger
 	producer           *queue.Producer
-	selector           *selector.ChannelSelector
+	selector           channel.Selector
 	taskDao            *dao.PushTaskDAO
 	appDao             *dao.ApplicationDAO
 	messageTemplateDao *dao.MessageTemplateDAO
@@ -33,7 +33,7 @@ func NewMessageService() *MessageService {
 	return &MessageService{
 		logger:             internalHelper.GetLogger(),
 		producer:           queue.NewProducer(internalHelper.GetRedis()),
-		selector:           selector.NewChannelSelector(),
+		selector:           channel.GetSelector(),
 		taskDao:            dao.NewPushTaskDAO(),
 		appDao:             dao.NewApplicationDAO(),
 		messageTemplateDao: dao.NewMessageTemplateDAO(),
