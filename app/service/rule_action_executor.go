@@ -13,7 +13,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/model"
-	"cnb.cool/mliev/push/message-push/app/queue"
+	"cnb.cool/mliev/push/message-push/modules/delivery"
 	"github.com/muleiwu/gsr"
 )
 
@@ -30,7 +30,7 @@ type ActionExecutor struct {
 	logger            gsr.Logger
 	taskDAO           *dao.PushTaskDAO
 	logDAO            *dao.PushLogDAO
-	producer          *queue.Producer
+	producer          delivery.Producer
 	httpClient        *http.Client
 	defaultWebhookURL string // 系统默认告警 Webhook URL
 }
@@ -41,7 +41,7 @@ func NewActionExecutor() *ActionExecutor {
 		logger:            internalHelper.GetLogger(),
 		taskDAO:           dao.NewPushTaskDAO(),
 		logDAO:            dao.NewPushLogDAO(),
-		producer:          queue.NewProducer(internalHelper.GetRedis()),
+		producer:          delivery.GetProducer(),
 		defaultWebhookURL: internalHelper.GetEnv().GetString("alert.default_webhook_url", ""),
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,

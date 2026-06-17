@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"cnb.cool/mliev/open/go-web/pkg/helper"
-	"cnb.cool/mliev/push/message-push/app/queue"
+	"cnb.cool/mliev/push/message-push/modules/delivery/infrastructure/queue"
 	"github.com/muleiwu/gsr"
 	"github.com/redis/go-redis/v9"
 )

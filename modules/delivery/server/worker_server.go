@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"cnb.cool/mliev/open/go-web/pkg/helper"
-	"cnb.cool/mliev/push/message-push/app/worker"
+	"cnb.cool/mliev/push/message-push/modules/delivery/infrastructure/worker"
 )
 
 // WorkerServer 包装消息 Worker 池为 go-web ServerInterface。

@@ -5,8 +5,12 @@ import (
 	"time"
 
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/modules/delivery/domain"
 	"github.com/redis/go-redis/v9"
 )
+
+// 确保 Producer 实现 domain.Producer 端口
+var _ domain.Producer = (*Producer)(nil)
 
 // Producer 队列生产者
 type Producer struct {

@@ -3,9 +3,10 @@ package config
 import (
 	"cnb.cool/mliev/open/go-web/pkg/interfaces"
 	channelAssembly "cnb.cool/mliev/push/message-push/modules/channel/assembly"
+	deliveryAssembly "cnb.cool/mliev/push/message-push/modules/delivery/assembly"
+	deliveryServer "cnb.cool/mliev/push/message-push/modules/delivery/server"
 	ruleengineAssembly "cnb.cool/mliev/push/message-push/modules/ruleengine/assembly"
 	senderAssembly "cnb.cool/mliev/push/message-push/modules/sender/assembly"
-	"cnb.cool/mliev/push/message-push/server"
 )
 
 // pushAssemblies 返回 message-push 专属的 Assembly 列表。
@@ -17,13 +18,14 @@ func pushAssemblies() []interfaces.AssemblyInterface {
 		&senderAssembly.Sender{},
 		&channelAssembly.Channel{},
 		&ruleengineAssembly.RuleEngine{},
+		&deliveryAssembly.Producer{},
 	}
 }
 
-// pushServers 返回 message-push 专属的 Server 列表：Worker 消费池与调度器。
+// pushServers 返回 message-push 专属的 Server 列表：Worker 消费池与调度器（delivery 模块）。
 func pushServers() []interfaces.ServerInterface {
 	return []interfaces.ServerInterface{
-		server.NewWorkerServer(),
-		server.NewSchedulerServer(),
+		deliveryServer.NewWorkerServer(),
+		deliveryServer.NewSchedulerServer(),
 	}
 }

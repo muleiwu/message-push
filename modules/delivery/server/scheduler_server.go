@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"cnb.cool/mliev/open/go-web/pkg/helper"
-	"cnb.cool/mliev/push/message-push/app/scheduler"
+	"cnb.cool/mliev/push/message-push/modules/delivery/infrastructure/scheduler"
 )
 
 // SchedulerServer 包装调度器（定时任务扫描、配额同步、短信超时扫描）为 go-web ServerInterface。
