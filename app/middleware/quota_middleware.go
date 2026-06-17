@@ -5,27 +5,27 @@ import (
 	"fmt"
 	"time"
 
+	"cnb.cool/mliev/open/go-web/pkg/helper"
+	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/controller"
-	"cnb.cool/mliev/push/message-push/internal/helper"
-	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 )
 
 // QuotaMiddleware 配额中间件
-func QuotaMiddleware() gin.HandlerFunc {
-	redisClient := helper.GetHelper().GetRedis()
+func QuotaMiddleware() httpInterfaces.HandlerFunc {
+	redisClient := helper.GetRedis()
 
-	return func(c *gin.Context) {
-		appDBID, exists := c.Get("app_db_id")
-		if !exists {
+	return func(c httpInterfaces.RouterContextInterface) {
+		appDBID := c.Get("app_db_id")
+		if appDBID == nil {
 			c.Next()
 			return
 		}
 
 		// 获取应用的每日配额配置
-		dailyQuota, exists := c.Get("daily_quota")
-		if !exists {
+		var dailyQuota any = c.Get("daily_quota")
+		if dailyQuota == nil {
 			dailyQuota = 10000 // 默认配额
 		}
 
@@ -38,7 +38,7 @@ func QuotaMiddleware() gin.HandlerFunc {
 		// 检查今日配额
 		allowed, err := checkQuota(context.Background(), redisClient, appDBID.(uint), dailyQuota.(int))
 		if err != nil {
-			helper.GetHelper().GetLogger().Error(fmt.Sprintf("quota check error: %v", err))
+			helper.GetLogger().Error(fmt.Sprintf("quota check error: %v", err))
 			c.Next()
 			return
 		}

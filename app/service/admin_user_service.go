@@ -8,10 +8,10 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
+	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/model"
-	"cnb.cool/mliev/push/message-push/internal/helper"
 )
 
 // AdminUserService 管理员用户管理服务
@@ -33,7 +33,7 @@ func generateRandomPassword(length int) (string, error) {
 
 // CreateUser 创建管理员用户
 func (s *AdminUserService) CreateUser(req *dto.CreateAdminUserRequest) (*dto.AdminUserResponse, error) {
-	logger := helper.GetHelper().GetLogger()
+	logger := helper.GetLogger()
 	userDAO := dao.NewAdminUserDAO()
 
 	// 检查用户名是否已存在
@@ -135,7 +135,7 @@ func (s *AdminUserService) GetUserByID(id uint) (*dto.AdminUserResponse, error) 
 
 // UpdateUser 更新管理员用户
 func (s *AdminUserService) UpdateUser(id uint, req *dto.UpdateAdminUserRequest) error {
-	logger := helper.GetHelper().GetLogger()
+	logger := helper.GetLogger()
 	userDAO := dao.NewAdminUserDAO()
 
 	// 检查用户是否存在
@@ -163,7 +163,7 @@ func (s *AdminUserService) UpdateUser(id uint, req *dto.UpdateAdminUserRequest) 
 
 // DeleteUser 删除管理员用户
 func (s *AdminUserService) DeleteUser(id uint) error {
-	logger := helper.GetHelper().GetLogger()
+	logger := helper.GetLogger()
 	userDAO := dao.NewAdminUserDAO()
 
 	// 检查用户是否存在
@@ -183,7 +183,7 @@ func (s *AdminUserService) DeleteUser(id uint) error {
 
 // ResetPassword 重置管理员用户密码
 func (s *AdminUserService) ResetPassword(id uint, req *dto.ResetPasswordRequest) (*dto.ResetPasswordResponse, error) {
-	logger := helper.GetHelper().GetLogger()
+	logger := helper.GetLogger()
 	userDAO := dao.NewAdminUserDAO()
 
 	// 检查用户是否存在

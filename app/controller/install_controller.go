@@ -3,14 +3,15 @@ package controller
 import (
 	"time"
 
+	"cnb.cool/mliev/open/go-web/pkg/helper"
+	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
+	"cnb.cool/mliev/open/go-web/pkg/server/reload"
+
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/service"
-	"cnb.cool/mliev/push/message-push/internal/interfaces"
-	"cnb.cool/mliev/push/message-push/internal/pkg/reload"
-	"cnb.cool/mliev/push/message-push/internal/service/migration"
+	"cnb.cool/mliev/push/message-push/migration"
 	"cnb.cool/mliev/push/message-push/migrations"
-	"github.com/gin-gonic/gin"
 )
 
 // InstallController 系统安装控制器
@@ -20,7 +21,7 @@ type InstallController struct {
 
 // CheckInstall 检查系统安装状态
 // GET /api/install/check
-func (ic InstallController) CheckInstall(c *gin.Context, helper interfaces.HelperInterface) {
+func (ic InstallController) CheckInstall(c httpInterfaces.RouterContextInterface) {
 	installService := service.NewInstallService(helper.GetDatabase())
 	response := installService.CheckInstallStatus()
 
@@ -29,7 +30,7 @@ func (ic InstallController) CheckInstall(c *gin.Context, helper interfaces.Helpe
 
 // TestConnection 测试数据库连接
 // POST /api/install/test-connection
-func (ic InstallController) TestConnection(c *gin.Context, helper interfaces.HelperInterface) {
+func (ic InstallController) TestConnection(c httpInterfaces.RouterContextInterface) {
 	var req dto.DatabaseConfig
 	if err := c.ShouldBindJSON(&req); err != nil {
 		ic.Error(c, constants.CodeBadRequest, "请求参数错误: "+err.Error())
@@ -55,7 +56,7 @@ func (ic InstallController) TestConnection(c *gin.Context, helper interfaces.Hel
 
 // TestRedisConnection 测试 Redis 连接
 // POST /api/install/test-redis
-func (ic InstallController) TestRedisConnection(c *gin.Context, helper interfaces.HelperInterface) {
+func (ic InstallController) TestRedisConnection(c httpInterfaces.RouterContextInterface) {
 	var req dto.RedisConfig
 	if err := c.ShouldBindJSON(&req); err != nil {
 		ic.Error(c, constants.CodeBadRequest, "请求参数错误: "+err.Error())
@@ -73,7 +74,7 @@ func (ic InstallController) TestRedisConnection(c *gin.Context, helper interface
 
 	// 测试成功后关闭连接
 	if err := testRedis.Close(); err != nil {
-		helper.GetLogger().Warn("关闭 Redis 测试连接时出错: " + err.Error())
+		helper.GetRequestLogger(c).Warn("关闭 Redis 测试连接时出错: " + err.Error())
 	}
 
 	ic.SuccessWithMessage(c, "Redis 连接测试成功", nil)
@@ -81,7 +82,7 @@ func (ic InstallController) TestRedisConnection(c *gin.Context, helper interface
 
 // SubmitInstall 提交系统安装
 // POST /api/install/submit
-func (ic InstallController) SubmitInstall(c *gin.Context, helper interfaces.HelperInterface) {
+func (ic InstallController) SubmitInstall(c httpInterfaces.RouterContextInterface) {
 	var req dto.InstallSubmitRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		ic.Error(c, constants.CodeBadRequest, "请求参数错误: "+err.Error())
@@ -121,7 +122,7 @@ func (ic InstallController) SubmitInstall(c *gin.Context, helper interfaces.Help
 	// 确保在函数退出时关闭 Redis 连接
 	defer func() {
 		if err := testRedis.Close(); err != nil {
-			helper.GetLogger().Warn("关闭 Redis 测试连接时出错: " + err.Error())
+			helper.GetRequestLogger(c).Warn("关闭 Redis 测试连接时出错: " + err.Error())
 		}
 	}()
 

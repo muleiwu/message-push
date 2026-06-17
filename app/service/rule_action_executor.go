@@ -8,11 +8,11 @@ import (
 	"net/http"
 	"time"
 
+	internalHelper "cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/app/queue"
-	internalHelper "cnb.cool/mliev/push/message-push/internal/helper"
 	"github.com/muleiwu/gsr"
 )
 
@@ -36,13 +36,12 @@ type ActionExecutor struct {
 
 // NewActionExecutor 创建动作执行器
 func NewActionExecutor() *ActionExecutor {
-	h := internalHelper.GetHelper()
 	return &ActionExecutor{
-		logger:            h.GetLogger(),
+		logger:            internalHelper.GetLogger(),
 		taskDAO:           dao.NewPushTaskDAO(),
 		logDAO:            dao.NewPushLogDAO(),
-		producer:          queue.NewProducer(h.GetRedis()),
-		defaultWebhookURL: h.GetEnv().GetString("alert.default_webhook_url", ""),
+		producer:          queue.NewProducer(internalHelper.GetRedis()),
+		defaultWebhookURL: internalHelper.GetEnv().GetString("alert.default_webhook_url", ""),
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},

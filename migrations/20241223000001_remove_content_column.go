@@ -66,4 +66,3 @@ func downRemoveContentColumn(ctx context.Context, tx *sql.Tx) error {
 	log.Println("Successfully added content column back to push_tasks table")
 	return nil
 }
-

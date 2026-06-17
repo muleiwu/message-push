@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/queue"
-	"cnb.cool/mliev/push/message-push/internal/helper"
 	"github.com/muleiwu/gsr"
 	"github.com/redis/go-redis/v9"
 )
@@ -24,11 +24,10 @@ type ScheduledTaskScanner struct {
 
 // NewScheduledTaskScanner 创建扫描器
 func NewScheduledTaskScanner() *ScheduledTaskScanner {
-	h := helper.GetHelper()
 	return &ScheduledTaskScanner{
-		logger:   h.GetLogger(),
-		redis:    h.GetRedis(),
-		producer: queue.NewProducer(h.GetRedis()),
+		logger:   helper.GetLogger(),
+		redis:    helper.GetRedis(),
+		producer: queue.NewProducer(helper.GetRedis()),
 		taskDao:  dao.NewPushTaskDAO(),
 		interval: 10 * time.Second, // 每10秒扫描一次
 		stopCh:   make(chan struct{}),

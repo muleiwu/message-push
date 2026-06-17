@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
+	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/model"
-	"cnb.cool/mliev/push/message-push/internal/helper"
 	"github.com/muleiwu/gsr"
 )
 
@@ -49,12 +49,11 @@ type ChannelSelector struct {
 
 // NewChannelSelector 创建通道选择器
 func NewChannelSelector() *ChannelSelector {
-	h := helper.GetHelper()
 	return &ChannelSelector{
-		logger:                    h.GetLogger(),
+		logger:                    helper.GetLogger(),
 		channelTemplateBindingDao: dao.NewChannelTemplateBindingDAO(),
 		providerAccountDAO:        dao.NewProviderAccountDAO(),
-		cache:                     h.GetCache(),
+		cache:                     helper.GetCache(),
 		cacheTTL:                  30 * time.Second, // 默认30秒
 	}
 }

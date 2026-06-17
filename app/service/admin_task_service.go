@@ -3,10 +3,10 @@ package service
 import (
 	"time"
 
+	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/model"
-	"cnb.cool/mliev/push/message-push/internal/helper"
 )
 
 // AdminTaskService 管理后台任务服务
@@ -61,7 +61,7 @@ func (s *AdminTaskService) GetPushTaskList(req *dto.PushTaskListRequest) (*dto.P
 	items := make([]*dto.PushTaskItem, 0, len(tasks))
 
 	// 预加载缓存
-	db := helper.GetHelper().GetDatabase()
+	db := helper.GetDatabase()
 	channelMap := make(map[uint]string)
 
 	for _, task := range tasks {
@@ -202,7 +202,7 @@ func (s *AdminTaskService) GetTasksByBatchID(batchID string, page, pageSize int)
 
 // convertPushTaskToItem 转换任务为DTO
 func (s *AdminTaskService) convertPushTaskToItem(task *model.PushTask) *dto.PushTaskItem {
-	db := helper.GetHelper().GetDatabase()
+	db := helper.GetDatabase()
 
 	// 获取通道名称
 	channelName := ""

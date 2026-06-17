@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 
+	internalHelper "cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/helper"
@@ -14,7 +15,6 @@ import (
 	"cnb.cool/mliev/push/message-push/app/selector"
 	"cnb.cool/mliev/push/message-push/app/sender"
 	"cnb.cool/mliev/push/message-push/app/service"
-	internalHelper "cnb.cool/mliev/push/message-push/internal/helper"
 	"github.com/muleiwu/gsr"
 )
 
@@ -43,13 +43,13 @@ type MessageHandler struct {
 // NewMessageHandler 创建消息处理器
 func NewMessageHandler() *MessageHandler {
 	return &MessageHandler{
-		logger:              internalHelper.GetHelper().GetLogger(),
+		logger:              internalHelper.GetLogger(),
 		taskDao:             dao.NewPushTaskDAO(),
 		logDao:              dao.NewPushLogDAO(),
 		selector:            selector.NewChannelSelector(),
 		senderFactory:       sender.NewFactory(),
 		retryHelper:         helper.NewRetryHelper(),
-		signatureMappingDao: dao.NewChannelSignatureMappingDAO(internalHelper.GetHelper().GetDatabase()),
+		signatureMappingDao: dao.NewChannelSignatureMappingDAO(internalHelper.GetDatabase()),
 		templateHelper:      helper.NewTemplateHelper(),
 		ruleEngine:          service.GetRuleEngineService(),
 		actionExecutor:      service.NewActionExecutor(),

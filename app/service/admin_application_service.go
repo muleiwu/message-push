@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"time"
 
+	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	apphelper "cnb.cool/mliev/push/message-push/app/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
-	"cnb.cool/mliev/push/message-push/internal/helper"
 )
 
 // AdminApplicationService 应用管理服务
@@ -33,7 +33,7 @@ func generateRandomKey(length int) (string, error) {
 
 // CreateApplication 创建应用
 func (s *AdminApplicationService) CreateApplication(req *dto.CreateApplicationRequest) (*dto.ApplicationResponse, error) {
-	logger := helper.GetHelper().GetLogger()
+	logger := helper.GetLogger()
 
 	// 生成AppID和AppSecret
 	appID, err := generateRandomKey(16)
@@ -126,7 +126,7 @@ func (s *AdminApplicationService) GetApplicationList(req *dto.ApplicationListReq
 	var apps []*model.Application
 	var total int64
 
-	query := helper.GetHelper().GetDatabase().Model(&model.Application{})
+	query := helper.GetDatabase().Model(&model.Application{})
 
 	// 条件过滤
 	if req.Name != "" {
@@ -238,7 +238,7 @@ func (s *AdminApplicationService) DeleteApplication(id uint) error {
 
 // RegenerateSecret 重新生成密钥
 func (s *AdminApplicationService) RegenerateSecret(appID uint) (*dto.RegenerateSecretResponse, error) {
-	logger := helper.GetHelper().GetLogger()
+	logger := helper.GetLogger()
 
 	app, err := dao.GetAppByID(appID)
 	if err != nil {
@@ -282,7 +282,7 @@ func (s *AdminApplicationService) GetQuotaUsage(id uint) (*dto.QuotaUsageRespons
 	}
 
 	// 从 Redis 获取今日使用量
-	redisClient := helper.GetHelper().GetRedis()
+	redisClient := helper.GetRedis()
 	used, limit, err := apphelper.GetQuotaUsage(context.Background(), redisClient, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get quota usage from redis: %w", err)

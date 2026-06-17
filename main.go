@@ -3,7 +3,9 @@ package main
 import (
 	"embed"
 
-	"cnb.cool/mliev/push/message-push/cmd"
+	"cnb.cool/mliev/open/go-web/cmd"
+	mpConfig "cnb.cool/mliev/push/message-push/config"
+	"github.com/muleiwu/gomander"
 )
 
 //go:embed templates
@@ -13,9 +15,11 @@ var templateFS embed.FS
 var staticFs embed.FS
 
 func main() {
-	staticFs := map[string]embed.FS{
-		"templates":  templateFS,
-		"web.static": staticFs,
-	}
-	cmd.Start(staticFs)
+	gomander.Run(func() {
+		cmd.Start(
+			cmd.WithTemplateFs(templateFS),
+			cmd.WithWebStaticFs(staticFs),
+			cmd.WithApp(mpConfig.App{}),
+		)
+	})
 }

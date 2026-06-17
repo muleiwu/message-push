@@ -1,8 +1,8 @@
 package dao
 
 import (
+	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
-	"cnb.cool/mliev/push/message-push/internal/helper"
 )
 
 // ChannelTemplateBindingDAO 通道模板绑定配置 DAO
@@ -15,7 +15,7 @@ func NewChannelTemplateBindingDAO() *ChannelTemplateBindingDAO {
 
 // Create 创建绑定配置
 func (d *ChannelTemplateBindingDAO) Create(binding *model.ChannelTemplateBinding) error {
-	db := helper.GetHelper().GetDatabase()
+	db := helper.GetDatabase()
 	return db.Create(binding).Error
 }
 
@@ -24,14 +24,14 @@ func (d *ChannelTemplateBindingDAO) BatchCreate(bindings []*model.ChannelTemplat
 	if len(bindings) == 0 {
 		return nil
 	}
-	db := helper.GetHelper().GetDatabase()
+	db := helper.GetDatabase()
 	return db.Create(&bindings).Error
 }
 
 // GetByID 根据ID查询
 func (d *ChannelTemplateBindingDAO) GetByID(id uint) (*model.ChannelTemplateBinding, error) {
 	var binding model.ChannelTemplateBinding
-	db := helper.GetHelper().GetDatabase()
+	db := helper.GetDatabase()
 	err := db.Preload("ProviderTemplate").
 		Preload("ProviderTemplate.ProviderAccount").
 		Preload("Channel").
@@ -46,7 +46,7 @@ func (d *ChannelTemplateBindingDAO) GetByID(id uint) (*model.ChannelTemplateBind
 // GetByChannelID 根据通道ID查询所有绑定配置
 func (d *ChannelTemplateBindingDAO) GetByChannelID(channelID uint) ([]*model.ChannelTemplateBinding, error) {
 	var bindings []*model.ChannelTemplateBinding
-	db := helper.GetHelper().GetDatabase()
+	db := helper.GetDatabase()
 	err := db.Where("channel_id = ?", channelID).
 		Preload("ProviderTemplate").
 		Preload("ProviderTemplate.ProviderAccount").
@@ -61,7 +61,7 @@ func (d *ChannelTemplateBindingDAO) GetByChannelID(channelID uint) ([]*model.Cha
 // GetActiveByChannelID 根据通道ID查询所有激活的绑定配置
 func (d *ChannelTemplateBindingDAO) GetActiveByChannelID(channelID uint) ([]*model.ChannelTemplateBinding, error) {
 	var bindings []*model.ChannelTemplateBinding
-	db := helper.GetHelper().GetDatabase()
+	db := helper.GetDatabase()
 	err := db.Where("channel_id = ? AND is_active = 1 AND status = 1", channelID).
 		Preload("ProviderTemplate").
 		Preload("ProviderTemplate.ProviderAccount").
@@ -75,42 +75,42 @@ func (d *ChannelTemplateBindingDAO) GetActiveByChannelID(channelID uint) ([]*mod
 
 // Update 更新配置
 func (d *ChannelTemplateBindingDAO) Update(id uint, updates map[string]interface{}) error {
-	db := helper.GetHelper().GetDatabase()
+	db := helper.GetDatabase()
 	return db.Model(&model.ChannelTemplateBinding{}).Where("id = ?", id).Updates(updates).Error
 }
 
 // UpdateWeight 更新权重
 func (d *ChannelTemplateBindingDAO) UpdateWeight(id uint, weight int) error {
-	db := helper.GetHelper().GetDatabase()
+	db := helper.GetDatabase()
 	return db.Model(&model.ChannelTemplateBinding{}).Where("id = ?", id).Update("weight", weight).Error
 }
 
 // UpdatePriority 更新优先级
 func (d *ChannelTemplateBindingDAO) UpdatePriority(id uint, priority int) error {
-	db := helper.GetHelper().GetDatabase()
+	db := helper.GetDatabase()
 	return db.Model(&model.ChannelTemplateBinding{}).Where("id = ?", id).Update("priority", priority).Error
 }
 
 // UpdateStatus 更新状态（status 字段）
 func (d *ChannelTemplateBindingDAO) UpdateStatus(id uint, status int8) error {
-	db := helper.GetHelper().GetDatabase()
+	db := helper.GetDatabase()
 	return db.Model(&model.ChannelTemplateBinding{}).Where("id = ?", id).Update("status", status).Error
 }
 
 // UpdateIsActive 更新激活状态（is_active 字段）
 func (d *ChannelTemplateBindingDAO) UpdateIsActive(id uint, isActive int8) error {
-	db := helper.GetHelper().GetDatabase()
+	db := helper.GetDatabase()
 	return db.Model(&model.ChannelTemplateBinding{}).Where("id = ?", id).Update("is_active", isActive).Error
 }
 
 // Delete 删除配置
 func (d *ChannelTemplateBindingDAO) Delete(id uint) error {
-	db := helper.GetHelper().GetDatabase()
+	db := helper.GetDatabase()
 	return db.Delete(&model.ChannelTemplateBinding{}, id).Error
 }
 
 // DeleteByChannelID 删除通道的所有绑定配置
 func (d *ChannelTemplateBindingDAO) DeleteByChannelID(channelID uint) error {
-	db := helper.GetHelper().GetDatabase()
+	db := helper.GetDatabase()
 	return db.Where("channel_id = ?", channelID).Delete(&model.ChannelTemplateBinding{}).Error
 }

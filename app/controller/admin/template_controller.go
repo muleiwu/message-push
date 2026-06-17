@@ -3,11 +3,10 @@ package admin
 import (
 	"strconv"
 
+	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
 	"cnb.cool/mliev/push/message-push/app/controller"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/service"
-	"cnb.cool/mliev/push/message-push/internal/interfaces"
-	"github.com/gin-gonic/gin"
 )
 
 // TemplateController 模板管理控制器
@@ -17,7 +16,7 @@ type TemplateController struct {
 // ========== 系统模板管理 ==========
 
 // CreateMessageTemplate 创建系统模板
-func (c TemplateController) CreateMessageTemplate(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c TemplateController) CreateMessageTemplate(ctx httpInterfaces.RouterContextInterface) {
 	templateService := service.NewTemplateService()
 	var req dto.CreateMessageTemplateRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -35,7 +34,7 @@ func (c TemplateController) CreateMessageTemplate(ctx *gin.Context, helper inter
 }
 
 // UpdateMessageTemplate 更新系统模板
-func (c TemplateController) UpdateMessageTemplate(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c TemplateController) UpdateMessageTemplate(ctx httpInterfaces.RouterContextInterface) {
 	templateService := service.NewTemplateService()
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -59,7 +58,7 @@ func (c TemplateController) UpdateMessageTemplate(ctx *gin.Context, helper inter
 }
 
 // GetMessageTemplate 获取系统模板详情
-func (c TemplateController) GetMessageTemplate(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c TemplateController) GetMessageTemplate(ctx httpInterfaces.RouterContextInterface) {
 	templateService := service.NewTemplateService()
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -77,7 +76,7 @@ func (c TemplateController) GetMessageTemplate(ctx *gin.Context, helper interfac
 }
 
 // DeleteMessageTemplate 删除系统模板
-func (c TemplateController) DeleteMessageTemplate(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c TemplateController) DeleteMessageTemplate(ctx httpInterfaces.RouterContextInterface) {
 	templateService := service.NewTemplateService()
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -94,7 +93,7 @@ func (c TemplateController) DeleteMessageTemplate(ctx *gin.Context, helper inter
 }
 
 // ListMessageTemplates 查询系统模板列表
-func (c TemplateController) ListMessageTemplates(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c TemplateController) ListMessageTemplates(ctx httpInterfaces.RouterContextInterface) {
 	templateService := service.NewTemplateService()
 	var req dto.MessageTemplateListRequest
 	if err := ctx.ShouldBindQuery(&req); err != nil {
@@ -122,7 +121,7 @@ func (c TemplateController) ListMessageTemplates(ctx *gin.Context, helper interf
 // ========== 供应商模板管理 ==========
 
 // CreateProviderTemplate 创建供应商模板
-func (c TemplateController) CreateProviderTemplate(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c TemplateController) CreateProviderTemplate(ctx httpInterfaces.RouterContextInterface) {
 	templateService := service.NewTemplateService()
 	var req dto.CreateProviderTemplateRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -140,7 +139,7 @@ func (c TemplateController) CreateProviderTemplate(ctx *gin.Context, helper inte
 }
 
 // UpdateProviderTemplate 更新供应商模板
-func (c TemplateController) UpdateProviderTemplate(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c TemplateController) UpdateProviderTemplate(ctx httpInterfaces.RouterContextInterface) {
 	templateService := service.NewTemplateService()
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -164,7 +163,7 @@ func (c TemplateController) UpdateProviderTemplate(ctx *gin.Context, helper inte
 }
 
 // GetProviderTemplate 获取供应商模板详情
-func (c TemplateController) GetProviderTemplate(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c TemplateController) GetProviderTemplate(ctx httpInterfaces.RouterContextInterface) {
 	templateService := service.NewTemplateService()
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -182,7 +181,7 @@ func (c TemplateController) GetProviderTemplate(ctx *gin.Context, helper interfa
 }
 
 // DeleteProviderTemplate 删除供应商模板
-func (c TemplateController) DeleteProviderTemplate(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c TemplateController) DeleteProviderTemplate(ctx httpInterfaces.RouterContextInterface) {
 	templateService := service.NewTemplateService()
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -199,7 +198,7 @@ func (c TemplateController) DeleteProviderTemplate(ctx *gin.Context, helper inte
 }
 
 // ListProviderTemplates 查询供应商模板列表
-func (c TemplateController) ListProviderTemplates(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c TemplateController) ListProviderTemplates(ctx httpInterfaces.RouterContextInterface) {
 	templateService := service.NewTemplateService()
 	var req dto.ProviderTemplateListRequest
 	if err := ctx.ShouldBindQuery(&req); err != nil {

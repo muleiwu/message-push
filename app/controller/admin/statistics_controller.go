@@ -3,12 +3,10 @@ package admin
 import (
 	"strconv"
 
-	"github.com/gin-gonic/gin"
-
+	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
 	"cnb.cool/mliev/push/message-push/app/controller"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/service"
-	"cnb.cool/mliev/push/message-push/internal/interfaces"
 )
 
 // StatisticsController 统计分析控制器
@@ -16,7 +14,7 @@ type StatisticsController struct {
 }
 
 // GetStatistics 获取统计数据
-func (c StatisticsController) GetStatistics(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c StatisticsController) GetStatistics(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminStatisticsService()
 	var req dto.StatisticsRequest
 	if err := ctx.ShouldBindQuery(&req); err != nil {
@@ -34,7 +32,7 @@ func (c StatisticsController) GetStatistics(ctx *gin.Context, helper interfaces.
 }
 
 // GetDashboard 获取仪表盘数据
-func (c StatisticsController) GetDashboard(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c StatisticsController) GetDashboard(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminStatisticsService()
 	resp, err := adminService.GetDashboard()
 	if err != nil {
@@ -46,7 +44,7 @@ func (c StatisticsController) GetDashboard(ctx *gin.Context, helper interfaces.H
 }
 
 // GetTopApplications 获取热门应用
-func (c StatisticsController) GetTopApplications(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c StatisticsController) GetTopApplications(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminStatisticsService()
 	limitStr := ctx.DefaultQuery("limit", "10")
 	limit, _ := strconv.Atoi(limitStr)
@@ -61,7 +59,7 @@ func (c StatisticsController) GetTopApplications(ctx *gin.Context, helper interf
 }
 
 // GetRecentActivities 获取近期活动
-func (c StatisticsController) GetRecentActivities(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c StatisticsController) GetRecentActivities(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminStatisticsService()
 	limitStr := ctx.DefaultQuery("limit", "10")
 	limit, _ := strconv.Atoi(limitStr)

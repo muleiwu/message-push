@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dao"
-	"cnb.cool/mliev/push/message-push/internal/helper"
 	"github.com/muleiwu/gsr"
 )
 
@@ -27,9 +27,8 @@ type SMSTimeoutScanner struct {
 
 // NewSMSTimeoutScanner 创建消息超时扫描器
 func NewSMSTimeoutScanner() *SMSTimeoutScanner {
-	h := helper.GetHelper()
 	return &SMSTimeoutScanner{
-		logger:            h.GetLogger(),
+		logger:            helper.GetLogger(),
 		taskDao:           dao.NewPushTaskDAO(),
 		interval:          10 * time.Second,  // 每10秒扫描一次
 		timeout:           60 * time.Second,  // 60秒未收到回调视为超时

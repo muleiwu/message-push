@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"time"
 
+	internalHelper "cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/app/sender"
-	internalHelper "cnb.cool/mliev/push/message-push/internal/helper"
 	"github.com/muleiwu/gsr"
 )
 
@@ -28,9 +28,8 @@ type CallbackService struct {
 
 // NewCallbackService 创建回调服务
 func NewCallbackService() *CallbackService {
-	h := internalHelper.GetHelper()
 	return &CallbackService{
-		logger:         h.GetLogger(),
+		logger:         internalHelper.GetLogger(),
 		taskDao:        dao.NewPushTaskDAO(),
 		logDao:         dao.NewPushLogDAO(),
 		callbackLogDao: dao.NewCallbackLogDAO(),

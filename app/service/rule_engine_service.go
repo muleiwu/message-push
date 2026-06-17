@@ -6,9 +6,9 @@ import (
 	"strings"
 	"sync"
 
+	internalHelper "cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/model"
-	internalHelper "cnb.cool/mliev/push/message-push/internal/helper"
 	"github.com/muleiwu/gsr"
 )
 
@@ -51,7 +51,7 @@ var (
 func GetRuleEngineService() *RuleEngineService {
 	ruleEngineOnce.Do(func() {
 		ruleEngineInstance = &RuleEngineService{
-			logger:  internalHelper.GetHelper().GetLogger(),
+			logger:  internalHelper.GetLogger(),
 			ruleDAO: dao.NewFailureRuleDAO(),
 			cache: &ruleCache{
 				rules: make(map[string][]*model.FailureRule),

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	internalHelper "cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
@@ -12,7 +13,6 @@ import (
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/app/queue"
 	"cnb.cool/mliev/push/message-push/app/selector"
-	internalHelper "cnb.cool/mliev/push/message-push/internal/helper"
 	"github.com/google/uuid"
 	"github.com/muleiwu/gsr"
 )
@@ -30,10 +30,9 @@ type MessageService struct {
 
 // NewMessageService 创建消息服务
 func NewMessageService() *MessageService {
-	h := internalHelper.GetHelper()
 	return &MessageService{
-		logger:             h.GetLogger(),
-		producer:           queue.NewProducer(h.GetRedis()),
+		logger:             internalHelper.GetLogger(),
+		producer:           queue.NewProducer(internalHelper.GetRedis()),
 		selector:           selector.NewChannelSelector(),
 		taskDao:            dao.NewPushTaskDAO(),
 		appDao:             dao.NewApplicationDAO(),
@@ -46,7 +45,7 @@ func NewMessageService() *MessageService {
 func (s *MessageService) Send(ctx context.Context, req *dto.SendRequest) (*dto.SendResponse, error) {
 	// 1. 验证通道（获取 MessageTemplateID 和 Type）
 	var channel model.Channel
-	db := internalHelper.GetHelper().GetDatabase()
+	db := internalHelper.GetDatabase()
 	if err := db.First(&channel, req.ChannelID).Error; err != nil {
 		return nil, fmt.Errorf("invalid channel_id: %w", err)
 	}
@@ -142,7 +141,7 @@ func (s *MessageService) Send(ctx context.Context, req *dto.SendRequest) (*dto.S
 func (s *MessageService) BatchSend(ctx context.Context, req *dto.BatchSendRequest) (*dto.BatchSendResponse, error) {
 	// 1. 验证通道（获取 MessageTemplateID 和 Type）
 	var channel model.Channel
-	db := internalHelper.GetHelper().GetDatabase()
+	db := internalHelper.GetDatabase()
 	if err := db.First(&channel, req.ChannelID).Error; err != nil {
 		return nil, fmt.Errorf("invalid channel_id: %w", err)
 	}

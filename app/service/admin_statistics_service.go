@@ -6,9 +6,9 @@ import (
 
 	"gorm.io/gorm"
 
+	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/model"
-	"cnb.cool/mliev/push/message-push/internal/helper"
 )
 
 // AdminStatisticsService 统计分析服务
@@ -21,7 +21,7 @@ func NewAdminStatisticsService() *AdminStatisticsService {
 
 // GetStatistics 获取推送统计
 func (s *AdminStatisticsService) GetStatistics(req *dto.StatisticsRequest) (*dto.StatisticsResponse, error) {
-	db := helper.GetHelper().GetDatabase()
+	db := helper.GetDatabase()
 
 	// 基本查询
 	query := db.Model(&model.PushLog{}).Where("DATE(created_at) >= ? AND DATE(created_at) <= ?", req.StartDate, req.EndDate)
@@ -102,7 +102,7 @@ func (s *AdminStatisticsService) GetStatistics(req *dto.StatisticsRequest) (*dto
 
 // GetDashboard 获取仪表盘数据
 func (s *AdminStatisticsService) GetDashboard() (*dto.DashboardResponse, error) {
-	db := helper.GetHelper().GetDatabase()
+	db := helper.GetDatabase()
 	resp := &dto.DashboardResponse{}
 
 	// 1. 统计 Applications
@@ -150,7 +150,7 @@ func (s *AdminStatisticsService) GetTopApplications(limit int) ([]*dto.TopApplic
 	if limit <= 0 {
 		limit = 10
 	}
-	db := helper.GetHelper().GetDatabase()
+	db := helper.GetDatabase()
 
 	var results []struct {
 		AppID        string
@@ -205,7 +205,7 @@ func (s *AdminStatisticsService) GetRecentActivities(limit int) ([]*dto.RecentAc
 	if limit <= 0 {
 		limit = 10
 	}
-	db := helper.GetHelper().GetDatabase()
+	db := helper.GetDatabase()
 
 	var logs []*model.PushLog
 	if err := db.Order("created_at DESC").Limit(limit).Find(&logs).Error; err != nil {

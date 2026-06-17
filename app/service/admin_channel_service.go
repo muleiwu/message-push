@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"time"
 
+	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/app/selector"
-	"cnb.cool/mliev/push/message-push/internal/helper"
 )
 
 // convertModelParamMappingToDTO 将 model.ParamMappingItem 转换为 dto.ParamMappingItem
@@ -57,7 +57,7 @@ type AdminChannelService struct {
 
 // NewAdminChannelService 创建通道管理服务实例
 func NewAdminChannelService() *AdminChannelService {
-	db := helper.GetHelper().GetDatabase()
+	db := helper.GetDatabase()
 	return &AdminChannelService{
 		bindingDAO:           dao.NewChannelTemplateBindingDAO(),
 		messageTemplateDAO:   dao.NewMessageTemplateDAO(),
@@ -77,8 +77,8 @@ func (s *AdminChannelService) invalidateChannelCache(channelID uint) {
 
 // CreateChannel 创建通道
 func (s *AdminChannelService) CreateChannel(req *dto.CreateChannelRequest) (*dto.ChannelResponse, error) {
-	logger := helper.GetHelper().GetLogger()
-	db := helper.GetHelper().GetDatabase()
+	logger := helper.GetLogger()
+	db := helper.GetDatabase()
 
 	// 验证系统模板是否存在
 	messageTemplate, err := s.messageTemplateDAO.GetByID(req.MessageTemplateID)
@@ -133,7 +133,7 @@ func (s *AdminChannelService) GetChannelList(req *dto.ChannelListRequest) (*dto.
 	var channels []*model.Channel
 	var total int64
 
-	query := helper.GetHelper().GetDatabase().Model(&model.Channel{}).Preload("MessageTemplate")
+	query := helper.GetDatabase().Model(&model.Channel{}).Preload("MessageTemplate")
 
 	// 条件过滤
 	if req.Type != "" {
@@ -182,7 +182,7 @@ func (s *AdminChannelService) GetChannelList(req *dto.ChannelListRequest) (*dto.
 // GetChannelByID 获取通道详情
 func (s *AdminChannelService) GetChannelByID(id uint) (*dto.ChannelResponse, error) {
 	var channel model.Channel
-	db := helper.GetHelper().GetDatabase()
+	db := helper.GetDatabase()
 	if err := db.Preload("MessageTemplate").First(&channel, id).Error; err != nil {
 		return nil, err
 	}
@@ -225,13 +225,13 @@ func (s *AdminChannelService) UpdateChannel(id uint, req *dto.UpdateChannelReque
 		return nil
 	}
 
-	db := helper.GetHelper().GetDatabase()
+	db := helper.GetDatabase()
 	return db.Model(&model.Channel{}).Where("id = ?", id).Updates(updates).Error
 }
 
 // DeleteChannel 删除通道
 func (s *AdminChannelService) DeleteChannel(id uint) error {
-	db := helper.GetHelper().GetDatabase()
+	db := helper.GetDatabase()
 
 	// 开启事务
 	tx := db.Begin()
@@ -376,7 +376,7 @@ func (s *AdminChannelService) DeleteChannelBinding(bindingID uint) error {
 // GetActiveChannels 获取活跃通道列表
 func (s *AdminChannelService) GetActiveChannels() ([]*dto.ActiveItem, error) {
 	var channels []*model.Channel
-	db := helper.GetHelper().GetDatabase()
+	db := helper.GetDatabase()
 	if err := db.Where("status = ?", 1).Find(&channels).Error; err != nil {
 		return nil, err
 	}
@@ -430,8 +430,8 @@ func (s *AdminChannelService) GetChannelBinding(bindingID uint) (*dto.ChannelBin
 
 // CreateChannelBinding 创建通道绑定配置
 func (s *AdminChannelService) CreateChannelBinding(channelID uint, req *dto.CreateChannelBindingRequest) (*dto.ChannelBindingResponse, error) {
-	logger := helper.GetHelper().GetLogger()
-	db := helper.GetHelper().GetDatabase()
+	logger := helper.GetLogger()
+	db := helper.GetDatabase()
 
 	// 验证通道是否存在
 	var channel model.Channel
@@ -557,7 +557,7 @@ func (s *AdminChannelService) CreateChannelBinding(channelID uint, req *dto.Crea
 
 // GetAvailableTemplateBindings 获取通道可用的供应商模板列表（排除已添加的）
 func (s *AdminChannelService) GetAvailableTemplateBindings(channelID uint) ([]*dto.AvailableProviderTemplateResponse, error) {
-	db := helper.GetHelper().GetDatabase()
+	db := helper.GetDatabase()
 
 	// 验证通道是否存在
 	var channel model.Channel
@@ -688,8 +688,8 @@ func (s *AdminChannelService) GetChannelSignatureMapping(mappingID uint) (*dto.C
 
 // CreateChannelSignatureMapping 创建签名映射
 func (s *AdminChannelService) CreateChannelSignatureMapping(channelID uint, req *dto.CreateChannelSignatureMappingRequest) (*dto.ChannelSignatureMappingResponse, error) {
-	logger := helper.GetHelper().GetLogger()
-	db := helper.GetHelper().GetDatabase()
+	logger := helper.GetLogger()
+	db := helper.GetDatabase()
 
 	// 验证通道是否存在
 	var channel model.Channel
@@ -823,7 +823,7 @@ func (s *AdminChannelService) DeleteChannelSignatureMapping(mappingID uint) erro
 
 // GetAvailableProviderSignatures 获取可用的供应商签名列表（根据通道类型）
 func (s *AdminChannelService) GetAvailableProviderSignatures(channelID uint) ([]*dto.ProviderSignatureResponse, error) {
-	db := helper.GetHelper().GetDatabase()
+	db := helper.GetDatabase()
 
 	// 验证通道是否存在
 	var channel model.Channel
@@ -864,8 +864,8 @@ func (s *AdminChannelService) GetAvailableProviderSignatures(channelID uint) ([]
 
 // TestChannel 测试通道发送
 func (s *AdminChannelService) TestChannel(channelID uint, req *dto.TestChannelRequest) (*dto.TestChannelResponse, error) {
-	logger := helper.GetHelper().GetLogger()
-	db := helper.GetHelper().GetDatabase()
+	logger := helper.GetLogger()
+	db := helper.GetDatabase()
 
 	// 1. 验证通道是否存在
 	var channel model.Channel

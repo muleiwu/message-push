@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/registry"
-	"cnb.cool/mliev/push/message-push/internal/helper"
 )
 
 func init() {
@@ -172,7 +172,7 @@ func (s *WeChatWorkSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 }
 
 func (s *WeChatWorkSender) getAccessToken(ctx context.Context, corpID, secret string) (string, error) {
-	redisClient := helper.GetHelper().GetRedis()
+	redisClient := helper.GetRedis()
 	key := fmt.Sprintf("wechat:token:%s:%s", corpID, secret)
 
 	// 尝试从Redis获取

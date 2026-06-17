@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/queue"
-	"cnb.cool/mliev/push/message-push/internal/helper"
 	"github.com/muleiwu/gsr"
 	"github.com/redis/go-redis/v9"
 )
@@ -34,7 +34,7 @@ func NewWorker(id int, redisClient *redis.Client, handler MessageHandlerFunc) *W
 		handler:  handler,
 		stopCh:   make(chan struct{}),
 		wg:       &sync.WaitGroup{},
-		logger:   helper.GetHelper().GetLogger(),
+		logger:   helper.GetLogger(),
 	}
 }
 
@@ -126,7 +126,7 @@ func NewWorkerPool(size int, redisClient *redis.Client, handler MessageHandlerFu
 
 	return &WorkerPool{
 		workers: workers,
-		logger:  helper.GetHelper().GetLogger(),
+		logger:  helper.GetLogger(),
 	}
 }
 

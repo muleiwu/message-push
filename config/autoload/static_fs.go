@@ -1,21 +1,14 @@
 package autoload
 
-import (
-	"embed"
-
-	envInterface "cnb.cool/mliev/push/message-push/internal/interfaces"
-)
+import "embed"
 
 type StaticFs struct {
 }
 
-func (receiver StaticFs) InitConfig(helper envInterface.HelperInterface) map[string]any {
+func (receiver StaticFs) InitConfig() map[string]any {
 	return map[string]any{
-		"static.fs": func() map[string]embed.FS {
-			return map[string]embed.FS{
-				// 这里会在启动的时候在 main.go 注入静态资源进来，请在main.go 添加静态资源
-				//"tempe": embed.FS{},
-			}
-		},
+		// 实际的静态资源（templates / web.static）由 main.go 通过
+		// cmd.WithTemplateFs / cmd.WithWebStaticFs 注入，框架在启动时覆盖此键。
+		"static.fs": map[string]embed.FS{},
 	}
 }

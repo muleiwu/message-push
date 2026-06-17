@@ -4,18 +4,17 @@ import (
 	"net/http"
 	"strings"
 
-	"cnb.cool/mliev/push/message-push/internal/helper"
-	"cnb.cool/mliev/push/message-push/internal/interfaces"
-	"github.com/gin-gonic/gin"
+	"cnb.cool/mliev/open/go-web/pkg/helper"
+	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
 )
 
 // BlockIfInstalledMiddleware 阻止已安装系统访问安装路由
 // 如果系统已安装，返回 403 禁止访问
-func BlockIfInstalledMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		installed := helper.GetHelper().GetConfig().GetBool("app.installed", false)
+func BlockIfInstalledMiddleware() httpInterfaces.HandlerFunc {
+	return func(c httpInterfaces.RouterContextInterface) {
+		installed := helper.GetConfig().GetBool("app.installed", false)
 		if installed {
-			c.JSON(http.StatusForbidden, gin.H{
+			c.JSON(http.StatusForbidden, map[string]any{
 				"code":    403,
 				"message": "系统已安装，此接口不可用",
 			})
@@ -28,8 +27,8 @@ func BlockIfInstalledMiddleware() gin.HandlerFunc {
 
 // InstallCheckMiddleware 安装检查中间件
 // 如果系统未安装，除豁免路径外的所有请求都将重定向到安装页面
-func InstallCheckMiddleware(helper interfaces.HelperInterface) gin.HandlerFunc {
-	return func(c *gin.Context) {
+func InstallCheckMiddleware() httpInterfaces.HandlerFunc {
+	return func(c httpInterfaces.RouterContextInterface) {
 		// 检查系统是否已安装
 		installed := helper.GetConfig().GetBool("app.installed", false)
 
@@ -40,7 +39,7 @@ func InstallCheckMiddleware(helper interfaces.HelperInterface) gin.HandlerFunc {
 		}
 
 		// 系统未安装时，获取当前请求路径
-		path := c.Request.URL.Path
+		path := c.Request().URL.Path
 
 		// 豁免路径列表（这些路径在未安装时也可以访问）
 		exemptPaths := []string{

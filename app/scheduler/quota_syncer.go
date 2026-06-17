@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	apphelper "cnb.cool/mliev/push/message-push/app/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
-	"cnb.cool/mliev/push/message-push/internal/helper"
 	"github.com/muleiwu/gsr"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
@@ -27,11 +27,10 @@ type QuotaSyncer struct {
 
 // NewQuotaSyncer 创建同步器
 func NewQuotaSyncer() *QuotaSyncer {
-	h := helper.GetHelper()
 	return &QuotaSyncer{
-		logger:   h.GetLogger(),
-		redis:    h.GetRedis(),
-		db:       h.GetDatabase(),
+		logger:   helper.GetLogger(),
+		redis:    helper.GetRedis(),
+		db:       helper.GetDatabase(),
 		appDao:   dao.NewApplicationDAO(),
 		interval: 1 * time.Hour, // 每小时同步一次
 		stopCh:   make(chan struct{}),
@@ -73,8 +72,8 @@ func (s *QuotaSyncer) Stop() {
 // sync 同步配额数据
 func (s *QuotaSyncer) sync(ctx context.Context) {
 	s.logger.Info("starting quota sync...")
-	if !helper.GetHelper().GetConfig().GetBool("app.installed", false) {
-		helper.GetHelper().GetLogger().Warn("数据库未安装，不执行")
+	if !helper.GetConfig().GetBool("app.installed", false) {
+		helper.GetLogger().Warn("数据库未安装，不执行")
 		return
 	}
 

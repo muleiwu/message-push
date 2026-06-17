@@ -3,17 +3,17 @@ package controller
 import (
 	"net/http"
 
-	"cnb.cool/mliev/push/message-push/internal/interfaces"
-	"github.com/gin-gonic/gin"
+	"cnb.cool/mliev/open/go-web/pkg/helper"
+	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
 )
 
 type IndexController struct {
 	BaseResponse
 }
 
-func (receiver IndexController) GetIndex(c *gin.Context, helper interfaces.HelperInterface) {
-	helper.GetLogger().Info("visiting homepage")
-	c.HTML(http.StatusOK, "index.html", gin.H{
+func (receiver IndexController) GetIndex(c httpInterfaces.RouterContextInterface) {
+	helper.GetRequestLogger(c).Info("visiting homepage")
+	c.HTML(http.StatusOK, "index.html", map[string]any{
 		"title": "Mulei Message Service",
 	})
 }

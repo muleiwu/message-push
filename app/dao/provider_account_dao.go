@@ -1,8 +1,8 @@
 package dao
 
 import (
+	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
-	"cnb.cool/mliev/push/message-push/internal/helper"
 	"gorm.io/gorm"
 )
 
@@ -14,7 +14,7 @@ type ProviderAccountDAO struct {
 // NewProviderAccountDAO 创建DAO
 func NewProviderAccountDAO() *ProviderAccountDAO {
 	return &ProviderAccountDAO{
-		db: helper.GetHelper().GetDatabase(),
+		db: helper.GetDatabase(),
 	}
 }
 

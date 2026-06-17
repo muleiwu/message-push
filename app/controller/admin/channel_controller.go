@@ -3,12 +3,10 @@ package admin
 import (
 	"strconv"
 
-	"github.com/gin-gonic/gin"
-
+	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
 	"cnb.cool/mliev/push/message-push/app/controller"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/service"
-	"cnb.cool/mliev/push/message-push/internal/interfaces"
 )
 
 // ChannelController 通道管理控制器
@@ -16,7 +14,7 @@ type ChannelController struct {
 }
 
 // CreateChannel 创建通道
-func (c ChannelController) CreateChannel(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ChannelController) CreateChannel(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminChannelService()
 	var req dto.CreateChannelRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -34,7 +32,7 @@ func (c ChannelController) CreateChannel(ctx *gin.Context, helper interfaces.Hel
 }
 
 // GetChannelList 获取通道列表
-func (c ChannelController) GetChannelList(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ChannelController) GetChannelList(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminChannelService()
 	var req dto.ChannelListRequest
 	if err := ctx.ShouldBindQuery(&req); err != nil {
@@ -52,7 +50,7 @@ func (c ChannelController) GetChannelList(ctx *gin.Context, helper interfaces.He
 }
 
 // GetChannel 获取通道详情
-func (c ChannelController) GetChannel(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ChannelController) GetChannel(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminChannelService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -71,7 +69,7 @@ func (c ChannelController) GetChannel(ctx *gin.Context, helper interfaces.Helper
 }
 
 // UpdateChannel 更新通道
-func (c ChannelController) UpdateChannel(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ChannelController) UpdateChannel(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminChannelService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -91,11 +89,11 @@ func (c ChannelController) UpdateChannel(ctx *gin.Context, helper interfaces.Hel
 		return
 	}
 
-	controller.SuccessResponse(ctx, gin.H{"message": "updated successfully"})
+	controller.SuccessResponse(ctx, map[string]any{"message": "updated successfully"})
 }
 
 // DeleteChannel 删除通道
-func (c ChannelController) DeleteChannel(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ChannelController) DeleteChannel(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminChannelService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -109,11 +107,11 @@ func (c ChannelController) DeleteChannel(ctx *gin.Context, helper interfaces.Hel
 		return
 	}
 
-	controller.SuccessResponse(ctx, gin.H{"message": "deleted successfully"})
+	controller.SuccessResponse(ctx, map[string]any{"message": "deleted successfully"})
 }
 
 // GetChannelBindings 获取通道的模板绑定配置列表
-func (c ChannelController) GetChannelBindings(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ChannelController) GetChannelBindings(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminChannelService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -132,7 +130,7 @@ func (c ChannelController) GetChannelBindings(ctx *gin.Context, helper interface
 }
 
 // GetChannelBinding 获取单个通道绑定配置
-func (c ChannelController) GetChannelBinding(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ChannelController) GetChannelBinding(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminChannelService()
 	bindingIDStr := ctx.Param("bindingId")
 	bindingID, err := strconv.ParseUint(bindingIDStr, 10, 32)
@@ -151,7 +149,7 @@ func (c ChannelController) GetChannelBinding(ctx *gin.Context, helper interfaces
 }
 
 // UpdateChannelBinding 更新通道绑定配置
-func (c ChannelController) UpdateChannelBinding(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ChannelController) UpdateChannelBinding(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminChannelService()
 	bindingIDStr := ctx.Param("bindingId")
 	bindingID, err := strconv.ParseUint(bindingIDStr, 10, 32)
@@ -171,11 +169,11 @@ func (c ChannelController) UpdateChannelBinding(ctx *gin.Context, helper interfa
 		return
 	}
 
-	controller.SuccessResponse(ctx, gin.H{"message": "updated successfully"})
+	controller.SuccessResponse(ctx, map[string]any{"message": "updated successfully"})
 }
 
 // DeleteChannelBinding 删除通道绑定配置
-func (c ChannelController) DeleteChannelBinding(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ChannelController) DeleteChannelBinding(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminChannelService()
 	bindingIDStr := ctx.Param("bindingId")
 	bindingID, err := strconv.ParseUint(bindingIDStr, 10, 32)
@@ -189,11 +187,11 @@ func (c ChannelController) DeleteChannelBinding(ctx *gin.Context, helper interfa
 		return
 	}
 
-	controller.SuccessResponse(ctx, gin.H{"message": "deleted successfully"})
+	controller.SuccessResponse(ctx, map[string]any{"message": "deleted successfully"})
 }
 
 // GetActiveChannels 获取活跃通道列表
-func (c ChannelController) GetActiveChannels(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ChannelController) GetActiveChannels(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminChannelService()
 	resp, err := adminService.GetActiveChannels()
 	if err != nil {
@@ -205,7 +203,7 @@ func (c ChannelController) GetActiveChannels(ctx *gin.Context, helper interfaces
 }
 
 // CreateChannelBinding 创建通道绑定配置
-func (c ChannelController) CreateChannelBinding(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ChannelController) CreateChannelBinding(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminChannelService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -230,7 +228,7 @@ func (c ChannelController) CreateChannelBinding(ctx *gin.Context, helper interfa
 }
 
 // GetAvailableTemplateBindings 获取通道可用的模板绑定列表
-func (c ChannelController) GetAvailableTemplateBindings(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ChannelController) GetAvailableTemplateBindings(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminChannelService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -249,7 +247,7 @@ func (c ChannelController) GetAvailableTemplateBindings(ctx *gin.Context, helper
 }
 
 // GetChannelSignatureMappings 获取通道的签名映射列表
-func (c ChannelController) GetChannelSignatureMappings(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ChannelController) GetChannelSignatureMappings(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminChannelService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -268,7 +266,7 @@ func (c ChannelController) GetChannelSignatureMappings(ctx *gin.Context, helper 
 }
 
 // GetChannelSignatureMapping 获取单个通道签名映射
-func (c ChannelController) GetChannelSignatureMapping(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ChannelController) GetChannelSignatureMapping(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminChannelService()
 	mappingIDStr := ctx.Param("mappingId")
 	mappingID, err := strconv.ParseUint(mappingIDStr, 10, 32)
@@ -287,7 +285,7 @@ func (c ChannelController) GetChannelSignatureMapping(ctx *gin.Context, helper i
 }
 
 // CreateChannelSignatureMapping 创建通道签名映射
-func (c ChannelController) CreateChannelSignatureMapping(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ChannelController) CreateChannelSignatureMapping(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminChannelService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -312,7 +310,7 @@ func (c ChannelController) CreateChannelSignatureMapping(ctx *gin.Context, helpe
 }
 
 // UpdateChannelSignatureMapping 更新通道签名映射
-func (c ChannelController) UpdateChannelSignatureMapping(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ChannelController) UpdateChannelSignatureMapping(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminChannelService()
 	mappingIDStr := ctx.Param("mappingId")
 	mappingID, err := strconv.ParseUint(mappingIDStr, 10, 32)
@@ -332,11 +330,11 @@ func (c ChannelController) UpdateChannelSignatureMapping(ctx *gin.Context, helpe
 		return
 	}
 
-	controller.SuccessResponse(ctx, gin.H{"message": "updated successfully"})
+	controller.SuccessResponse(ctx, map[string]any{"message": "updated successfully"})
 }
 
 // DeleteChannelSignatureMapping 删除通道签名映射
-func (c ChannelController) DeleteChannelSignatureMapping(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ChannelController) DeleteChannelSignatureMapping(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminChannelService()
 	mappingIDStr := ctx.Param("mappingId")
 	mappingID, err := strconv.ParseUint(mappingIDStr, 10, 32)
@@ -350,11 +348,11 @@ func (c ChannelController) DeleteChannelSignatureMapping(ctx *gin.Context, helpe
 		return
 	}
 
-	controller.SuccessResponse(ctx, gin.H{"message": "deleted successfully"})
+	controller.SuccessResponse(ctx, map[string]any{"message": "deleted successfully"})
 }
 
 // GetAvailableProviderSignatures 获取通道可用的供应商签名列表
-func (c ChannelController) GetAvailableProviderSignatures(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ChannelController) GetAvailableProviderSignatures(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminChannelService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -373,7 +371,7 @@ func (c ChannelController) GetAvailableProviderSignatures(ctx *gin.Context, help
 }
 
 // TestChannel 测试通道发送
-func (c ChannelController) TestChannel(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ChannelController) TestChannel(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminChannelService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)

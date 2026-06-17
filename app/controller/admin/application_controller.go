@@ -3,12 +3,10 @@ package admin
 import (
 	"strconv"
 
-	"github.com/gin-gonic/gin"
-
+	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
 	"cnb.cool/mliev/push/message-push/app/controller"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/service"
-	"cnb.cool/mliev/push/message-push/internal/interfaces"
 )
 
 // ApplicationController 应用管理控制器
@@ -16,7 +14,7 @@ type ApplicationController struct {
 }
 
 // CreateApplication 创建应用
-func (c ApplicationController) CreateApplication(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ApplicationController) CreateApplication(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminApplicationService()
 	var req dto.CreateApplicationRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -34,7 +32,7 @@ func (c ApplicationController) CreateApplication(ctx *gin.Context, helper interf
 }
 
 // GetApplicationList 获取应用列表
-func (c ApplicationController) GetApplicationList(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ApplicationController) GetApplicationList(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminApplicationService()
 	var req dto.ApplicationListRequest
 	if err := ctx.ShouldBindQuery(&req); err != nil {
@@ -52,7 +50,7 @@ func (c ApplicationController) GetApplicationList(ctx *gin.Context, helper inter
 }
 
 // GetApplication 获取应用详情
-func (c ApplicationController) GetApplication(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ApplicationController) GetApplication(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminApplicationService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -71,7 +69,7 @@ func (c ApplicationController) GetApplication(ctx *gin.Context, helper interface
 }
 
 // UpdateApplication 更新应用
-func (c ApplicationController) UpdateApplication(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ApplicationController) UpdateApplication(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminApplicationService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -91,11 +89,11 @@ func (c ApplicationController) UpdateApplication(ctx *gin.Context, helper interf
 		return
 	}
 
-	controller.SuccessResponse(ctx, gin.H{"message": "updated successfully"})
+	controller.SuccessResponse(ctx, map[string]any{"message": "updated successfully"})
 }
 
 // DeleteApplication 删除应用
-func (c ApplicationController) DeleteApplication(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ApplicationController) DeleteApplication(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminApplicationService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -109,11 +107,11 @@ func (c ApplicationController) DeleteApplication(ctx *gin.Context, helper interf
 		return
 	}
 
-	controller.SuccessResponse(ctx, gin.H{"message": "deleted successfully"})
+	controller.SuccessResponse(ctx, map[string]any{"message": "deleted successfully"})
 }
 
 // RegenerateSecret 重新生成密钥
-func (c ApplicationController) RegenerateSecret(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ApplicationController) RegenerateSecret(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminApplicationService()
 	var req dto.RegenerateSecretRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -131,7 +129,7 @@ func (c ApplicationController) RegenerateSecret(ctx *gin.Context, helper interfa
 }
 
 // GetQuotaUsage 获取配额使用情况
-func (c ApplicationController) GetQuotaUsage(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ApplicationController) GetQuotaUsage(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminApplicationService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)

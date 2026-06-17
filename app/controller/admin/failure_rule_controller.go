@@ -3,20 +3,18 @@ package admin
 import (
 	"strconv"
 
-	"github.com/gin-gonic/gin"
-
+	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
 	"cnb.cool/mliev/push/message-push/app/controller"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/app/service"
-	"cnb.cool/mliev/push/message-push/internal/interfaces"
 )
 
 // FailureRuleController 失败规则管理控制器
 type FailureRuleController struct{}
 
 // CreateFailureRule 创建失败规则
-func (c FailureRuleController) CreateFailureRule(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c FailureRuleController) CreateFailureRule(ctx httpInterfaces.RouterContextInterface) {
 	var req dto.CreateFailureRuleRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		controller.ErrorResponse(ctx, 400, "invalid request: "+err.Error())
@@ -74,7 +72,7 @@ func (c FailureRuleController) CreateFailureRule(ctx *gin.Context, helper interf
 }
 
 // GetFailureRuleList 获取失败规则列表
-func (c FailureRuleController) GetFailureRuleList(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c FailureRuleController) GetFailureRuleList(ctx httpInterfaces.RouterContextInterface) {
 	var req dto.FailureRuleListRequest
 	if err := ctx.ShouldBindQuery(&req); err != nil {
 		controller.ErrorResponse(ctx, 400, "invalid request: "+err.Error())
@@ -112,7 +110,7 @@ func (c FailureRuleController) GetFailureRuleList(ctx *gin.Context, helper inter
 }
 
 // GetFailureRule 获取失败规则详情
-func (c FailureRuleController) GetFailureRule(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c FailureRuleController) GetFailureRule(ctx httpInterfaces.RouterContextInterface) {
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -133,7 +131,7 @@ func (c FailureRuleController) GetFailureRule(ctx *gin.Context, helper interface
 }
 
 // UpdateFailureRule 更新失败规则
-func (c FailureRuleController) UpdateFailureRule(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c FailureRuleController) UpdateFailureRule(ctx httpInterfaces.RouterContextInterface) {
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -203,11 +201,11 @@ func (c FailureRuleController) UpdateFailureRule(ctx *gin.Context, helper interf
 	// 刷新缓存
 	ruleEngine.RefreshCache()
 
-	controller.SuccessResponse(ctx, gin.H{"message": "updated successfully"})
+	controller.SuccessResponse(ctx, map[string]any{"message": "updated successfully"})
 }
 
 // DeleteFailureRule 删除失败规则
-func (c FailureRuleController) DeleteFailureRule(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c FailureRuleController) DeleteFailureRule(ctx httpInterfaces.RouterContextInterface) {
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -226,11 +224,11 @@ func (c FailureRuleController) DeleteFailureRule(ctx *gin.Context, helper interf
 	// 刷新缓存
 	ruleEngine.RefreshCache()
 
-	controller.SuccessResponse(ctx, gin.H{"message": "deleted successfully"})
+	controller.SuccessResponse(ctx, map[string]any{"message": "deleted successfully"})
 }
 
 // GetFailureRuleOptions 获取失败规则选项
-func (c FailureRuleController) GetFailureRuleOptions(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c FailureRuleController) GetFailureRuleOptions(ctx httpInterfaces.RouterContextInterface) {
 	controller.SuccessResponse(ctx, &dto.FailureRuleOptionsResponse{
 		Scenes: []dto.OptionItem{
 			{Value: model.RuleSceneSendFailure, Label: "发送失败"},
@@ -246,10 +244,10 @@ func (c FailureRuleController) GetFailureRuleOptions(ctx *gin.Context, helper in
 }
 
 // RefreshRuleCache 刷新规则缓存
-func (c FailureRuleController) RefreshRuleCache(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c FailureRuleController) RefreshRuleCache(ctx httpInterfaces.RouterContextInterface) {
 	ruleEngine := service.GetRuleEngineService()
 	ruleEngine.RefreshCache()
-	controller.SuccessResponse(ctx, gin.H{"message": "cache refreshed"})
+	controller.SuccessResponse(ctx, map[string]any{"message": "cache refreshed"})
 }
 
 // toFailureRuleResponse 转换为响应DTO

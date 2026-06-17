@@ -16,9 +16,9 @@ import (
 	"strings"
 	"time"
 
+	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/registry"
-	"cnb.cool/mliev/push/message-push/internal/helper"
 )
 
 func init() {
@@ -215,7 +215,7 @@ func (s *DingTalkSender) Send(ctx context.Context, req *SendRequest) (*SendRespo
 }
 
 func (s *DingTalkSender) getAccessToken(ctx context.Context, appKey, appSecret string) (string, error) {
-	redisClient := helper.GetHelper().GetRedis()
+	redisClient := helper.GetRedis()
 	key := fmt.Sprintf("dingtalk:token:%s", appKey)
 
 	// 尝试从Redis获取

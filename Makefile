@@ -15,7 +15,7 @@ migrate-seed:
 
 # 开发运行
 dev:
-	go run main.go
+	go run main.go start
 
 # 构建
 build:

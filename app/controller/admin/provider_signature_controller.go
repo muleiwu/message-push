@@ -3,12 +3,10 @@ package admin
 import (
 	"strconv"
 
-	"github.com/gin-gonic/gin"
-
+	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
 	"cnb.cool/mliev/push/message-push/app/controller"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/service"
-	"cnb.cool/mliev/push/message-push/internal/interfaces"
 )
 
 // ProviderSignatureController 供应商签名管理控制器
@@ -16,7 +14,7 @@ type ProviderSignatureController struct {
 }
 
 // GetSignatureList 获取签名列表
-func (c ProviderSignatureController) GetSignatureList(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ProviderSignatureController) GetSignatureList(ctx httpInterfaces.RouterContextInterface) {
 	signatureService := service.NewAdminProviderSignatureService()
 
 	accountIDStr := ctx.Param("id")
@@ -42,7 +40,7 @@ func (c ProviderSignatureController) GetSignatureList(ctx *gin.Context, helper i
 }
 
 // CreateSignature 创建签名
-func (c ProviderSignatureController) CreateSignature(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ProviderSignatureController) CreateSignature(ctx httpInterfaces.RouterContextInterface) {
 	signatureService := service.NewAdminProviderSignatureService()
 
 	accountIDStr := ctx.Param("id")
@@ -68,7 +66,7 @@ func (c ProviderSignatureController) CreateSignature(ctx *gin.Context, helper in
 }
 
 // UpdateSignature 更新签名
-func (c ProviderSignatureController) UpdateSignature(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ProviderSignatureController) UpdateSignature(ctx httpInterfaces.RouterContextInterface) {
 	signatureService := service.NewAdminProviderSignatureService()
 
 	idStr := ctx.Param("id")
@@ -89,11 +87,11 @@ func (c ProviderSignatureController) UpdateSignature(ctx *gin.Context, helper in
 		return
 	}
 
-	controller.SuccessResponse(ctx, gin.H{"message": "updated successfully"})
+	controller.SuccessResponse(ctx, map[string]any{"message": "updated successfully"})
 }
 
 // DeleteSignature 删除签名
-func (c ProviderSignatureController) DeleteSignature(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ProviderSignatureController) DeleteSignature(ctx httpInterfaces.RouterContextInterface) {
 	signatureService := service.NewAdminProviderSignatureService()
 
 	idStr := ctx.Param("id")
@@ -108,11 +106,11 @@ func (c ProviderSignatureController) DeleteSignature(ctx *gin.Context, helper in
 		return
 	}
 
-	controller.SuccessResponse(ctx, gin.H{"message": "deleted successfully"})
+	controller.SuccessResponse(ctx, map[string]any{"message": "deleted successfully"})
 }
 
 // GetSignature 获取签名详情
-func (c ProviderSignatureController) GetSignature(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ProviderSignatureController) GetSignature(ctx httpInterfaces.RouterContextInterface) {
 	signatureService := service.NewAdminProviderSignatureService()
 
 	idStr := ctx.Param("id")

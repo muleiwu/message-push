@@ -1,11 +1,11 @@
 package autoload
 
-import envInterface "cnb.cool/mliev/push/message-push/internal/interfaces"
+import "cnb.cool/mliev/open/go-web/pkg/helper"
 
 type Cache struct {
 }
 
-func (receiver Cache) InitConfig(helper envInterface.HelperInterface) map[string]any {
+func (receiver Cache) InitConfig() map[string]any {
 	return map[string]any{
 		"cache.driver": helper.GetEnv().GetString("cache.driver", "redis"), // memory,redis,none
 	}

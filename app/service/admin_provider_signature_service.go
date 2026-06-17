@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"time"
 
+	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/model"
-	"cnb.cool/mliev/push/message-push/internal/helper"
 )
 
 // AdminProviderSignatureService 签名管理服务
@@ -18,7 +18,7 @@ type AdminProviderSignatureService struct {
 
 // NewAdminProviderSignatureService 创建签名管理服务实例
 func NewAdminProviderSignatureService() *AdminProviderSignatureService {
-	db := helper.GetHelper().GetDatabase()
+	db := helper.GetDatabase()
 	return &AdminProviderSignatureService{
 		signatureDAO: dao.NewProviderSignatureDAO(db),
 		accountDAO:   dao.NewProviderAccountDAO(),

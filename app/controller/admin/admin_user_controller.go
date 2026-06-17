@@ -3,12 +3,10 @@ package admin
 import (
 	"strconv"
 
-	"github.com/gin-gonic/gin"
-
+	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
 	"cnb.cool/mliev/push/message-push/app/controller"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/service"
-	"cnb.cool/mliev/push/message-push/internal/interfaces"
 )
 
 // AdminUserController 管理员用户管理控制器
@@ -16,7 +14,7 @@ type AdminUserController struct {
 }
 
 // GetUserList 获取管理员用户列表
-func (c AdminUserController) GetUserList(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c AdminUserController) GetUserList(ctx httpInterfaces.RouterContextInterface) {
 	adminUserService := service.NewAdminUserService()
 	var req dto.AdminUserListRequest
 	if err := ctx.ShouldBindQuery(&req); err != nil {
@@ -34,7 +32,7 @@ func (c AdminUserController) GetUserList(ctx *gin.Context, helper interfaces.Hel
 }
 
 // CreateUser 创建管理员用户
-func (c AdminUserController) CreateUser(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c AdminUserController) CreateUser(ctx httpInterfaces.RouterContextInterface) {
 	adminUserService := service.NewAdminUserService()
 	var req dto.CreateAdminUserRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -52,7 +50,7 @@ func (c AdminUserController) CreateUser(ctx *gin.Context, helper interfaces.Help
 }
 
 // GetUser 获取管理员用户详情
-func (c AdminUserController) GetUser(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c AdminUserController) GetUser(ctx httpInterfaces.RouterContextInterface) {
 	adminUserService := service.NewAdminUserService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -71,7 +69,7 @@ func (c AdminUserController) GetUser(ctx *gin.Context, helper interfaces.HelperI
 }
 
 // UpdateUser 更新管理员用户
-func (c AdminUserController) UpdateUser(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c AdminUserController) UpdateUser(ctx httpInterfaces.RouterContextInterface) {
 	adminUserService := service.NewAdminUserService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -91,11 +89,11 @@ func (c AdminUserController) UpdateUser(ctx *gin.Context, helper interfaces.Help
 		return
 	}
 
-	controller.SuccessResponse(ctx, gin.H{"message": "updated successfully"})
+	controller.SuccessResponse(ctx, map[string]any{"message": "updated successfully"})
 }
 
 // DeleteUser 删除管理员用户
-func (c AdminUserController) DeleteUser(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c AdminUserController) DeleteUser(ctx httpInterfaces.RouterContextInterface) {
 	adminUserService := service.NewAdminUserService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -109,11 +107,11 @@ func (c AdminUserController) DeleteUser(ctx *gin.Context, helper interfaces.Help
 		return
 	}
 
-	controller.SuccessResponse(ctx, gin.H{"message": "deleted successfully"})
+	controller.SuccessResponse(ctx, map[string]any{"message": "deleted successfully"})
 }
 
 // ResetPassword 重置管理员用户密码
-func (c AdminUserController) ResetPassword(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c AdminUserController) ResetPassword(ctx httpInterfaces.RouterContextInterface) {
 	adminUserService := service.NewAdminUserService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)

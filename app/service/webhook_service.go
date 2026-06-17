@@ -12,10 +12,10 @@ import (
 	"net/http"
 	"time"
 
+	internalHelper "cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/app/sender"
-	internalHelper "cnb.cool/mliev/push/message-push/internal/helper"
 	"github.com/muleiwu/gsr"
 )
 
@@ -29,9 +29,8 @@ type WebhookService struct {
 
 // NewWebhookService 创建 Webhook 服务
 func NewWebhookService() *WebhookService {
-	h := internalHelper.GetHelper()
 	return &WebhookService{
-		logger:           h.GetLogger(),
+		logger:           internalHelper.GetLogger(),
 		webhookConfigDao: dao.NewWebhookConfigDAO(),
 		webhookLogDao:    dao.NewWebhookLogDAO(),
 		httpClient: &http.Client{
