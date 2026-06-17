@@ -1,6 +1,7 @@
 package service
 
 import (
+	"cnb.cool/mliev/push/message-push/modules/messaging"
 	"fmt"
 	"time"
 
@@ -931,7 +932,7 @@ func (s *AdminChannelService) TestChannel(channelID uint, req *dto.TestChannelRe
 	}
 
 	// 6. 使用消息服务发送测试消息
-	messageService := NewMessageService()
+	messageService := messaging.GetService()
 	sendReq := &dto.SendRequest{
 		AppID:          "admin_test", // 管理后台测试使用特殊的 AppID
 		ChannelID:      channelID,

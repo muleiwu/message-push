@@ -1,4 +1,4 @@
-package service
+package infrastructure
 
 import (
 	"context"
@@ -13,9 +13,13 @@ import (
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/modules/channel"
 	"cnb.cool/mliev/push/message-push/modules/delivery"
+	"cnb.cool/mliev/push/message-push/modules/messaging/domain"
 	"github.com/google/uuid"
 	"github.com/muleiwu/gsr"
 )
+
+// 确保 MessageService 实现 domain.Service 端口
+var _ domain.Service = (*MessageService)(nil)
 
 // MessageService 消息服务
 type MessageService struct {

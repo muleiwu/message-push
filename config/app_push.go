@@ -5,6 +5,7 @@ import (
 	channelAssembly "cnb.cool/mliev/push/message-push/modules/channel/assembly"
 	deliveryAssembly "cnb.cool/mliev/push/message-push/modules/delivery/assembly"
 	deliveryServer "cnb.cool/mliev/push/message-push/modules/delivery/server"
+	messagingAssembly "cnb.cool/mliev/push/message-push/modules/messaging/assembly"
 	ruleengineAssembly "cnb.cool/mliev/push/message-push/modules/ruleengine/assembly"
 	senderAssembly "cnb.cool/mliev/push/message-push/modules/sender/assembly"
 )
@@ -19,6 +20,7 @@ func pushAssemblies() []interfaces.AssemblyInterface {
 		&channelAssembly.Channel{},
 		&ruleengineAssembly.RuleEngine{},
 		&deliveryAssembly.Producer{},
+		&messagingAssembly.Messaging{},
 	}
 }
 

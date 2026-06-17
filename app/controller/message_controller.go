@@ -4,7 +4,7 @@ import (
 	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
 
 	"cnb.cool/mliev/push/message-push/app/dto"
-	"cnb.cool/mliev/push/message-push/app/service"
+	"cnb.cool/mliev/push/message-push/modules/messaging"
 )
 
 // MessageController 消息控制器
@@ -13,7 +13,7 @@ type MessageController struct {
 
 // Send 发送消息
 func (ctrl MessageController) Send(c httpInterfaces.RouterContextInterface) {
-	messageService := service.NewMessageService()
+	messageService := messaging.GetService()
 	var req dto.SendRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		FailWithMessage(c, "invalid request: "+err.Error())
@@ -35,7 +35,7 @@ func (ctrl MessageController) Send(c httpInterfaces.RouterContextInterface) {
 
 // BatchSend 批量发送消息
 func (ctrl MessageController) BatchSend(c httpInterfaces.RouterContextInterface) {
-	messageService := service.NewMessageService()
+	messageService := messaging.GetService()
 	var req dto.BatchSendRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		FailWithMessage(c, "invalid request: "+err.Error())
@@ -57,7 +57,7 @@ func (ctrl MessageController) BatchSend(c httpInterfaces.RouterContextInterface)
 
 // QueryTask 查询任务状态
 func (ctrl MessageController) QueryTask(c httpInterfaces.RouterContextInterface) {
-	messageService := service.NewMessageService()
+	messageService := messaging.GetService()
 	taskID := c.Param("task_id")
 	if taskID == "" {
 		FailWithMessage(c, "task_id is required")
