@@ -1,4 +1,4 @@
-package sender
+package infrastructure
 
 import (
 	"bytes"
@@ -12,22 +12,22 @@ import (
 
 	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/constants"
-	"cnb.cool/mliev/push/message-push/app/registry"
+	domain "cnb.cool/mliev/push/message-push/modules/sender/domain"
 )
 
 func init() {
 	// 注册企业微信服务商
-	registry.Register(&registry.ProviderMeta{
+	domain.Register(&domain.ProviderMeta{
 		Code:        constants.ProviderWeChatWork,
 		Name:        "企业微信",
 		Type:        constants.MessageTypeWeChatWork,
 		Description: "企业微信应用消息服务，支持文本和Markdown消息",
-		ConfigFields: []registry.ConfigField{
+		ConfigFields: []domain.ConfigField{
 			{
 				Key:         "corp_id",
 				Label:       "企业ID",
 				Description: "企业微信的企业ID（CorpID）",
-				Type:        registry.FieldTypeText,
+				Type:        domain.FieldTypeText,
 				Required:    true,
 				Example:     "ww1234567890abcdef",
 				Placeholder: "请输入企业ID",
@@ -37,7 +37,7 @@ func init() {
 				Key:         "agent_secret",
 				Label:       "应用Secret",
 				Description: "企业微信应用的Secret",
-				Type:        registry.FieldTypePassword,
+				Type:        domain.FieldTypePassword,
 				Required:    true,
 				Example:     "xxxxxxxxxxxxxxxxxxxxxx",
 				Placeholder: "请输入应用Secret",
@@ -47,7 +47,7 @@ func init() {
 				Key:         "agent_id",
 				Label:       "应用ID",
 				Description: "企业微信应用的AgentID",
-				Type:        registry.FieldTypeText,
+				Type:        domain.FieldTypeText,
 				Required:    true,
 				Example:     "1000002",
 				Placeholder: "请输入应用ID",
@@ -81,7 +81,7 @@ func (s *WeChatWorkSender) GetProviderCode() string {
 	return constants.ProviderWeChatWork
 }
 
-func (s *WeChatWorkSender) Send(ctx context.Context, req *SendRequest) (*SendResponse, error) {
+func (s *WeChatWorkSender) Send(ctx context.Context, req *domain.SendRequest) (*domain.SendResponse, error) {
 	config, err := req.ProviderAccount.GetConfig()
 	if err != nil {
 		return nil, fmt.Errorf("invalid provider config: %w", err)
@@ -155,7 +155,7 @@ func (s *WeChatWorkSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 	}
 
 	if respData.ErrCode != 0 {
-		return &SendResponse{
+		return &domain.SendResponse{
 			Success:      false,
 			ErrorCode:    fmt.Sprintf("%d", respData.ErrCode),
 			ErrorMessage: respData.ErrMsg,
@@ -163,7 +163,7 @@ func (s *WeChatWorkSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 		}, nil
 	}
 
-	return &SendResponse{
+	return &domain.SendResponse{
 		Success:    true,
 		ProviderID: respData.MsgID,
 		TaskID:     req.Task.TaskID,
@@ -218,9 +218,9 @@ func (s *WeChatWorkSender) SupportsBatchSend() bool {
 }
 
 // BatchSend 批量发送企业微信消息（企业微信支持 touser 用 | 分隔多个用户）
-func (s *WeChatWorkSender) BatchSend(ctx context.Context, req *BatchSendRequest) (*BatchSendResponse, error) {
+func (s *WeChatWorkSender) BatchSend(ctx context.Context, req *domain.BatchSendRequest) (*domain.BatchSendResponse, error) {
 	if len(req.Tasks) == 0 {
-		return &BatchSendResponse{Results: []*SendResponse{}}, nil
+		return &domain.BatchSendResponse{Results: []*domain.SendResponse{}}, nil
 	}
 
 	config, err := req.ProviderAccount.GetConfig()
@@ -302,7 +302,7 @@ func (s *WeChatWorkSender) BatchSend(ctx context.Context, req *BatchSendRequest)
 	}
 
 	// 构造结果
-	results := make([]*SendResponse, len(req.Tasks))
+	results := make([]*domain.SendResponse, len(req.Tasks))
 	invalidUsers := make(map[string]bool)
 	if respData.InvalidUser != "" {
 		for _, u := range strings.Split(respData.InvalidUser, "|") {
@@ -312,21 +312,21 @@ func (s *WeChatWorkSender) BatchSend(ctx context.Context, req *BatchSendRequest)
 
 	for i, task := range req.Tasks {
 		if respData.ErrCode != 0 {
-			results[i] = &SendResponse{
+			results[i] = &domain.SendResponse{
 				Success:      false,
 				ErrorCode:    fmt.Sprintf("%d", respData.ErrCode),
 				ErrorMessage: respData.ErrMsg,
 				TaskID:       task.TaskID,
 			}
 		} else if invalidUsers[task.Receiver] {
-			results[i] = &SendResponse{
+			results[i] = &domain.SendResponse{
 				Success:      false,
 				ErrorCode:    "invalid_user",
 				ErrorMessage: "用户ID无效",
 				TaskID:       task.TaskID,
 			}
 		} else {
-			results[i] = &SendResponse{
+			results[i] = &domain.SendResponse{
 				Success:    true,
 				ProviderID: respData.MsgID,
 				TaskID:     task.TaskID,
@@ -335,7 +335,7 @@ func (s *WeChatWorkSender) BatchSend(ctx context.Context, req *BatchSendRequest)
 		}
 	}
 
-	return &BatchSendResponse{Results: results}, nil
+	return &domain.BatchSendResponse{Results: results}, nil
 }
 
 // ==================== CallbackHandler 接口实现 ====================
@@ -347,9 +347,9 @@ func (s *WeChatWorkSender) SupportsCallback() bool {
 
 // HandleCallback 处理企业微信回调
 // 企业微信消息发送状态回调格式（需要在企业微信后台配置回调URL）
-func (s *WeChatWorkSender) HandleCallback(ctx context.Context, req *CallbackRequest) (CallbackResponse, []*CallbackResult, error) {
+func (s *WeChatWorkSender) HandleCallback(ctx context.Context, req *domain.CallbackRequest) (domain.CallbackResponse, []*domain.CallbackResult, error) {
 	// 默认响应（企业微信期望返回 {"errcode": 0, "errmsg": "ok"}）
-	resp := CallbackResponse{
+	resp := domain.CallbackResponse{
 		StatusCode: 200,
 		Body:       `{"errcode":0,"errmsg":"ok"}`,
 	}
@@ -379,7 +379,7 @@ func (s *WeChatWorkSender) HandleCallback(ctx context.Context, req *CallbackRequ
 		reportTime = time.Now()
 	}
 
-	return resp, []*CallbackResult{{
+	return resp, []*domain.CallbackResult{{
 		ProviderID:   callbackData.MsgID,
 		Status:       status,
 		ErrorCode:    fmt.Sprintf("%d", callbackData.ErrCode),

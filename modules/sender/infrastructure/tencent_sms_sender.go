@@ -1,4 +1,4 @@
-package sender
+package infrastructure
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"cnb.cool/mliev/push/message-push/app/constants"
-	"cnb.cool/mliev/push/message-push/app/registry"
+	domain "cnb.cool/mliev/push/message-push/modules/sender/domain"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 	sms "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sms/v20210111"
@@ -16,17 +16,17 @@ import (
 
 func init() {
 	// 注册腾讯云短信服务商
-	registry.Register(&registry.ProviderMeta{
+	domain.Register(&domain.ProviderMeta{
 		Code:        constants.ProviderTencentSMS,
 		Name:        "腾讯云短信",
 		Type:        constants.MessageTypeSMS,
 		Description: "腾讯云短信服务，支持国内短信和国际短信发送。注意：短信签名需在「签名管理」中单独配置",
-		ConfigFields: []registry.ConfigField{
+		ConfigFields: []domain.ConfigField{
 			{
 				Key:            "secret_id",
 				Label:          "SecretId",
 				Description:    "腾讯云账号的SecretId",
-				Type:           registry.FieldTypeText,
+				Type:           domain.FieldTypeText,
 				Required:       true,
 				Example:        "AKIDxxxxxxxxxxxxxxxx",
 				Placeholder:    "请输入SecretId",
@@ -37,7 +37,7 @@ func init() {
 				Key:            "secret_key",
 				Label:          "SecretKey",
 				Description:    "腾讯云账号的SecretKey",
-				Type:           registry.FieldTypePassword,
+				Type:           domain.FieldTypePassword,
 				Required:       true,
 				Example:        "xxxxxxxxxxxxxxxxxxxxxx",
 				Placeholder:    "请输入SecretKey",
@@ -48,7 +48,7 @@ func init() {
 				Key:         "sdk_app_id",
 				Label:       "应用ID",
 				Description: "短信应用的SdkAppId",
-				Type:        registry.FieldTypeText,
+				Type:        domain.FieldTypeText,
 				Required:    true,
 				Example:     "1400000000",
 				Placeholder: "请输入SdkAppId",
@@ -57,7 +57,7 @@ func init() {
 				Key:          "region",
 				Label:        "地域",
 				Description:  "腾讯云地域，默认为ap-guangzhou",
-				Type:         registry.FieldTypeText,
+				Type:         domain.FieldTypeText,
 				Required:     false,
 				Example:      "ap-guangzhou",
 				Placeholder:  "请输入地域",
@@ -93,7 +93,7 @@ func (s *TencentSMSSender) GetProviderCode() string {
 	return constants.ProviderTencentSMS
 }
 
-func (s *TencentSMSSender) Send(ctx context.Context, req *SendRequest) (*SendResponse, error) {
+func (s *TencentSMSSender) Send(ctx context.Context, req *domain.SendRequest) (*domain.SendResponse, error) {
 	// 1. 获取配置
 	config, err := req.ProviderAccount.GetConfig()
 	if err != nil {
@@ -167,7 +167,7 @@ func (s *TencentSMSSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 	// 5. 发送
 	response, err := client.SendSms(request)
 	if err != nil {
-		return &SendResponse{
+		return &domain.SendResponse{
 			Success:      false,
 			ErrorMessage: err.Error(),
 			TaskID:       req.Task.TaskID,
@@ -184,7 +184,7 @@ func (s *TencentSMSSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 	if len(response.Response.SendStatusSet) > 0 {
 		status := response.Response.SendStatusSet[0]
 		if *status.Code == "Ok" {
-			return &SendResponse{
+			return &domain.SendResponse{
 				Success:      true,
 				ProviderID:   *status.SerialNo,
 				TaskID:       req.Task.TaskID,
@@ -193,7 +193,7 @@ func (s *TencentSMSSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 				ResponseData: string(responseData),
 			}, nil
 		}
-		return &SendResponse{
+		return &domain.SendResponse{
 			Success:      false,
 			ErrorCode:    *status.Code,
 			ErrorMessage: *status.Message,
@@ -203,7 +203,7 @@ func (s *TencentSMSSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 		}, nil
 	}
 
-	return &SendResponse{
+	return &domain.SendResponse{
 		Success:      false,
 		ErrorMessage: "empty response from tencent cloud",
 		TaskID:       req.Task.TaskID,
@@ -214,7 +214,7 @@ func (s *TencentSMSSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 
 // buildParamsFromMapping 从 MappedParams 构建有序参数数组
 // 腾讯云要求参数按模板占位符顺序排列
-func (s *TencentSMSSender) buildParamsFromMapping(req *SendRequest) []string {
+func (s *TencentSMSSender) buildParamsFromMapping(req *domain.SendRequest) []string {
 	if len(req.MappedParams) == 0 {
 		return []string{}
 	}
@@ -265,7 +265,7 @@ func (s *TencentSMSSender) buildParamsFromMapping(req *SendRequest) []string {
 }
 
 // buildParamsFromBatchMapping 从批量请求的 MappedParams 构建有序参数数组
-func (s *TencentSMSSender) buildParamsFromBatchMapping(req *BatchSendRequest) []string {
+func (s *TencentSMSSender) buildParamsFromBatchMapping(req *domain.BatchSendRequest) []string {
 	if len(req.MappedParams) == 0 {
 		return []string{}
 	}
@@ -322,9 +322,9 @@ func (s *TencentSMSSender) SupportsBatchSend() bool {
 }
 
 // BatchSend 批量发送短信（腾讯云原生支持批量发送，最多200个号码）
-func (s *TencentSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest) (*BatchSendResponse, error) {
+func (s *TencentSMSSender) BatchSend(ctx context.Context, req *domain.BatchSendRequest) (*domain.BatchSendResponse, error) {
 	if len(req.Tasks) == 0 {
-		return &BatchSendResponse{Results: []*SendResponse{}}, nil
+		return &domain.BatchSendResponse{Results: []*domain.SendResponse{}}, nil
 	}
 
 	// 1. 获取配置
@@ -413,7 +413,7 @@ func (s *TencentSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest)
 	responseData, _ := json.Marshal(response.Response)
 
 	// 7. 解析响应
-	results := make([]*SendResponse, 0, len(response.Response.SendStatusSet))
+	results := make([]*domain.SendResponse, 0, len(response.Response.SendStatusSet))
 	for i, status := range response.Response.SendStatusSet {
 		taskID := ""
 		if i < len(req.Tasks) {
@@ -421,7 +421,7 @@ func (s *TencentSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest)
 		}
 
 		if *status.Code == "Ok" {
-			results = append(results, &SendResponse{
+			results = append(results, &domain.SendResponse{
 				Success:      true,
 				ProviderID:   *status.SerialNo,
 				TaskID:       taskID,
@@ -430,7 +430,7 @@ func (s *TencentSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest)
 				ResponseData: string(responseData),
 			})
 		} else {
-			results = append(results, &SendResponse{
+			results = append(results, &domain.SendResponse{
 				Success:      false,
 				ErrorCode:    *status.Code,
 				ErrorMessage: *status.Message,
@@ -441,7 +441,7 @@ func (s *TencentSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest)
 		}
 	}
 
-	return &BatchSendResponse{Results: results}, nil
+	return &domain.BatchSendResponse{Results: results}, nil
 }
 
 // ==================== StatusQuerier 接口实现 ====================
@@ -453,7 +453,7 @@ func (s *TencentSMSSender) SupportsStatusQuery() bool {
 
 // QueryStatus 查询短信发送状态
 // 使用腾讯云 PullSmsSendStatusByPhoneNumber API
-func (s *TencentSMSSender) QueryStatus(ctx context.Context, req *StatusQueryRequest) (*StatusQueryResponse, error) {
+func (s *TencentSMSSender) QueryStatus(ctx context.Context, req *domain.StatusQueryRequest) (*domain.StatusQueryResponse, error) {
 	// 1. 获取配置
 	config, err := req.ProviderAccount.GetConfig()
 	if err != nil {
@@ -499,7 +499,7 @@ func (s *TencentSMSSender) QueryStatus(ctx context.Context, req *StatusQueryRequ
 	}
 
 	// 5. 转换结果
-	results := make([]*StatusQueryResult, 0)
+	results := make([]*domain.StatusQueryResult, 0)
 	if response.Response != nil && response.Response.PullSmsSendStatusSet != nil {
 		for _, detail := range response.Response.PullSmsSendStatusSet {
 			status := constants.CallbackStatusFailed
@@ -536,7 +536,7 @@ func (s *TencentSMSSender) QueryStatus(ctx context.Context, req *StatusQueryRequ
 				description = *detail.Description
 			}
 
-			results = append(results, &StatusQueryResult{
+			results = append(results, &domain.StatusQueryResult{
 				ProviderMsgID: serialNo,
 				PhoneNumber:   phoneNumber,
 				Status:        status,
@@ -547,7 +547,7 @@ func (s *TencentSMSSender) QueryStatus(ctx context.Context, req *StatusQueryRequ
 		}
 	}
 
-	return &StatusQueryResponse{Results: results}, nil
+	return &domain.StatusQueryResponse{Results: results}, nil
 }
 
 // ==================== CallbackHandler 接口实现 ====================
@@ -560,9 +560,9 @@ func (s *TencentSMSSender) SupportsCallback() bool {
 // HandleCallback 处理腾讯云短信回调
 // 腾讯云短信状态报告格式：
 // [{"user_receive_time":"2015-10-17 08:03:04","nationcode":"86","mobile":"13xxxxxxxxx","report_status":"SUCCESS","errmsg":"DELIVRD","description":"用户短信送达成功","sid":"xxxxxxx"}]
-func (s *TencentSMSSender) HandleCallback(ctx context.Context, req *CallbackRequest) (CallbackResponse, []*CallbackResult, error) {
+func (s *TencentSMSSender) HandleCallback(ctx context.Context, req *domain.CallbackRequest) (domain.CallbackResponse, []*domain.CallbackResult, error) {
 	// 默认响应（腾讯云期望返回 {"result": 0, "errmsg": "OK"}）
-	resp := CallbackResponse{
+	resp := domain.CallbackResponse{
 		StatusCode: 200,
 		Body:       `{"result":0,"errmsg":"OK"}`,
 	}
@@ -583,7 +583,7 @@ func (s *TencentSMSSender) HandleCallback(ctx context.Context, req *CallbackRequ
 		return resp, nil, fmt.Errorf("invalid callback data: %w", err)
 	}
 
-	results := make([]*CallbackResult, 0, len(reports))
+	results := make([]*domain.CallbackResult, 0, len(reports))
 	for _, report := range reports {
 		status := constants.CallbackStatusDelivered
 		if report.ReportStatus != "SUCCESS" {
@@ -592,7 +592,7 @@ func (s *TencentSMSSender) HandleCallback(ctx context.Context, req *CallbackRequ
 
 		reportTime, _ := time.ParseInLocation("2006-01-02 15:04:05", report.UserReceiveTime, time.Local)
 
-		results = append(results, &CallbackResult{
+		results = append(results, &domain.CallbackResult{
 			ProviderID:   report.Sid,
 			Status:       status,
 			ErrorCode:    report.ErrMsg,

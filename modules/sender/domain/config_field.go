@@ -1,4 +1,4 @@
-package registry
+package domain
 
 // FieldOption 下拉选项
 type FieldOption struct {

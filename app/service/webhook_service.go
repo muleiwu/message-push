@@ -15,7 +15,7 @@ import (
 	internalHelper "cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/model"
-	"cnb.cool/mliev/push/message-push/app/sender"
+	"cnb.cool/mliev/push/message-push/modules/sender"
 	"github.com/muleiwu/gsr"
 )
 

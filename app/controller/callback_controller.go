@@ -9,8 +9,8 @@ import (
 	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
 
 	"cnb.cool/mliev/push/message-push/app/dao"
-	"cnb.cool/mliev/push/message-push/app/sender"
 	"cnb.cool/mliev/push/message-push/app/service"
+	"cnb.cool/mliev/push/message-push/modules/sender"
 )
 
 // CallbackController 回调控制器

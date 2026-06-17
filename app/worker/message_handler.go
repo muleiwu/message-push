@@ -13,8 +13,8 @@ import (
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/app/queue"
 	"cnb.cool/mliev/push/message-push/app/selector"
-	"cnb.cool/mliev/push/message-push/app/sender"
 	"cnb.cool/mliev/push/message-push/app/service"
+	"cnb.cool/mliev/push/message-push/modules/sender"
 	"github.com/muleiwu/gsr"
 )
 
@@ -32,7 +32,7 @@ type MessageHandler struct {
 	taskDao             *dao.PushTaskDAO
 	logDao              *dao.PushLogDAO
 	selector            *selector.ChannelSelector
-	senderFactory       *sender.Factory
+	senderResolver      sender.Resolver
 	retryHelper         *helper.RetryHelper
 	signatureMappingDao *dao.ChannelSignatureMappingDAO
 	templateHelper      *helper.TemplateHelper
@@ -47,7 +47,7 @@ func NewMessageHandler() *MessageHandler {
 		taskDao:             dao.NewPushTaskDAO(),
 		logDao:              dao.NewPushLogDAO(),
 		selector:            selector.NewChannelSelector(),
-		senderFactory:       sender.NewFactory(),
+		senderResolver:      sender.GetResolver(),
 		retryHelper:         helper.NewRetryHelper(),
 		signatureMappingDao: dao.NewChannelSignatureMappingDAO(internalHelper.GetDatabase()),
 		templateHelper:      helper.NewTemplateHelper(),
@@ -93,7 +93,7 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 	}
 
 	// 获取发送器（按服务商代码获取）
-	messageSender, err := h.senderFactory.GetSender(providerAccount.ProviderCode)
+	messageSender, err := h.senderResolver.GetSender(providerAccount.ProviderCode)
 	if err != nil {
 		h.logger.Error(fmt.Sprintf("failed to get sender task_id=%s: %v", taskID, err))
 		h.handleEarlyFailure(task, providerAccount.ID, err.Error())

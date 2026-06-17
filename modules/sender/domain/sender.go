@@ -1,4 +1,7 @@
-package sender
+// Package domain 是 sender 限界上下文的领域层：
+// 定义发送器端口（Sender 及其能力接口）、领域值对象与服务商注册表。
+// 领域层不依赖具体服务商 SDK，仅依赖共享内核 app/model。
+package domain
 
 import (
 	"context"

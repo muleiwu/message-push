@@ -1,4 +1,4 @@
-package sender
+package infrastructure
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"cnb.cool/mliev/push/message-push/app/constants"
-	"cnb.cool/mliev/push/message-push/app/registry"
+	domain "cnb.cool/mliev/push/message-push/modules/sender/domain"
 
 	openapi "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	dysmsapi "github.com/alibabacloud-go/dysmsapi-20170525/v3/client"
@@ -16,17 +16,17 @@ import (
 
 func init() {
 	// 注册阿里云短信服务商
-	registry.Register(&registry.ProviderMeta{
+	domain.Register(&domain.ProviderMeta{
 		Code:        constants.ProviderAliyunSMS,
 		Name:        "阿里云短信",
 		Type:        constants.MessageTypeSMS,
 		Description: "阿里云短信服务，支持国内短信和国际短信发送。注意：短信签名需在「签名管理」中单独配置",
-		ConfigFields: []registry.ConfigField{
+		ConfigFields: []domain.ConfigField{
 			{
 				Key:            "access_key_id",
 				Label:          "AccessKeyID",
 				Description:    "阿里云账号的AccessKeyID",
-				Type:           registry.FieldTypeText,
+				Type:           domain.FieldTypeText,
 				Required:       true,
 				Example:        "LTAI5tXXXXXXXXXXXXXX",
 				Placeholder:    "请输入AccessKeyID",
@@ -37,7 +37,7 @@ func init() {
 				Key:            "access_key_secret",
 				Label:          "AccessKeySecret",
 				Description:    "阿里云账号的AccessKeySecret",
-				Type:           registry.FieldTypePassword,
+				Type:           domain.FieldTypePassword,
 				Required:       true,
 				Example:        "xxxxxxxxxxxxxxxxxxxxxx",
 				Placeholder:    "请输入AccessKeySecret",
@@ -78,7 +78,7 @@ func (s *AliyunSMSSender) GetProviderCode() string {
 }
 
 // Send 发送短信
-func (s *AliyunSMSSender) Send(ctx context.Context, req *SendRequest) (*SendResponse, error) {
+func (s *AliyunSMSSender) Send(ctx context.Context, req *domain.SendRequest) (*domain.SendResponse, error) {
 	// 1. 获取配置
 	config, err := req.ProviderAccount.GetConfig()
 	if err != nil {
@@ -148,7 +148,7 @@ func (s *AliyunSMSSender) Send(ctx context.Context, req *SendRequest) (*SendResp
 	// 5. 发送
 	response, err := client.SendSms(sendRequest)
 	if err != nil {
-		return &SendResponse{
+		return &domain.SendResponse{
 			Success:      false,
 			ErrorMessage: err.Error(),
 			TaskID:       req.Task.TaskID,
@@ -162,7 +162,7 @@ func (s *AliyunSMSSender) Send(ctx context.Context, req *SendRequest) (*SendResp
 
 	// 7. 解析响应
 	if response.Body == nil {
-		return &SendResponse{
+		return &domain.SendResponse{
 			Success:      false,
 			ErrorMessage: "empty response from aliyun",
 			TaskID:       req.Task.TaskID,
@@ -172,7 +172,7 @@ func (s *AliyunSMSSender) Send(ctx context.Context, req *SendRequest) (*SendResp
 	}
 
 	if tea.StringValue(response.Body.Code) == "OK" {
-		return &SendResponse{
+		return &domain.SendResponse{
 			Success:      true,
 			ProviderID:   tea.StringValue(response.Body.BizId),
 			TaskID:       req.Task.TaskID,
@@ -182,7 +182,7 @@ func (s *AliyunSMSSender) Send(ctx context.Context, req *SendRequest) (*SendResp
 		}, nil
 	}
 
-	return &SendResponse{
+	return &domain.SendResponse{
 		Success:      false,
 		ErrorCode:    tea.StringValue(response.Body.Code),
 		ErrorMessage: tea.StringValue(response.Body.Message),
@@ -210,9 +210,9 @@ func (s *AliyunSMSSender) SupportsBatchSend() bool {
 }
 
 // BatchSend 批量发送短信（阿里云支持最多1000个号码）
-func (s *AliyunSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest) (*BatchSendResponse, error) {
+func (s *AliyunSMSSender) BatchSend(ctx context.Context, req *domain.BatchSendRequest) (*domain.BatchSendResponse, error) {
 	if len(req.Tasks) == 0 {
-		return &BatchSendResponse{Results: []*SendResponse{}}, nil
+		return &domain.BatchSendResponse{Results: []*domain.SendResponse{}}, nil
 	}
 
 	// 1. 获取配置
@@ -301,9 +301,9 @@ func (s *AliyunSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest) 
 	response, err := client.SendBatchSms(batchRequest)
 	if err != nil {
 		// 如果批量发送失败，返回所有任务都失败的结果
-		results := make([]*SendResponse, len(req.Tasks))
+		results := make([]*domain.SendResponse, len(req.Tasks))
 		for i, task := range req.Tasks {
-			results[i] = &SendResponse{
+			results[i] = &domain.SendResponse{
 				Success:      false,
 				ErrorMessage: err.Error(),
 				TaskID:       task.TaskID,
@@ -311,7 +311,7 @@ func (s *AliyunSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest) 
 				ResponseData: "",
 			}
 		}
-		return &BatchSendResponse{Results: results}, nil
+		return &domain.BatchSendResponse{Results: results}, nil
 	}
 
 	// 6. 序列化响应数据用于日志
@@ -320,9 +320,9 @@ func (s *AliyunSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest) 
 	// 7. 解析响应
 	// 阿里云批量发送成功时返回一个统一的 BizId
 	if response.Body == nil {
-		results := make([]*SendResponse, len(req.Tasks))
+		results := make([]*domain.SendResponse, len(req.Tasks))
 		for i, task := range req.Tasks {
-			results[i] = &SendResponse{
+			results[i] = &domain.SendResponse{
 				Success:      false,
 				ErrorMessage: "empty response from aliyun",
 				TaskID:       task.TaskID,
@@ -330,10 +330,10 @@ func (s *AliyunSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest) 
 				ResponseData: "",
 			}
 		}
-		return &BatchSendResponse{Results: results}, nil
+		return &domain.BatchSendResponse{Results: results}, nil
 	}
 
-	results := make([]*SendResponse, len(req.Tasks))
+	results := make([]*domain.SendResponse, len(req.Tasks))
 	isSuccess := tea.StringValue(response.Body.Code) == "OK"
 	batchBizId := tea.StringValue(response.Body.BizId)
 	errorCode := tea.StringValue(response.Body.Code)
@@ -341,7 +341,7 @@ func (s *AliyunSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest) 
 
 	for i, task := range req.Tasks {
 		if isSuccess {
-			results[i] = &SendResponse{
+			results[i] = &domain.SendResponse{
 				Success:      true,
 				ProviderID:   fmt.Sprintf("%s_%d", batchBizId, i), // 为每条记录生成唯一标识
 				TaskID:       task.TaskID,
@@ -350,7 +350,7 @@ func (s *AliyunSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest) 
 				ResponseData: string(responseData),
 			}
 		} else {
-			results[i] = &SendResponse{
+			results[i] = &domain.SendResponse{
 				Success:      false,
 				ErrorCode:    errorCode,
 				ErrorMessage: errorMessage,
@@ -361,7 +361,7 @@ func (s *AliyunSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest) 
 		}
 	}
 
-	return &BatchSendResponse{Results: results}, nil
+	return &domain.BatchSendResponse{Results: results}, nil
 }
 
 // ==================== CallbackHandler 接口实现 ====================
@@ -380,7 +380,7 @@ func (s *AliyunSMSSender) SupportsStatusQuery() bool {
 
 // QueryStatus 查询短信发送状态
 // 使用阿里云 QuerySendDetails API
-func (s *AliyunSMSSender) QueryStatus(ctx context.Context, req *StatusQueryRequest) (*StatusQueryResponse, error) {
+func (s *AliyunSMSSender) QueryStatus(ctx context.Context, req *domain.StatusQueryRequest) (*domain.StatusQueryResponse, error) {
 	// 1. 获取配置
 	config, err := req.ProviderAccount.GetConfig()
 	if err != nil {
@@ -431,7 +431,7 @@ func (s *AliyunSMSSender) QueryStatus(ctx context.Context, req *StatusQueryReque
 	}
 
 	// 6. 转换结果
-	results := make([]*StatusQueryResult, 0)
+	results := make([]*domain.StatusQueryResult, 0)
 	if response.Body.SmsSendDetailDTOs != nil && response.Body.SmsSendDetailDTOs.SmsSendDetailDTO != nil {
 		for _, detail := range response.Body.SmsSendDetailDTOs.SmsSendDetailDTO {
 			status := constants.CallbackStatusFailed
@@ -448,7 +448,7 @@ func (s *AliyunSMSSender) QueryStatus(ctx context.Context, req *StatusQueryReque
 
 			reportTime, _ := time.ParseInLocation("2006-01-02 15:04:05", tea.StringValue(detail.ReceiveDate), time.Local)
 
-			results = append(results, &StatusQueryResult{
+			results = append(results, &domain.StatusQueryResult{
 				ProviderMsgID: req.ProviderMsgID,
 				PhoneNumber:   tea.StringValue(detail.PhoneNum),
 				Status:        status,
@@ -459,15 +459,15 @@ func (s *AliyunSMSSender) QueryStatus(ctx context.Context, req *StatusQueryReque
 		}
 	}
 
-	return &StatusQueryResponse{Results: results}, nil
+	return &domain.StatusQueryResponse{Results: results}, nil
 }
 
 // HandleCallback 处理阿里云短信回调
 // 阿里云短信状态报告格式：
 // [{"phone_number":"1381111****","send_time":"2017-01-01 00:00:00","report_time":"2017-01-01 00:00:00","success":true,"err_code":"DELIVRD","err_msg":"用户接收成功","sms_size":"1","biz_id":"12345^67890","out_id":""}]
-func (s *AliyunSMSSender) HandleCallback(ctx context.Context, req *CallbackRequest) (CallbackResponse, []*CallbackResult, error) {
+func (s *AliyunSMSSender) HandleCallback(ctx context.Context, req *domain.CallbackRequest) (domain.CallbackResponse, []*domain.CallbackResult, error) {
 	// 默认响应（阿里云期望返回 {"code" : 0, "msg" : "接收成功"} ）
-	resp := CallbackResponse{
+	resp := domain.CallbackResponse{
 		StatusCode: 200,
 		Body:       `{"code" : 0, "msg" : "接收成功"}`,
 	}
@@ -490,7 +490,7 @@ func (s *AliyunSMSSender) HandleCallback(ctx context.Context, req *CallbackReque
 		return resp, nil, fmt.Errorf("invalid callback data: %w", err)
 	}
 
-	results := make([]*CallbackResult, 0, len(reports))
+	results := make([]*domain.CallbackResult, 0, len(reports))
 	for _, report := range reports {
 		status := constants.CallbackStatusDelivered
 		if !report.Success {
@@ -506,7 +506,7 @@ func (s *AliyunSMSSender) HandleCallback(ctx context.Context, req *CallbackReque
 		//	providerID = parts[0]
 		//}
 
-		results = append(results, &CallbackResult{
+		results = append(results, &domain.CallbackResult{
 			ProviderID:   providerID,
 			Status:       status,
 			ErrorCode:    report.ErrCode,

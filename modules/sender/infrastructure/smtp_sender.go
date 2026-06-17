@@ -1,4 +1,4 @@
-package sender
+package infrastructure
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"cnb.cool/mliev/push/message-push/app/constants"
-	"cnb.cool/mliev/push/message-push/app/registry"
+	domain "cnb.cool/mliev/push/message-push/modules/sender/domain"
 )
 
 const (
@@ -21,17 +21,17 @@ const (
 
 func init() {
 	// 注册SMTP邮件服务商
-	registry.Register(&registry.ProviderMeta{
+	domain.Register(&domain.ProviderMeta{
 		Code:        constants.ProviderSMTP,
 		Name:        "SMTP邮件",
 		Type:        constants.MessageTypeEmail,
 		Description: "通用SMTP邮件发送服务，支持各类邮件服务器",
-		ConfigFields: []registry.ConfigField{
+		ConfigFields: []domain.ConfigField{
 			{
 				Key:         "host",
 				Label:       "SMTP服务器",
 				Description: "SMTP服务器地址",
-				Type:        registry.FieldTypeText,
+				Type:        domain.FieldTypeText,
 				Required:    true,
 				Example:     "smtp.qq.com",
 				Placeholder: "请输入SMTP服务器地址",
@@ -40,7 +40,7 @@ func init() {
 				Key:          "port",
 				Label:        "端口",
 				Description:  "SMTP服务器端口",
-				Type:         registry.FieldTypeNumber,
+				Type:         domain.FieldTypeNumber,
 				Required:     true,
 				Example:      "587",
 				Placeholder:  "请输入端口号",
@@ -50,7 +50,7 @@ func init() {
 				Key:         "username",
 				Label:       "用户名",
 				Description: "SMTP登录用户名",
-				Type:        registry.FieldTypeText,
+				Type:        domain.FieldTypeText,
 				Required:    true,
 				Example:     "your-email@example.com",
 				Placeholder: "请输入用户名",
@@ -59,7 +59,7 @@ func init() {
 				Key:         "password",
 				Label:       "密码",
 				Description: "SMTP登录密码或授权码",
-				Type:        registry.FieldTypePassword,
+				Type:        domain.FieldTypePassword,
 				Required:    true,
 				Example:     "your-password",
 				Placeholder: "请输入密码或授权码",
@@ -68,7 +68,7 @@ func init() {
 				Key:         "from",
 				Label:       "发件人地址",
 				Description: "邮件发件人地址",
-				Type:        registry.FieldTypeText,
+				Type:        domain.FieldTypeText,
 				Required:    true,
 				Example:     "noreply@example.com",
 				Placeholder: "请输入发件人地址",
@@ -77,10 +77,10 @@ func init() {
 				Key:          "encryption",
 				Label:        "加密方式",
 				Description:  "邮件传输加密方式",
-				Type:         registry.FieldTypeSelect,
+				Type:         domain.FieldTypeSelect,
 				Required:     false,
 				DefaultValue: "starttls",
-				Options: []registry.FieldOption{
+				Options: []domain.FieldOption{
 					{Value: "none", Label: "无加密"},
 					{Value: "starttls", Label: "STARTTLS (端口587)"},
 					{Value: "ssl", Label: "SSL/TLS (端口465)"},
@@ -124,7 +124,7 @@ func NewSMTPSender() *SMTPSender {
 }
 
 // getEmailContentType 根据供应商模板的内容类型获取邮件 MIME 类型
-func getEmailContentType(req *SendRequest) string {
+func getEmailContentType(req *domain.SendRequest) string {
 	// 默认为纯文本
 	contentType := "text/plain; charset=UTF-8"
 
@@ -342,7 +342,7 @@ func (s *SMTPSender) sendMailWithoutEncryption(config *smtpConfig, addr string, 
 }
 
 // Send 发送邮件
-func (s *SMTPSender) Send(ctx context.Context, req *SendRequest) (*SendResponse, error) {
+func (s *SMTPSender) Send(ctx context.Context, req *domain.SendRequest) (*domain.SendResponse, error) {
 	// 解析服务商配置
 	var config smtpConfig
 	if err := json.Unmarshal([]byte(req.ProviderAccount.Config), &config); err != nil {
@@ -380,7 +380,7 @@ func (s *SMTPSender) Send(ctx context.Context, req *SendRequest) (*SendResponse,
 	err := s.sendMail(&config, []string{req.Task.Receiver}, []byte(message))
 
 	if err != nil {
-		return &SendResponse{
+		return &domain.SendResponse{
 			Success:      false,
 			ErrorMessage: err.Error(),
 			TaskID:       req.Task.TaskID,
@@ -395,7 +395,7 @@ func (s *SMTPSender) Send(ctx context.Context, req *SendRequest) (*SendResponse,
 		"message": "Email sent successfully",
 	})
 
-	return &SendResponse{
+	return &domain.SendResponse{
 		Success:      true,
 		ProviderID:   fmt.Sprintf("smtp_%s", req.Task.TaskID),
 		TaskID:       req.Task.TaskID,
@@ -413,9 +413,9 @@ func (s *SMTPSender) SupportsBatchSend() bool {
 }
 
 // BatchSend 批量发送邮件（通过多收件人或循环发送）
-func (s *SMTPSender) BatchSend(ctx context.Context, req *BatchSendRequest) (*BatchSendResponse, error) {
+func (s *SMTPSender) BatchSend(ctx context.Context, req *domain.BatchSendRequest) (*domain.BatchSendResponse, error) {
 	if len(req.Tasks) == 0 {
-		return &BatchSendResponse{Results: []*SendResponse{}}, nil
+		return &domain.BatchSendResponse{Results: []*domain.SendResponse{}}, nil
 	}
 
 	// 解析服务商配置
@@ -424,7 +424,7 @@ func (s *SMTPSender) BatchSend(ctx context.Context, req *BatchSendRequest) (*Bat
 		return nil, fmt.Errorf("invalid provider config: %w", err)
 	}
 
-	results := make([]*SendResponse, len(req.Tasks))
+	results := make([]*domain.SendResponse, len(req.Tasks))
 
 	// 获取邮件内容类型
 	contentType := "text/plain; charset=UTF-8"
@@ -466,7 +466,7 @@ func (s *SMTPSender) BatchSend(ctx context.Context, req *BatchSendRequest) (*Bat
 		err := s.sendMail(&config, []string{task.Receiver}, []byte(message))
 
 		if err != nil {
-			results[i] = &SendResponse{
+			results[i] = &domain.SendResponse{
 				Success:      false,
 				ErrorMessage: err.Error(),
 				TaskID:       task.TaskID,
@@ -479,7 +479,7 @@ func (s *SMTPSender) BatchSend(ctx context.Context, req *BatchSendRequest) (*Bat
 				"status":  "sent",
 				"message": "Email sent successfully",
 			})
-			results[i] = &SendResponse{
+			results[i] = &domain.SendResponse{
 				Success:      true,
 				ProviderID:   fmt.Sprintf("smtp_%s", task.TaskID),
 				TaskID:       task.TaskID,
@@ -490,7 +490,7 @@ func (s *SMTPSender) BatchSend(ctx context.Context, req *BatchSendRequest) (*Bat
 		}
 	}
 
-	return &BatchSendResponse{Results: results}, nil
+	return &domain.BatchSendResponse{Results: results}, nil
 }
 
 // ==================== CallbackHandler 接口实现 ====================
@@ -505,9 +505,9 @@ func (s *SMTPSender) SupportsCallback() bool {
 // HandleCallback 处理 SMTP 退信回调
 // 退信格式通常是邮件内容，包含原始邮件信息和退信原因
 // 这里提供一个简化的实现，实际使用中可能需要更复杂的解析
-func (s *SMTPSender) HandleCallback(ctx context.Context, req *CallbackRequest) (CallbackResponse, []*CallbackResult, error) {
+func (s *SMTPSender) HandleCallback(ctx context.Context, req *domain.CallbackRequest) (domain.CallbackResponse, []*domain.CallbackResult, error) {
 	// 默认响应
-	resp := CallbackResponse{
+	resp := domain.CallbackResponse{
 		StatusCode: 200,
 		Body:       `{"status":"ok"}`,
 	}
@@ -528,7 +528,7 @@ func (s *SMTPSender) HandleCallback(ctx context.Context, req *CallbackRequest) (
 		bodyStr := string(req.RawBody)
 		if strings.Contains(bodyStr, "Delivery Status Notification") ||
 			strings.Contains(bodyStr, "Undelivered Mail") {
-			return resp, []*CallbackResult{{
+			return resp, []*domain.CallbackResult{{
 				Status:       constants.CallbackStatusFailed,
 				ErrorMessage: "Email delivery failed (bounce detected)",
 				ReportTime:   time.Now(),
@@ -550,7 +550,7 @@ func (s *SMTPSender) HandleCallback(ctx context.Context, req *CallbackRequest) (
 		reportTime = time.Now()
 	}
 
-	return resp, []*CallbackResult{{
+	return resp, []*domain.CallbackResult{{
 		ProviderID:   bounceReport.MessageID,
 		Status:       status,
 		ErrorCode:    bounceReport.ErrorCode,

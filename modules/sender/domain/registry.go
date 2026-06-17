@@ -1,4 +1,4 @@
-package registry
+package domain
 
 import (
 	"fmt"
@@ -141,7 +141,7 @@ func GetByCode(code string) (*ProviderMeta, error) {
 	return GetRegistry().GetByCode(code)
 }
 
-// GetByType 全局根据类型获取服务商（便捷方法）
+// GetByType 全局根据类型获取服务商列表（便捷方法）
 func GetByType(msgType string) []*ProviderMeta {
 	return GetRegistry().GetByType(msgType)
 }

@@ -10,7 +10,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/model"
-	"cnb.cool/mliev/push/message-push/app/sender"
+	"cnb.cool/mliev/push/message-push/modules/sender"
 	"github.com/muleiwu/gsr"
 )
 
@@ -20,7 +20,7 @@ type CallbackService struct {
 	taskDao        *dao.PushTaskDAO
 	logDao         *dao.PushLogDAO
 	callbackLogDao *dao.CallbackLogDAO
-	senderFactory  *sender.Factory
+	senderResolver sender.Resolver
 	webhookService *WebhookService
 	ruleEngine     *RuleEngineService
 	actionExecutor *ActionExecutor
@@ -33,7 +33,7 @@ func NewCallbackService() *CallbackService {
 		taskDao:        dao.NewPushTaskDAO(),
 		logDao:         dao.NewPushLogDAO(),
 		callbackLogDao: dao.NewCallbackLogDAO(),
-		senderFactory:  sender.NewFactory(),
+		senderResolver: sender.GetResolver(),
 		webhookService: NewWebhookService(),
 		ruleEngine:     GetRuleEngineService(),
 		actionExecutor: NewActionExecutor(),
@@ -50,7 +50,7 @@ func (s *CallbackService) HandleCallback(ctx context.Context, providerCode strin
 	}
 
 	// 1. 获取对应的回调处理器
-	handler, err := s.senderFactory.GetCallbackHandler(providerCode)
+	handler, err := s.senderResolver.GetCallbackHandler(providerCode)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("failed to get callback handler for provider=%s: %v", providerCode, err))
 		return defaultResp
@@ -201,7 +201,7 @@ func (s *CallbackService) processCallbackResult(ctx context.Context, providerCod
 
 // GetSupportedProviders 获取支持回调的服务商列表
 func (s *CallbackService) GetSupportedProviders() []string {
-	handlers := s.senderFactory.GetAllCallbackHandlers()
+	handlers := s.senderResolver.GetAllCallbackHandlers()
 	providers := make([]string, 0, len(handlers))
 	for _, handler := range handlers {
 		providers = append(providers, handler.GetProviderCode())

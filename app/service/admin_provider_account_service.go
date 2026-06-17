@@ -11,8 +11,8 @@ import (
 	"cnb.cool/mliev/push/message-push/app/dto"
 	appHelper "cnb.cool/mliev/push/message-push/app/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
-	"cnb.cool/mliev/push/message-push/app/registry"
-	"cnb.cool/mliev/push/message-push/app/sender"
+	"cnb.cool/mliev/push/message-push/modules/sender"
+	registry "cnb.cool/mliev/push/message-push/modules/sender/domain"
 )
 
 // AdminProviderAccountService 服务商账号配置管理服务
@@ -384,8 +384,8 @@ func (s *AdminProviderAccountService) TestProviderAccount(id uint, req *dto.Test
 	}
 
 	// 3. 获取发送器（使用服务商代码）
-	factory := sender.NewFactory()
-	msgSender, err := factory.GetSender(account.ProviderCode)
+	resolver := sender.GetResolver()
+	msgSender, err := resolver.GetSender(account.ProviderCode)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get sender: %w", err)
 	}

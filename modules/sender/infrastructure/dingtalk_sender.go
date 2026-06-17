@@ -1,4 +1,4 @@
-package sender
+package infrastructure
 
 import (
 	"bytes"
@@ -18,22 +18,22 @@ import (
 
 	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/constants"
-	"cnb.cool/mliev/push/message-push/app/registry"
+	domain "cnb.cool/mliev/push/message-push/modules/sender/domain"
 )
 
 func init() {
 	// 注册钉钉服务商
-	registry.Register(&registry.ProviderMeta{
+	domain.Register(&domain.ProviderMeta{
 		Code:        constants.ProviderDingTalk,
 		Name:        "钉钉",
 		Type:        constants.MessageTypeDingTalk,
 		Description: "钉钉工作通知消息服务，支持文本和Markdown消息",
-		ConfigFields: []registry.ConfigField{
+		ConfigFields: []domain.ConfigField{
 			{
 				Key:         "app_key",
 				Label:       "应用AppKey",
 				Description: "钉钉应用的AppKey",
-				Type:        registry.FieldTypeText,
+				Type:        domain.FieldTypeText,
 				Required:    true,
 				Example:     "dingxxxxxxxxxxxxxx",
 				Placeholder: "请输入AppKey",
@@ -43,7 +43,7 @@ func init() {
 				Key:         "app_secret",
 				Label:       "应用AppSecret",
 				Description: "钉钉应用的AppSecret",
-				Type:        registry.FieldTypePassword,
+				Type:        domain.FieldTypePassword,
 				Required:    true,
 				Example:     "xxxxxxxxxxxxxxxxxxxxxx",
 				Placeholder: "请输入AppSecret",
@@ -53,7 +53,7 @@ func init() {
 				Key:         "agent_id",
 				Label:       "应用AgentId",
 				Description: "钉钉应用的AgentId",
-				Type:        registry.FieldTypeText,
+				Type:        domain.FieldTypeText,
 				Required:    true,
 				Example:     "123456789",
 				Placeholder: "请输入AgentId",
@@ -62,7 +62,7 @@ func init() {
 				Key:         "callback_token",
 				Label:       "回调Token",
 				Description: "事件订阅的Token，用于签名验证",
-				Type:        registry.FieldTypeText,
+				Type:        domain.FieldTypeText,
 				Required:    false,
 				Placeholder: "请输入回调Token",
 			},
@@ -70,7 +70,7 @@ func init() {
 				Key:         "callback_aes_key",
 				Label:       "回调AESKey",
 				Description: "事件订阅的EncodingAESKey（43位字符）",
-				Type:        registry.FieldTypePassword,
+				Type:        domain.FieldTypePassword,
 				Required:    false,
 				Placeholder: "请输入43位AESKey",
 			},
@@ -103,7 +103,7 @@ func (s *DingTalkSender) GetProviderCode() string {
 	return constants.ProviderDingTalk
 }
 
-func (s *DingTalkSender) Send(ctx context.Context, req *SendRequest) (*SendResponse, error) {
+func (s *DingTalkSender) Send(ctx context.Context, req *domain.SendRequest) (*domain.SendResponse, error) {
 	config, err := req.ProviderAccount.GetConfig()
 	if err != nil {
 		return nil, fmt.Errorf("invalid provider config: %w", err)
@@ -194,7 +194,7 @@ func (s *DingTalkSender) Send(ctx context.Context, req *SendRequest) (*SendRespo
 	}
 
 	if respData.ErrCode != 0 {
-		return &SendResponse{
+		return &domain.SendResponse{
 			Success:      false,
 			ErrorCode:    fmt.Sprintf("%d", respData.ErrCode),
 			ErrorMessage: respData.ErrMsg,
@@ -204,7 +204,7 @@ func (s *DingTalkSender) Send(ctx context.Context, req *SendRequest) (*SendRespo
 		}, nil
 	}
 
-	return &SendResponse{
+	return &domain.SendResponse{
 		Success:      true,
 		ProviderID:   fmt.Sprintf("%d", respData.TaskID),
 		TaskID:       req.Task.TaskID,
@@ -266,9 +266,9 @@ func (s *DingTalkSender) SupportsBatchSend() bool {
 }
 
 // BatchSend 批量发送钉钉消息（钉钉支持 userid_list 用逗号分隔多个用户）
-func (s *DingTalkSender) BatchSend(ctx context.Context, req *BatchSendRequest) (*BatchSendResponse, error) {
+func (s *DingTalkSender) BatchSend(ctx context.Context, req *domain.BatchSendRequest) (*domain.BatchSendResponse, error) {
 	if len(req.Tasks) == 0 {
-		return &BatchSendResponse{Results: []*SendResponse{}}, nil
+		return &domain.BatchSendResponse{Results: []*domain.SendResponse{}}, nil
 	}
 
 	config, err := req.ProviderAccount.GetConfig()
@@ -370,12 +370,12 @@ func (s *DingTalkSender) BatchSend(ctx context.Context, req *BatchSendRequest) (
 	}
 
 	// 构造结果
-	results := make([]*SendResponse, len(req.Tasks))
+	results := make([]*domain.SendResponse, len(req.Tasks))
 	providerID := fmt.Sprintf("%d", respData.TaskID)
 
 	for i, task := range req.Tasks {
 		if respData.ErrCode != 0 {
-			results[i] = &SendResponse{
+			results[i] = &domain.SendResponse{
 				Success:      false,
 				ErrorCode:    fmt.Sprintf("%d", respData.ErrCode),
 				ErrorMessage: respData.ErrMsg,
@@ -384,7 +384,7 @@ func (s *DingTalkSender) BatchSend(ctx context.Context, req *BatchSendRequest) (
 				ResponseData: string(respBody),
 			}
 		} else {
-			results[i] = &SendResponse{
+			results[i] = &domain.SendResponse{
 				Success:      true,
 				ProviderID:   providerID,
 				TaskID:       task.TaskID,
@@ -395,7 +395,7 @@ func (s *DingTalkSender) BatchSend(ctx context.Context, req *BatchSendRequest) (
 		}
 	}
 
-	return &BatchSendResponse{Results: results}, nil
+	return &domain.BatchSendResponse{Results: results}, nil
 }
 
 // ==================== CallbackHandler 接口实现 ====================
@@ -407,9 +407,9 @@ func (s *DingTalkSender) SupportsCallback() bool {
 
 // HandleCallback 处理钉钉回调
 // 钉钉工作通知消息发送结果回调
-func (s *DingTalkSender) HandleCallback(ctx context.Context, req *CallbackRequest) (CallbackResponse, []*CallbackResult, error) {
+func (s *DingTalkSender) HandleCallback(ctx context.Context, req *domain.CallbackRequest) (domain.CallbackResponse, []*domain.CallbackResult, error) {
 	// 默认响应（钉钉期望返回加密后的 "success"）
-	resp := CallbackResponse{
+	resp := domain.CallbackResponse{
 		StatusCode: 200,
 		Body:       "success",
 	}
@@ -478,8 +478,8 @@ func (s *DingTalkSender) HandleCallback(ctx context.Context, req *CallbackReques
 }
 
 // handlePlainCallback 处理明文回调（兼容旧版本）
-func (s *DingTalkSender) handlePlainCallback(rawBody []byte) (CallbackResponse, []*CallbackResult, error) {
-	resp := CallbackResponse{
+func (s *DingTalkSender) handlePlainCallback(rawBody []byte) (domain.CallbackResponse, []*domain.CallbackResult, error) {
+	resp := domain.CallbackResponse{
 		StatusCode: 200,
 		Body:       "success",
 	}
@@ -509,7 +509,7 @@ func (s *DingTalkSender) handlePlainCallback(rawBody []byte) (CallbackResponse, 
 		reportTime = time.Now()
 	}
 
-	return resp, []*CallbackResult{{
+	return resp, []*domain.CallbackResult{{
 		ProviderID:   fmt.Sprintf("%d", callbackData.TaskID),
 		Status:       status,
 		ErrorCode:    fmt.Sprintf("%d", callbackData.ErrCode),
@@ -519,7 +519,7 @@ func (s *DingTalkSender) handlePlainCallback(rawBody []byte) (CallbackResponse, 
 }
 
 // parseCallbackData 解析回调数据
-func (s *DingTalkSender) parseCallbackData(plaintext []byte) ([]*CallbackResult, error) {
+func (s *DingTalkSender) parseCallbackData(plaintext []byte) ([]*domain.CallbackResult, error) {
 	var callbackData struct {
 		EventType string `json:"EventType"`
 		TaskID    int64  `json:"task_id"`
@@ -550,7 +550,7 @@ func (s *DingTalkSender) parseCallbackData(plaintext []byte) ([]*CallbackResult,
 		reportTime = time.Now()
 	}
 
-	return []*CallbackResult{{
+	return []*domain.CallbackResult{{
 		ProviderID:   fmt.Sprintf("%d", callbackData.TaskID),
 		Status:       status,
 		ErrorCode:    fmt.Sprintf("%d", callbackData.ErrCode),

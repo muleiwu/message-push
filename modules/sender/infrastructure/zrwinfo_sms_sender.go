@@ -1,4 +1,4 @@
-package sender
+package infrastructure
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"cnb.cool/mliev/push/message-push/app/constants"
-	"cnb.cool/mliev/push/message-push/app/registry"
+	domain "cnb.cool/mliev/push/message-push/modules/sender/domain"
 )
 
 // 掌榕网 API 端点
@@ -24,17 +24,17 @@ const (
 
 func init() {
 	// 注册掌榕网短信服务商
-	registry.Register(&registry.ProviderMeta{
+	domain.Register(&domain.ProviderMeta{
 		Code:        constants.ProviderZrwinfoSMS,
 		Name:        "掌榕网短信",
 		Type:        constants.MessageTypeSMS,
 		Description: "掌榕网融合通信产品，提供短信、国际短信、语音、5G智慧短信等服务。注意：短信签名需在「签名管理」中单独配置",
-		ConfigFields: []registry.ConfigField{
+		ConfigFields: []domain.ConfigField{
 			{
 				Key:         "accesskey",
 				Label:       "AccessKey",
 				Description: "平台分配的 accesskey，登录系统首页可点击「我的秘钥」查看",
-				Type:        registry.FieldTypeText,
+				Type:        domain.FieldTypeText,
 				Required:    true,
 				Example:     "your_accesskey",
 				Placeholder: "请输入 AccessKey",
@@ -43,7 +43,7 @@ func init() {
 				Key:         "secret",
 				Label:       "Secret",
 				Description: "平台分配的 secret，登录系统首页可点击「我的秘钥」查看",
-				Type:        registry.FieldTypePassword,
+				Type:        domain.FieldTypePassword,
 				Required:    true,
 				Example:     "your_secret",
 				Placeholder: "请输入 Secret",
@@ -75,7 +75,7 @@ type ZrwinfoSMSSender struct {
 func NewZrwinfoSMSSender() *ZrwinfoSMSSender {
 	return &ZrwinfoSMSSender{
 		client: &http.Client{
-			Timeout: time.Duration(DefaultTimeout) * time.Second,
+			Timeout: time.Duration(domain.DefaultTimeout) * time.Second,
 		},
 	}
 }
@@ -86,7 +86,7 @@ func (s *ZrwinfoSMSSender) GetProviderCode() string {
 }
 
 // Send 发送短信（单发）
-func (s *ZrwinfoSMSSender) Send(ctx context.Context, req *SendRequest) (*SendResponse, error) {
+func (s *ZrwinfoSMSSender) Send(ctx context.Context, req *domain.SendRequest) (*domain.SendResponse, error) {
 	// 1. 获取配置
 	config, err := req.ProviderAccount.GetConfig()
 	if err != nil {
@@ -159,7 +159,7 @@ func (s *ZrwinfoSMSSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 
 	resp, err := s.client.Do(httpReq)
 	if err != nil {
-		return &SendResponse{
+		return &domain.SendResponse{
 			Success:      false,
 			ErrorMessage: err.Error(),
 			TaskID:       req.Task.TaskID,
@@ -171,7 +171,7 @@ func (s *ZrwinfoSMSSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return &SendResponse{
+		return &domain.SendResponse{
 			Success:      false,
 			ErrorMessage: fmt.Sprintf("failed to read response: %v", err),
 			TaskID:       req.Task.TaskID,
@@ -188,7 +188,7 @@ func (s *ZrwinfoSMSSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 	}
 
 	if err := json.Unmarshal(body, &result); err != nil {
-		return &SendResponse{
+		return &domain.SendResponse{
 			Success:      false,
 			ErrorMessage: fmt.Sprintf("failed to parse response: %v, body: %s", err, string(body)),
 			TaskID:       req.Task.TaskID,
@@ -198,7 +198,7 @@ func (s *ZrwinfoSMSSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 	}
 
 	if result.Code == "0" {
-		return &SendResponse{
+		return &domain.SendResponse{
 			Success:      true,
 			ProviderID:   result.SmUuid,
 			TaskID:       req.Task.TaskID,
@@ -208,7 +208,7 @@ func (s *ZrwinfoSMSSender) Send(ctx context.Context, req *SendRequest) (*SendRes
 		}, nil
 	}
 
-	return &SendResponse{
+	return &domain.SendResponse{
 		Success:      false,
 		ErrorCode:    result.Code,
 		ErrorMessage: result.Msg,
@@ -267,9 +267,9 @@ func (s *ZrwinfoSMSSender) SupportsBatchSend() bool {
 }
 
 // BatchSend 批量发送短信
-func (s *ZrwinfoSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest) (*BatchSendResponse, error) {
+func (s *ZrwinfoSMSSender) BatchSend(ctx context.Context, req *domain.BatchSendRequest) (*domain.BatchSendResponse, error) {
 	if len(req.Tasks) == 0 {
-		return &BatchSendResponse{Results: []*SendResponse{}}, nil
+		return &domain.BatchSendResponse{Results: []*domain.SendResponse{}}, nil
 	}
 
 	// 1. 获取配置
@@ -315,7 +315,7 @@ func (s *ZrwinfoSMSSender) BatchSend(ctx context.Context, req *BatchSendRequest)
 }
 
 // batchSendSameContent 批量发送相同内容的短信
-func (s *ZrwinfoSMSSender) batchSendSameContent(ctx context.Context, req *BatchSendRequest, accesskey, secret, signName, templateCode, templateContent string) (*BatchSendResponse, error) {
+func (s *ZrwinfoSMSSender) batchSendSameContent(ctx context.Context, req *domain.BatchSendRequest, accesskey, secret, signName, templateCode, templateContent string) (*domain.BatchSendResponse, error) {
 	// 收集所有手机号
 	mobiles := make([]string, len(req.Tasks))
 	for i, task := range req.Tasks {
@@ -351,9 +351,9 @@ func (s *ZrwinfoSMSSender) batchSendSameContent(ctx context.Context, req *BatchS
 
 	resp, err := s.client.Do(httpReq)
 	if err != nil {
-		results := make([]*SendResponse, len(req.Tasks))
+		results := make([]*domain.SendResponse, len(req.Tasks))
 		for i, task := range req.Tasks {
-			results[i] = &SendResponse{
+			results[i] = &domain.SendResponse{
 				Success:      false,
 				ErrorMessage: err.Error(),
 				TaskID:       task.TaskID,
@@ -361,15 +361,15 @@ func (s *ZrwinfoSMSSender) batchSendSameContent(ctx context.Context, req *BatchS
 				ResponseData: "",
 			}
 		}
-		return &BatchSendResponse{Results: results}, nil
+		return &domain.BatchSendResponse{Results: results}, nil
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		results := make([]*SendResponse, len(req.Tasks))
+		results := make([]*domain.SendResponse, len(req.Tasks))
 		for i, task := range req.Tasks {
-			results[i] = &SendResponse{
+			results[i] = &domain.SendResponse{
 				Success:      false,
 				ErrorMessage: fmt.Sprintf("failed to read response: %v", err),
 				TaskID:       task.TaskID,
@@ -377,7 +377,7 @@ func (s *ZrwinfoSMSSender) batchSendSameContent(ctx context.Context, req *BatchS
 				ResponseData: "",
 			}
 		}
-		return &BatchSendResponse{Results: results}, nil
+		return &domain.BatchSendResponse{Results: results}, nil
 	}
 
 	// 解析响应
@@ -388,9 +388,9 @@ func (s *ZrwinfoSMSSender) batchSendSameContent(ctx context.Context, req *BatchS
 	}
 
 	if err := json.Unmarshal(body, &result); err != nil {
-		results := make([]*SendResponse, len(req.Tasks))
+		results := make([]*domain.SendResponse, len(req.Tasks))
 		for i, task := range req.Tasks {
-			results[i] = &SendResponse{
+			results[i] = &domain.SendResponse{
 				Success:      false,
 				ErrorMessage: fmt.Sprintf("failed to parse response: %v, body: %s", err, string(body)),
 				TaskID:       task.TaskID,
@@ -398,15 +398,15 @@ func (s *ZrwinfoSMSSender) batchSendSameContent(ctx context.Context, req *BatchS
 				ResponseData: string(body),
 			}
 		}
-		return &BatchSendResponse{Results: results}, nil
+		return &domain.BatchSendResponse{Results: results}, nil
 	}
 
-	results := make([]*SendResponse, len(req.Tasks))
+	results := make([]*domain.SendResponse, len(req.Tasks))
 	isSuccess := result.Code == "0"
 
 	for i, task := range req.Tasks {
 		if isSuccess {
-			results[i] = &SendResponse{
+			results[i] = &domain.SendResponse{
 				Success:      true,
 				ProviderID:   fmt.Sprintf("%s_%d", result.BatchId, i), // 为每条记录生成唯一标识
 				TaskID:       task.TaskID,
@@ -415,7 +415,7 @@ func (s *ZrwinfoSMSSender) batchSendSameContent(ctx context.Context, req *BatchS
 				ResponseData: string(body),
 			}
 		} else {
-			results[i] = &SendResponse{
+			results[i] = &domain.SendResponse{
 				Success:      false,
 				ErrorCode:    result.Code,
 				ErrorMessage: result.Msg,
@@ -426,7 +426,7 @@ func (s *ZrwinfoSMSSender) batchSendSameContent(ctx context.Context, req *BatchS
 		}
 	}
 
-	return &BatchSendResponse{Results: results}, nil
+	return &domain.BatchSendResponse{Results: results}, nil
 }
 
 // ==================== StatusPuller 接口实现 ====================
@@ -439,7 +439,7 @@ func (s *ZrwinfoSMSSender) SupportsStatusPull() bool {
 // PullStatus 批量拉取待处理状态
 // 使用掌榕网 /report/status API
 // 注意：已拉取的状态不会再次返回，需在开发者工具中开启"主动获取"功能
-func (s *ZrwinfoSMSSender) PullStatus(ctx context.Context, req *StatusPullRequest) (*StatusQueryResponse, error) {
+func (s *ZrwinfoSMSSender) PullStatus(ctx context.Context, req *domain.StatusPullRequest) (*domain.StatusQueryResponse, error) {
 	// 1. 获取配置
 	config, err := req.ProviderAccount.GetConfig()
 	if err != nil {
@@ -498,7 +498,7 @@ func (s *ZrwinfoSMSSender) PullStatus(ctx context.Context, req *StatusPullReques
 	}
 
 	// 5. 转换结果
-	results := make([]*StatusQueryResult, 0, len(result.Data))
+	results := make([]*domain.StatusQueryResult, 0, len(result.Data))
 	for _, item := range result.Data {
 		status := constants.CallbackStatusDelivered
 		if item.DeliverResult != "DELIVRD" {
@@ -507,7 +507,7 @@ func (s *ZrwinfoSMSSender) PullStatus(ctx context.Context, req *StatusPullReques
 
 		reportTime, _ := time.ParseInLocation("2006-01-02 15:04:05", item.DeliverTime, time.Local)
 
-		results = append(results, &StatusQueryResult{
+		results = append(results, &domain.StatusQueryResult{
 			ProviderMsgID: item.SmUuid,
 			PhoneNumber:   item.Mobile,
 			Status:        status,
@@ -517,7 +517,7 @@ func (s *ZrwinfoSMSSender) PullStatus(ctx context.Context, req *StatusPullReques
 		})
 	}
 
-	return &StatusQueryResponse{Results: results}, nil
+	return &domain.StatusQueryResponse{Results: results}, nil
 }
 
 // ==================== CallbackHandler 接口实现 ====================
@@ -535,9 +535,9 @@ func (s *ZrwinfoSMSSender) SupportsCallback() bool {
 //   - batchId: 批次id（可选），例 abc123456
 //   - deliverResult: 回执状态，DELIVRD 成功，其他失败
 //   - deliverTime: 状态码回执时间，格式 yyyy-MM-dd HH:mm:ss
-func (s *ZrwinfoSMSSender) HandleCallback(ctx context.Context, req *CallbackRequest) (CallbackResponse, []*CallbackResult, error) {
+func (s *ZrwinfoSMSSender) HandleCallback(ctx context.Context, req *domain.CallbackRequest) (domain.CallbackResponse, []*domain.CallbackResult, error) {
 	// 默认响应（掌榕网期望返回 HTTP 200 状态码）
-	resp := CallbackResponse{
+	resp := domain.CallbackResponse{
 		StatusCode: 200,
 		Body:       `{"code":"0","msg":"SUCCESS"}`,
 	}
@@ -561,7 +561,7 @@ func (s *ZrwinfoSMSSender) HandleCallback(ctx context.Context, req *CallbackRequ
 	// 解析时间
 	reportTime, _ := time.ParseInLocation("2006-01-02 15:04:05", deliverTime, time.Local)
 
-	return resp, []*CallbackResult{
+	return resp, []*domain.CallbackResult{
 		{
 			ProviderID:   smUuid,
 			Status:       status,
