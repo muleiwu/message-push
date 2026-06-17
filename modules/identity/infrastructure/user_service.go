@@ -1,6 +1,7 @@
-package service
+package infrastructure
 
 import (
+	"cnb.cool/mliev/push/message-push/modules/identity/domain"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -13,6 +14,9 @@ import (
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/model"
 )
+
+// 确保实现 domain.UserService 端口
+var _ domain.UserService = (*AdminUserService)(nil)
 
 // AdminUserService 管理员用户管理服务
 type AdminUserService struct{}

@@ -6,7 +6,7 @@ import (
 	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
 	"cnb.cool/mliev/push/message-push/app/controller"
 	"cnb.cool/mliev/push/message-push/app/dto"
-	"cnb.cool/mliev/push/message-push/app/service"
+	"cnb.cool/mliev/push/message-push/modules/identity"
 )
 
 // AdminUserController 管理员用户管理控制器
@@ -15,7 +15,7 @@ type AdminUserController struct {
 
 // GetUserList 获取管理员用户列表
 func (c AdminUserController) GetUserList(ctx httpInterfaces.RouterContextInterface) {
-	adminUserService := service.NewAdminUserService()
+	adminUserService := identity.GetUserService()
 	var req dto.AdminUserListRequest
 	if err := ctx.ShouldBindQuery(&req); err != nil {
 		controller.ErrorResponse(ctx, 400, "invalid request: "+err.Error())
@@ -33,7 +33,7 @@ func (c AdminUserController) GetUserList(ctx httpInterfaces.RouterContextInterfa
 
 // CreateUser 创建管理员用户
 func (c AdminUserController) CreateUser(ctx httpInterfaces.RouterContextInterface) {
-	adminUserService := service.NewAdminUserService()
+	adminUserService := identity.GetUserService()
 	var req dto.CreateAdminUserRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		controller.ErrorResponse(ctx, 400, "invalid request: "+err.Error())
@@ -51,7 +51,7 @@ func (c AdminUserController) CreateUser(ctx httpInterfaces.RouterContextInterfac
 
 // GetUser 获取管理员用户详情
 func (c AdminUserController) GetUser(ctx httpInterfaces.RouterContextInterface) {
-	adminUserService := service.NewAdminUserService()
+	adminUserService := identity.GetUserService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -70,7 +70,7 @@ func (c AdminUserController) GetUser(ctx httpInterfaces.RouterContextInterface) 
 
 // UpdateUser 更新管理员用户
 func (c AdminUserController) UpdateUser(ctx httpInterfaces.RouterContextInterface) {
-	adminUserService := service.NewAdminUserService()
+	adminUserService := identity.GetUserService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -94,7 +94,7 @@ func (c AdminUserController) UpdateUser(ctx httpInterfaces.RouterContextInterfac
 
 // DeleteUser 删除管理员用户
 func (c AdminUserController) DeleteUser(ctx httpInterfaces.RouterContextInterface) {
-	adminUserService := service.NewAdminUserService()
+	adminUserService := identity.GetUserService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -112,7 +112,7 @@ func (c AdminUserController) DeleteUser(ctx httpInterfaces.RouterContextInterfac
 
 // ResetPassword 重置管理员用户密码
 func (c AdminUserController) ResetPassword(ctx httpInterfaces.RouterContextInterface) {
-	adminUserService := service.NewAdminUserService()
+	adminUserService := identity.GetUserService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {

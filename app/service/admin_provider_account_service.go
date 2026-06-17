@@ -151,7 +151,7 @@ func (s *AdminProviderAccountService) CreateProviderAccount(c httpInterfaces.Rou
 	}
 
 	// 生成account_code
-	accountCode, err := generateRandomKey(8)
+	accountCode, err := appHelper.GenerateRandomKey(8)
 	if err != nil {
 		logger.Error("生成account_code失败")
 		return nil, fmt.Errorf("failed to generate account_code: %w", err)

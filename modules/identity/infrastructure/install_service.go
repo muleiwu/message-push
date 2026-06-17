@@ -1,6 +1,7 @@
-package service
+package infrastructure
 
 import (
+	"cnb.cool/mliev/push/message-push/modules/identity/domain"
 	"context"
 	"fmt"
 	"time"
@@ -14,6 +15,9 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
+
+// 确保实现 domain.InstallService 端口
+var _ domain.InstallService = (*InstallService)(nil)
 
 // InstallService 安装服务
 type InstallService struct {

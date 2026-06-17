@@ -9,9 +9,9 @@ import (
 
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dto"
-	"cnb.cool/mliev/push/message-push/app/service"
 	"cnb.cool/mliev/push/message-push/migration"
 	"cnb.cool/mliev/push/message-push/migrations"
+	"cnb.cool/mliev/push/message-push/modules/identity"
 )
 
 // InstallController 系统安装控制器
@@ -22,7 +22,7 @@ type InstallController struct {
 // CheckInstall 检查系统安装状态
 // GET /api/install/check
 func (ic InstallController) CheckInstall(c httpInterfaces.RouterContextInterface) {
-	installService := service.NewInstallService(helper.GetDatabase())
+	installService := identity.NewInstallService(helper.GetDatabase())
 	response := installService.CheckInstallStatus()
 
 	ic.Success(c, response)
@@ -37,7 +37,7 @@ func (ic InstallController) TestConnection(c httpInterfaces.RouterContextInterfa
 		return
 	}
 
-	installService := service.NewInstallService(helper.GetDatabase())
+	installService := identity.NewInstallService(helper.GetDatabase())
 
 	// 测试数据库连接
 	testDB, err := installService.TestDatabaseConnection(req)
@@ -63,7 +63,7 @@ func (ic InstallController) TestRedisConnection(c httpInterfaces.RouterContextIn
 		return
 	}
 
-	installService := service.NewInstallService(helper.GetDatabase())
+	installService := identity.NewInstallService(helper.GetDatabase())
 
 	// 测试 Redis 连接
 	testRedis, err := installService.TestRedisConnection(req)
@@ -89,7 +89,7 @@ func (ic InstallController) SubmitInstall(c httpInterfaces.RouterContextInterfac
 		return
 	}
 
-	installService := service.NewInstallService(helper.GetDatabase())
+	installService := identity.NewInstallService(helper.GetDatabase())
 
 	// 1. 检查系统是否已安装
 	status := installService.CheckInstallStatus()
@@ -127,7 +127,7 @@ func (ic InstallController) SubmitInstall(c httpInterfaces.RouterContextInterfac
 	}()
 
 	// 4. 使用测试成功的数据库连接创建新的 service 实例
-	newInstallService := service.NewInstallService(testDB)
+	newInstallService := identity.NewInstallService(testDB)
 
 	// 5. 更新数据库配置到配置文件
 	if err := newInstallService.UpdateDatabaseConfig(req.Database); err != nil {

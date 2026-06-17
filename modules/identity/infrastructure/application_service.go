@@ -1,9 +1,7 @@
-package service
+package infrastructure
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -12,7 +10,11 @@ import (
 	"cnb.cool/mliev/push/message-push/app/dto"
 	apphelper "cnb.cool/mliev/push/message-push/app/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/modules/identity/domain"
 )
+
+// 确保实现 domain.ApplicationService 端口
+var _ domain.ApplicationService = (*AdminApplicationService)(nil)
 
 // AdminApplicationService 应用管理服务
 type AdminApplicationService struct{}
@@ -22,27 +24,18 @@ func NewAdminApplicationService() *AdminApplicationService {
 	return &AdminApplicationService{}
 }
 
-// generateRandomKey 生成随机字符串
-func generateRandomKey(length int) (string, error) {
-	bytes := make([]byte, length/2)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(bytes), nil
-}
-
 // CreateApplication 创建应用
 func (s *AdminApplicationService) CreateApplication(req *dto.CreateApplicationRequest) (*dto.ApplicationResponse, error) {
 	logger := helper.GetLogger()
 
 	// 生成AppID和AppSecret
-	appID, err := generateRandomKey(16)
+	appID, err := apphelper.GenerateRandomKey(16)
 	if err != nil {
 		logger.Error("生成app_id失败")
 		return nil, fmt.Errorf("failed to generate app_id: %w", err)
 	}
 
-	appSecret, err := generateRandomKey(32)
+	appSecret, err := apphelper.GenerateRandomKey(32)
 	if err != nil {
 		logger.Error("生成app_secret失败")
 		return nil, fmt.Errorf("failed to generate app_secret: %w", err)
@@ -246,7 +239,7 @@ func (s *AdminApplicationService) RegenerateSecret(appID uint) (*dto.RegenerateS
 	}
 
 	// 生成新的AppSecret
-	appSecret, err := generateRandomKey(32)
+	appSecret, err := apphelper.GenerateRandomKey(32)
 	if err != nil {
 		logger.Error("生成app_secret失败")
 		return nil, fmt.Errorf("failed to generate app_secret: %w", err)
