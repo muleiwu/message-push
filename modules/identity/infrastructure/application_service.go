@@ -11,6 +11,7 @@ import (
 	apphelper "cnb.cool/mliev/push/message-push/app/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/modules/identity/domain"
+	"cnb.cool/mliev/push/message-push/modules/quota"
 )
 
 // 确保实现 domain.ApplicationService 端口
@@ -274,9 +275,8 @@ func (s *AdminApplicationService) GetQuotaUsage(id uint) (*dto.QuotaUsageRespons
 		return nil, err
 	}
 
-	// 从 Redis 获取今日使用量
-	redisClient := helper.GetRedis()
-	used, limit, err := apphelper.GetQuotaUsage(context.Background(), redisClient, id)
+	// 从配额服务获取今日使用量
+	used, limit, err := quota.GetService().GetUsage(context.Background(), id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get quota usage from redis: %w", err)
 	}

@@ -7,8 +7,8 @@ import (
 
 	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/dao"
-	apphelper "cnb.cool/mliev/push/message-push/app/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/modules/quota"
 	"github.com/muleiwu/gsr"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
@@ -90,7 +90,7 @@ func (s *QuotaSyncer) sync(ctx context.Context) {
 
 	for _, app := range apps {
 		// 2. 从 Redis 获取今日使用量
-		used, _, err := apphelper.GetQuotaUsage(ctx, s.redis, app.ID)
+		used, _, err := quota.GetService().GetUsage(ctx, app.ID)
 		if err != nil {
 			s.logger.Error(fmt.Sprintf("failed to get quota usage for app %s: %v", app.AppName, err))
 			continue

@@ -8,6 +8,7 @@ import (
 	deliveryServer "cnb.cool/mliev/push/message-push/modules/delivery/server"
 	identityAssembly "cnb.cool/mliev/push/message-push/modules/identity/assembly"
 	messagingAssembly "cnb.cool/mliev/push/message-push/modules/messaging/assembly"
+	quotaAssembly "cnb.cool/mliev/push/message-push/modules/quota/assembly"
 	ruleengineAssembly "cnb.cool/mliev/push/message-push/modules/ruleengine/assembly"
 	senderAssembly "cnb.cool/mliev/push/message-push/modules/sender/assembly"
 	templateAssembly "cnb.cool/mliev/push/message-push/modules/template/assembly"
@@ -19,6 +20,7 @@ import (
 // 通过 go-web 容器按接口类型注册，供其他模块以接口方式解析调用。
 func pushAssemblies() []interfaces.AssemblyInterface {
 	return []interfaces.AssemblyInterface{
+		&quotaAssembly.Quota{},
 		&senderAssembly.Sender{},
 		&channelAssembly.Channel{},
 		&ruleengineAssembly.RuleEngine{},
