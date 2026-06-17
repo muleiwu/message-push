@@ -14,6 +14,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/queue"
 	"cnb.cool/mliev/push/message-push/app/service"
 	"cnb.cool/mliev/push/message-push/modules/channel"
+	"cnb.cool/mliev/push/message-push/modules/ruleengine"
 	"cnb.cool/mliev/push/message-push/modules/sender"
 	"github.com/muleiwu/gsr"
 )
@@ -36,7 +37,7 @@ type MessageHandler struct {
 	retryHelper         *helper.RetryHelper
 	signatureMappingDao *dao.ChannelSignatureMappingDAO
 	templateHelper      *helper.TemplateHelper
-	ruleEngine          *service.RuleEngineService
+	ruleEngine          ruleengine.Engine
 	actionExecutor      *service.ActionExecutor
 }
 
@@ -51,7 +52,7 @@ func NewMessageHandler() *MessageHandler {
 		retryHelper:         helper.NewRetryHelper(),
 		signatureMappingDao: dao.NewChannelSignatureMappingDAO(internalHelper.GetDatabase()),
 		templateHelper:      helper.NewTemplateHelper(),
-		ruleEngine:          service.GetRuleEngineService(),
+		ruleEngine:          ruleengine.GetEngine(),
 		actionExecutor:      service.NewActionExecutor(),
 	}
 }
@@ -236,7 +237,7 @@ func (h *MessageHandler) handleSendError(task *model.PushTask, providerAccountID
 	}
 
 	// 使用规则引擎评估
-	evalReq := &service.EvaluateRequest{
+	evalReq := &ruleengine.EvaluateRequest{
 		Scene:        model.RuleSceneSendFailure,
 		ProviderCode: providerCode,
 		MessageType:  task.MessageType,

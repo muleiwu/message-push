@@ -1,6 +1,7 @@
 package service
 
 import (
+	"cnb.cool/mliev/push/message-push/modules/ruleengine"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -22,7 +23,7 @@ type CallbackService struct {
 	callbackLogDao *dao.CallbackLogDAO
 	senderResolver sender.Resolver
 	webhookService *WebhookService
-	ruleEngine     *RuleEngineService
+	ruleEngine     ruleengine.Engine
 	actionExecutor *ActionExecutor
 }
 
@@ -35,7 +36,7 @@ func NewCallbackService() *CallbackService {
 		callbackLogDao: dao.NewCallbackLogDAO(),
 		senderResolver: sender.GetResolver(),
 		webhookService: NewWebhookService(),
-		ruleEngine:     GetRuleEngineService(),
+		ruleEngine:     ruleengine.GetEngine(),
 		actionExecutor: NewActionExecutor(),
 	}
 }
@@ -143,7 +144,7 @@ func (s *CallbackService) processCallbackResult(ctx context.Context, providerCod
 		}
 	case "failed", "rejected":
 		// 使用规则引擎评估回调失败
-		evalReq := &EvaluateRequest{
+		evalReq := &ruleengine.EvaluateRequest{
 			Scene:        model.RuleSceneCallbackFailure,
 			ProviderCode: providerCode,
 			MessageType:  task.MessageType,

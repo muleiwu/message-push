@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"cnb.cool/mliev/push/message-push/modules/ruleengine"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -70,7 +71,7 @@ type ExecuteResult struct {
 }
 
 // Execute 执行规则动作
-func (e *ActionExecutor) Execute(ctx context.Context, result *EvaluateResult, execCtx *ExecuteContext) *ExecuteResult {
+func (e *ActionExecutor) Execute(ctx context.Context, result *ruleengine.EvaluateResult, execCtx *ExecuteContext) *ExecuteResult {
 	if result == nil || execCtx == nil || execCtx.Task == nil {
 		return &ExecuteResult{
 			Action:       model.RuleActionFail,
@@ -94,7 +95,7 @@ func (e *ActionExecutor) Execute(ctx context.Context, result *EvaluateResult, ex
 }
 
 // executeRetry 执行重试动作
-func (e *ActionExecutor) executeRetry(ctx context.Context, result *EvaluateResult, execCtx *ExecuteContext) *ExecuteResult {
+func (e *ActionExecutor) executeRetry(ctx context.Context, result *ruleengine.EvaluateResult, execCtx *ExecuteContext) *ExecuteResult {
 	task := execCtx.Task
 
 	// 获取重试配置
@@ -168,7 +169,7 @@ func (e *ActionExecutor) executeRetry(ctx context.Context, result *EvaluateResul
 }
 
 // executeSwitchProvider 执行切换供应商动作
-func (e *ActionExecutor) executeSwitchProvider(ctx context.Context, result *EvaluateResult, execCtx *ExecuteContext) *ExecuteResult {
+func (e *ActionExecutor) executeSwitchProvider(ctx context.Context, result *ruleengine.EvaluateResult, execCtx *ExecuteContext) *ExecuteResult {
 	task := execCtx.Task
 
 	// 获取切换配置
@@ -242,7 +243,7 @@ func (e *ActionExecutor) executeSwitchProvider(ctx context.Context, result *Eval
 }
 
 // executeFail 执行失败动作
-func (e *ActionExecutor) executeFail(ctx context.Context, result *EvaluateResult, execCtx *ExecuteContext) *ExecuteResult {
+func (e *ActionExecutor) executeFail(ctx context.Context, result *ruleengine.EvaluateResult, execCtx *ExecuteContext) *ExecuteResult {
 	task := execCtx.Task
 
 	// 更新任务状态为失败
@@ -281,7 +282,7 @@ func (e *ActionExecutor) executeFail(ctx context.Context, result *EvaluateResult
 }
 
 // executeAlert 执行告警动作
-func (e *ActionExecutor) executeAlert(ctx context.Context, result *EvaluateResult, execCtx *ExecuteContext) *ExecuteResult {
+func (e *ActionExecutor) executeAlert(ctx context.Context, result *ruleengine.EvaluateResult, execCtx *ExecuteContext) *ExecuteResult {
 	task := execCtx.Task
 
 	// 获取告警配置

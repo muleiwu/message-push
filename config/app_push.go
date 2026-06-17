@@ -3,6 +3,7 @@ package config
 import (
 	"cnb.cool/mliev/open/go-web/pkg/interfaces"
 	channelAssembly "cnb.cool/mliev/push/message-push/modules/channel/assembly"
+	ruleengineAssembly "cnb.cool/mliev/push/message-push/modules/ruleengine/assembly"
 	senderAssembly "cnb.cool/mliev/push/message-push/modules/sender/assembly"
 	"cnb.cool/mliev/push/message-push/server"
 )
@@ -15,6 +16,7 @@ func pushAssemblies() []interfaces.AssemblyInterface {
 	return []interfaces.AssemblyInterface{
 		&senderAssembly.Sender{},
 		&channelAssembly.Channel{},
+		&ruleengineAssembly.RuleEngine{},
 	}
 }
 

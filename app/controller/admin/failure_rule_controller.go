@@ -5,9 +5,10 @@ import (
 
 	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
 	"cnb.cool/mliev/push/message-push/app/controller"
+	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/model"
-	"cnb.cool/mliev/push/message-push/app/service"
+	"cnb.cool/mliev/push/message-push/modules/ruleengine"
 )
 
 // FailureRuleController 失败规则管理控制器
@@ -33,8 +34,7 @@ func (c FailureRuleController) CreateFailureRule(ctx httpInterfaces.RouterContex
 		return
 	}
 
-	ruleEngine := service.GetRuleEngineService()
-	ruleDAO := ruleEngine.GetRuleDAO()
+	ruleDAO := dao.NewFailureRuleDAO()
 
 	rule := &model.FailureRule{
 		Name:         req.Name,
@@ -66,7 +66,7 @@ func (c FailureRuleController) CreateFailureRule(ctx httpInterfaces.RouterContex
 	}
 
 	// 刷新缓存
-	ruleEngine.RefreshCache()
+	ruleengine.GetEngine().RefreshCache()
 
 	controller.SuccessResponse(ctx, toFailureRuleResponse(rule))
 }
@@ -87,8 +87,7 @@ func (c FailureRuleController) GetFailureRuleList(ctx httpInterfaces.RouterConte
 		req.PageSize = 20
 	}
 
-	ruleEngine := service.GetRuleEngineService()
-	ruleDAO := ruleEngine.GetRuleDAO()
+	ruleDAO := dao.NewFailureRuleDAO()
 
 	rules, total, err := ruleDAO.List(req.Page, req.PageSize, req.Scene)
 	if err != nil {
@@ -118,8 +117,7 @@ func (c FailureRuleController) GetFailureRule(ctx httpInterfaces.RouterContextIn
 		return
 	}
 
-	ruleEngine := service.GetRuleEngineService()
-	ruleDAO := ruleEngine.GetRuleDAO()
+	ruleDAO := dao.NewFailureRuleDAO()
 
 	rule, err := ruleDAO.GetByID(uint(id))
 	if err != nil {
@@ -145,8 +143,7 @@ func (c FailureRuleController) UpdateFailureRule(ctx httpInterfaces.RouterContex
 		return
 	}
 
-	ruleEngine := service.GetRuleEngineService()
-	ruleDAO := ruleEngine.GetRuleDAO()
+	ruleDAO := dao.NewFailureRuleDAO()
 
 	rule, err := ruleDAO.GetByID(uint(id))
 	if err != nil {
@@ -199,7 +196,7 @@ func (c FailureRuleController) UpdateFailureRule(ctx httpInterfaces.RouterContex
 	}
 
 	// 刷新缓存
-	ruleEngine.RefreshCache()
+	ruleengine.GetEngine().RefreshCache()
 
 	controller.SuccessResponse(ctx, map[string]any{"message": "updated successfully"})
 }
@@ -213,8 +210,7 @@ func (c FailureRuleController) DeleteFailureRule(ctx httpInterfaces.RouterContex
 		return
 	}
 
-	ruleEngine := service.GetRuleEngineService()
-	ruleDAO := ruleEngine.GetRuleDAO()
+	ruleDAO := dao.NewFailureRuleDAO()
 
 	if err := ruleDAO.Delete(uint(id)); err != nil {
 		controller.ErrorResponse(ctx, 500, "failed to delete rule: "+err.Error())
@@ -222,7 +218,7 @@ func (c FailureRuleController) DeleteFailureRule(ctx httpInterfaces.RouterContex
 	}
 
 	// 刷新缓存
-	ruleEngine.RefreshCache()
+	ruleengine.GetEngine().RefreshCache()
 
 	controller.SuccessResponse(ctx, map[string]any{"message": "deleted successfully"})
 }
@@ -245,8 +241,7 @@ func (c FailureRuleController) GetFailureRuleOptions(ctx httpInterfaces.RouterCo
 
 // RefreshRuleCache 刷新规则缓存
 func (c FailureRuleController) RefreshRuleCache(ctx httpInterfaces.RouterContextInterface) {
-	ruleEngine := service.GetRuleEngineService()
-	ruleEngine.RefreshCache()
+	ruleengine.GetEngine().RefreshCache()
 	controller.SuccessResponse(ctx, map[string]any{"message": "cache refreshed"})
 }
 
