@@ -2,6 +2,7 @@ package config
 
 import (
 	"cnb.cool/mliev/open/go-web/pkg/interfaces"
+	callbackAssembly "cnb.cool/mliev/push/message-push/modules/callback/assembly"
 	channelAssembly "cnb.cool/mliev/push/message-push/modules/channel/assembly"
 	deliveryAssembly "cnb.cool/mliev/push/message-push/modules/delivery/assembly"
 	deliveryServer "cnb.cool/mliev/push/message-push/modules/delivery/server"
@@ -24,6 +25,7 @@ func pushAssemblies() []interfaces.AssemblyInterface {
 		&templateAssembly.Renderer{},
 		&templateAssembly.Service{},
 		&messagingAssembly.Messaging{},
+		&callbackAssembly.Callback{},
 	}
 }
 

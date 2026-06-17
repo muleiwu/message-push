@@ -1,4 +1,4 @@
-package service
+package infrastructure
 
 import (
 	"cnb.cool/mliev/push/message-push/modules/ruleengine"
@@ -11,9 +11,14 @@ import (
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/app/service"
+	"cnb.cool/mliev/push/message-push/modules/callback/domain"
 	"cnb.cool/mliev/push/message-push/modules/sender"
 	"github.com/muleiwu/gsr"
 )
+
+// 确保 CallbackService 实现 domain.Service 端口
+var _ domain.Service = (*CallbackService)(nil)
 
 // CallbackService 回调服务
 type CallbackService struct {
@@ -24,7 +29,7 @@ type CallbackService struct {
 	senderResolver sender.Resolver
 	webhookService *WebhookService
 	ruleEngine     ruleengine.Engine
-	actionExecutor *ActionExecutor
+	actionExecutor *service.ActionExecutor
 }
 
 // NewCallbackService 创建回调服务
@@ -37,7 +42,7 @@ func NewCallbackService() *CallbackService {
 		senderResolver: sender.GetResolver(),
 		webhookService: NewWebhookService(),
 		ruleEngine:     ruleengine.GetEngine(),
-		actionExecutor: NewActionExecutor(),
+		actionExecutor: service.NewActionExecutor(),
 	}
 }
 
@@ -155,7 +160,7 @@ func (s *CallbackService) processCallbackResult(ctx context.Context, providerCod
 		evalResult := s.ruleEngine.Evaluate(ctx, evalReq)
 
 		// 构造执行上下文（从 pushLog 获取 ProviderAccountID）
-		execCtx := &ExecuteContext{
+		execCtx := &service.ExecuteContext{
 			Task:              task,
 			ProviderAccountID: pushLog.ProviderAccountID, // 从发送日志获取供应商账号ID
 			ProviderCode:      providerCode,

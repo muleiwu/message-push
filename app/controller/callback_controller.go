@@ -9,7 +9,7 @@ import (
 	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
 
 	"cnb.cool/mliev/push/message-push/app/dao"
-	"cnb.cool/mliev/push/message-push/app/service"
+	"cnb.cool/mliev/push/message-push/modules/callback"
 	"cnb.cool/mliev/push/message-push/modules/sender"
 )
 
@@ -89,7 +89,7 @@ func (ctrl CallbackController) Handle(c httpInterfaces.RouterContextInterface) {
 	}
 
 	// 处理回调
-	callbackService := service.NewCallbackService()
+	callbackService := callback.GetService()
 	resp := callbackService.HandleCallback(c.Request().Context(), providerCode, req)
 
 	// 如果状态码为 0，自动设置为 500
