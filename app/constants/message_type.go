@@ -16,8 +16,11 @@ const (
 	ProviderTencentSMS = "tencent_sms" // 腾讯云短信
 	ProviderZrwinfoSMS = "zrwinfo_sms" // 掌榕网短信
 	ProviderSMTP       = "smtp"        // SMTP邮件
-	ProviderWeChatWork = "wechat_work" // 企业微信
-	ProviderDingTalk   = "dingtalk"    // 钉钉
+	ProviderWeChatWork = "wechat_work" // 企业微信（应用消息）
+	ProviderDingTalk   = "dingtalk"    // 钉钉（工作通知）
+
+	ProviderWeChatWorkRobot = "wechat_work_robot" // 企业微信群机器人（webhook）
+	ProviderDingTalkRobot   = "dingtalk_robot"    // 钉钉群机器人（webhook）
 )
 
 // IsValidMessageType 检查消息类型是否有效
@@ -33,7 +36,7 @@ func IsValidMessageType(msgType string) bool {
 // IsValidProviderCode 检查服务商代码是否有效
 func IsValidProviderCode(code string) bool {
 	switch code {
-	case ProviderAliyunSMS, ProviderTencentSMS, ProviderZrwinfoSMS, ProviderSMTP, ProviderWeChatWork, ProviderDingTalk:
+	case ProviderAliyunSMS, ProviderTencentSMS, ProviderZrwinfoSMS, ProviderSMTP, ProviderWeChatWork, ProviderDingTalk, ProviderWeChatWorkRobot, ProviderDingTalkRobot:
 		return true
 	default:
 		return false

@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/constants"
@@ -89,10 +91,13 @@ func (s *WeChatWorkSender) Send(ctx context.Context, req *domain.SendRequest) (*
 
 	corpID, _ := config["corp_id"].(string)
 	agentSecret, _ := config["agent_secret"].(string)
-	agentID, _ := config["agent_id"].(string)
-
-	if corpID == "" || agentSecret == "" || agentID == "" {
-		return nil, fmt.Errorf("missing wechat work config: corp_id, agent_secret or agent_id")
+	if corpID == "" || agentSecret == "" {
+		return nil, fmt.Errorf("missing wechat work config: corp_id or agent_secret")
+	}
+	// agentid 按文档要求为整型
+	agentID, err := parseWeChatAgentID(config["agent_id"])
+	if err != nil {
+		return nil, fmt.Errorf("invalid wechat work config: %w", err)
 	}
 
 	// 1. 获取 Access Token
@@ -102,9 +107,9 @@ func (s *WeChatWorkSender) Send(ctx context.Context, req *domain.SendRequest) (*
 	}
 
 	// 2. 构造消息
-	// 默认发送文本消息，支持markdown
+	// 默认发送文本消息，支持markdown（格式由供应商模板的 ContentType 决定）
 	msgType := "text"
-	if req.Task.MessageType == "markdown" {
+	if isMarkdownContent(req.ChannelTemplateBinding) {
 		msgType = "markdown"
 	}
 
@@ -114,7 +119,8 @@ func (s *WeChatWorkSender) Send(ctx context.Context, req *domain.SendRequest) (*
 		toUser = "@all"
 	}
 
-	content := req.RenderedContent
+	// text 与 markdown 的 content 均最长 2048 字节，超出按文档行为截断（保证 UTF-8 完整）
+	content := truncateUTF8Bytes(req.RenderedContent, wechatWorkContentMaxBytes)
 
 	payload := map[string]interface{}{
 		"touser":  toUser,
@@ -135,9 +141,15 @@ func (s *WeChatWorkSender) Send(ctx context.Context, req *domain.SendRequest) (*
 
 	body, _ := json.Marshal(payload)
 
-	// 3. 发送请求
+	// 3. 发送请求（使用 context）
 	apiURL := fmt.Sprintf("https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token=%s", token)
-	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(body))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
 		return nil, err
 	}
@@ -181,9 +193,14 @@ func (s *WeChatWorkSender) getAccessToken(ctx context.Context, corpID, secret st
 		return token, nil
 	}
 
-	// 从API获取
+	// 从API获取（使用 context）
 	apiURL := fmt.Sprintf("https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=%s&corpsecret=%s", corpID, secret)
-	resp, err := http.Get(apiURL)
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
 		return "", err
 	}
@@ -230,10 +247,13 @@ func (s *WeChatWorkSender) BatchSend(ctx context.Context, req *domain.BatchSendR
 
 	corpID, _ := config["corp_id"].(string)
 	agentSecret, _ := config["agent_secret"].(string)
-	agentID, _ := config["agent_id"].(string)
-
-	if corpID == "" || agentSecret == "" || agentID == "" {
-		return nil, fmt.Errorf("missing wechat work config: corp_id, agent_secret or agent_id")
+	if corpID == "" || agentSecret == "" {
+		return nil, fmt.Errorf("missing wechat work config: corp_id or agent_secret")
+	}
+	// agentid 按文档要求为整型
+	agentID, err := parseWeChatAgentID(config["agent_id"])
+	if err != nil {
+		return nil, fmt.Errorf("invalid wechat work config: %w", err)
 	}
 
 	// 获取 Access Token
@@ -251,14 +271,14 @@ func (s *WeChatWorkSender) BatchSend(ctx context.Context, req *domain.BatchSendR
 	}
 	toUser := strings.Join(userIDs, "|")
 
-	// 构造消息（批量发送时使用第一个任务的内容）
-	firstTask := req.Tasks[0]
+	// 构造消息（批量发送时所有任务共用 RenderedContent）
 	msgType := "text"
-	if firstTask.MessageType == "markdown" {
+	if isMarkdownContent(req.ChannelTemplateBinding) {
 		msgType = "markdown"
 	}
 
-	content := req.RenderedContent
+	// text 与 markdown 的 content 均最长 2048 字节，超出按文档行为截断（保证 UTF-8 完整）
+	content := truncateUTF8Bytes(req.RenderedContent, wechatWorkContentMaxBytes)
 
 	payload := map[string]interface{}{
 		"touser":  toUser,
@@ -279,9 +299,15 @@ func (s *WeChatWorkSender) BatchSend(ctx context.Context, req *domain.BatchSendR
 
 	body, _ := json.Marshal(payload)
 
-	// 发送请求
+	// 发送请求（使用 context）
 	apiURL := fmt.Sprintf("https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token=%s", token)
-	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(body))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
 		return nil, err
 	}
@@ -289,12 +315,13 @@ func (s *WeChatWorkSender) BatchSend(ctx context.Context, req *domain.BatchSendR
 
 	respBody, _ := io.ReadAll(resp.Body)
 	var respData struct {
-		ErrCode      int    `json:"errcode"`
-		ErrMsg       string `json:"errmsg"`
-		MsgID        string `json:"msgid"`
-		InvalidUser  string `json:"invaliduser"`
-		InvalidParty string `json:"invalidparty"`
-		InvalidTag   string `json:"invalidtag"`
+		ErrCode        int    `json:"errcode"`
+		ErrMsg         string `json:"errmsg"`
+		MsgID          string `json:"msgid"`
+		InvalidUser    string `json:"invaliduser"`
+		InvalidParty   string `json:"invalidparty"`
+		InvalidTag     string `json:"invalidtag"`
+		UnlicensedUser string `json:"unlicenseduser"`
 	}
 
 	if err := json.Unmarshal(respBody, &respData); err != nil {
@@ -307,6 +334,13 @@ func (s *WeChatWorkSender) BatchSend(ctx context.Context, req *domain.BatchSendR
 	if respData.InvalidUser != "" {
 		for _, u := range strings.Split(respData.InvalidUser, "|") {
 			invalidUsers[u] = true
+		}
+	}
+	// 未授权（未购买/分配许可）的成员不会收到消息，需标记为失败
+	unlicensedUsers := make(map[string]bool)
+	if respData.UnlicensedUser != "" {
+		for _, u := range strings.Split(respData.UnlicensedUser, "|") {
+			unlicensedUsers[u] = true
 		}
 	}
 
@@ -323,6 +357,13 @@ func (s *WeChatWorkSender) BatchSend(ctx context.Context, req *domain.BatchSendR
 				Success:      false,
 				ErrorCode:    "invalid_user",
 				ErrorMessage: "用户ID无效",
+				TaskID:       task.TaskID,
+			}
+		} else if unlicensedUsers[task.Receiver] {
+			results[i] = &domain.SendResponse{
+				Success:      false,
+				ErrorCode:    "unlicensed_user",
+				ErrorMessage: "用户未分配应用许可，消息未送达",
 				TaskID:       task.TaskID,
 			}
 		} else {
@@ -386,4 +427,48 @@ func (s *WeChatWorkSender) HandleCallback(ctx context.Context, req *domain.Callb
 		ErrorMessage: callbackData.ErrMsg,
 		ReportTime:   reportTime,
 	}}, nil
+}
+
+// wechatWorkContentMaxBytes 企业微信应用消息 text/markdown 内容的最大字节数（文档限制 2048 字节）
+const wechatWorkContentMaxBytes = 2048
+
+// parseWeChatAgentID 将配置中的 agent_id 解析为整型（文档要求 agentid 为整型）。
+// 兼容配置以字符串或数字形式存储的情况。
+func parseWeChatAgentID(v interface{}) (int, error) {
+	switch x := v.(type) {
+	case string:
+		s := strings.TrimSpace(x)
+		if s == "" {
+			return 0, fmt.Errorf("agent_id is empty")
+		}
+		n, err := strconv.Atoi(s)
+		if err != nil {
+			return 0, fmt.Errorf("agent_id %q is not an integer", s)
+		}
+		return n, nil
+	case float64:
+		return int(x), nil
+	case int:
+		return x, nil
+	case nil:
+		return 0, fmt.Errorf("agent_id is missing")
+	default:
+		return 0, fmt.Errorf("agent_id has unexpected type %T", v)
+	}
+}
+
+// truncateUTF8Bytes 按字节上限截断字符串，且不切断 UTF-8 多字节字符。
+func truncateUTF8Bytes(s string, maxBytes int) string {
+	if len(s) <= maxBytes {
+		return s
+	}
+	b := 0
+	for i, r := range s {
+		size := utf8.RuneLen(r)
+		if b+size > maxBytes {
+			return s[:i]
+		}
+		b += size
+	}
+	return s
 }

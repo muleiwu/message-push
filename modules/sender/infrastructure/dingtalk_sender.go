@@ -124,9 +124,9 @@ func (s *DingTalkSender) Send(ctx context.Context, req *domain.SendRequest) (*do
 	}
 
 	// 2. 构造消息
-	// 根据 MessageType 判断消息类型，支持 text 和 markdown
+	// 消息格式由供应商模板的 ContentType 决定，支持 text 和 markdown
 	msgType := "text"
-	if req.Task.MessageType == "markdown" {
+	if isMarkdownContent(req.ChannelTemplateBinding) {
 		msgType = "markdown"
 	}
 
@@ -302,9 +302,9 @@ func (s *DingTalkSender) BatchSend(ctx context.Context, req *domain.BatchSendReq
 	// 构造消息（批量发送时使用第一个任务的内容）
 	firstTask := req.Tasks[0]
 
-	// 根据 MessageType 判断消息类型
+	// 消息格式由供应商模板的 ContentType 决定
 	msgType := "text"
-	if firstTask.MessageType == "markdown" {
+	if isMarkdownContent(req.ChannelTemplateBinding) {
 		msgType = "markdown"
 	}
 
@@ -528,7 +528,7 @@ func (s *DingTalkSender) parseCallbackData(plaintext []byte) ([]*domain.Callback
 		Status    string `json:"status"`
 		ErrCode   int    `json:"errcode"`
 		ErrMsg    string `json:"errmsg"`
-		Timestamp int64  `json:"TimeStamp"`
+		Timestamp int64  `json:"timestamp"`
 	}
 
 	if err := json.Unmarshal(plaintext, &callbackData); err != nil {

@@ -24,6 +24,8 @@ func NewFactory() *Factory {
 	factory.Register(NewZrwinfoSMSSender())
 	factory.Register(NewWeChatWorkSender())
 	factory.Register(NewDingTalkSender())
+	factory.Register(NewWeChatWorkRobotSender())
+	factory.Register(NewDingTalkRobotSender())
 
 	return factory
 }
