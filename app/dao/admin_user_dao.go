@@ -1,8 +1,8 @@
 package dao
 
 import (
+	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
-	"cnb.cool/mliev/push/message-push/internal/helper"
 	"gorm.io/gorm"
 )
 
@@ -12,7 +12,7 @@ type AdminUserDAO struct {
 
 func NewAdminUserDAO() *AdminUserDAO {
 	return &AdminUserDAO{
-		db: helper.GetHelper().GetDatabase(),
+		db: helper.GetDatabase(),
 	}
 }
 

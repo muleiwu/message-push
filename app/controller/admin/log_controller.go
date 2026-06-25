@@ -3,12 +3,10 @@ package admin
 import (
 	"strconv"
 
-	"github.com/gin-gonic/gin"
-
+	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
 	"cnb.cool/mliev/push/message-push/app/controller"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/service"
-	"cnb.cool/mliev/push/message-push/internal/interfaces"
 )
 
 // LogController 日志管理控制器
@@ -16,7 +14,7 @@ type LogController struct {
 }
 
 // GetLogList 获取日志列表
-func (c LogController) GetLogList(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c LogController) GetLogList(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminLogService()
 	var req dto.LogListRequest
 	if err := ctx.ShouldBindQuery(&req); err != nil {
@@ -34,7 +32,7 @@ func (c LogController) GetLogList(ctx *gin.Context, helper interfaces.HelperInte
 }
 
 // GetLog 获取日志详情
-func (c LogController) GetLog(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c LogController) GetLog(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminLogService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 64)
@@ -53,7 +51,7 @@ func (c LogController) GetLog(ctx *gin.Context, helper interfaces.HelperInterfac
 }
 
 // GetLogsByTaskID 根据任务ID获取推送日志
-func (c LogController) GetLogsByTaskID(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c LogController) GetLogsByTaskID(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminLogService()
 	taskID := ctx.Param("task_id")
 	if taskID == "" {
@@ -71,7 +69,7 @@ func (c LogController) GetLogsByTaskID(ctx *gin.Context, helper interfaces.Helpe
 }
 
 // GetCallbackLogsByTaskID 根据任务ID获取回调日志
-func (c LogController) GetCallbackLogsByTaskID(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c LogController) GetCallbackLogsByTaskID(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminLogService()
 	taskID := ctx.Param("task_id")
 	if taskID == "" {
@@ -89,7 +87,7 @@ func (c LogController) GetCallbackLogsByTaskID(ctx *gin.Context, helper interfac
 }
 
 // GetWebhookLogsByTaskID 根据任务ID获取Webhook日志
-func (c LogController) GetWebhookLogsByTaskID(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c LogController) GetWebhookLogsByTaskID(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminLogService()
 	taskID := ctx.Param("task_id")
 	if taskID == "" {

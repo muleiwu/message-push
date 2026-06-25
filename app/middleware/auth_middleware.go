@@ -6,19 +6,19 @@ import (
 	"io"
 	"strconv"
 
+	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/controller"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/helper"
-	"github.com/gin-gonic/gin"
 )
 
 // AuthMiddleware 认证中间件
-func AuthMiddleware() gin.HandlerFunc {
+func AuthMiddleware() httpInterfaces.HandlerFunc {
 	appDao := dao.NewApplicationDAO()
 	signatureHelper := helper.NewSignatureHelper()
 
-	return func(c *gin.Context) {
+	return func(c httpInterfaces.RouterContextInterface) {
 		// 从Header获取AppID和签名信息
 		appID := c.GetHeader("X-App-Id")
 		signature := c.GetHeader("X-Signature")
@@ -64,15 +64,16 @@ func AuthMiddleware() gin.HandlerFunc {
 
 		// 读取请求体用于签名验证
 		var bodyParams map[string]interface{}
-		if c.Request.Body != nil {
-			bodyBytes, err := io.ReadAll(c.Request.Body)
+		req := c.Request()
+		if req.Body != nil {
+			bodyBytes, err := io.ReadAll(req.Body)
 			if err != nil {
 				controller.FailWithCode(c, constants.CodeUnauthorized)
 				c.Abort()
 				return
 			}
 			// 将 body 放回，以便后续 handler 可以读取
-			c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+			req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 			// 解析 body 为 map
 			if len(bodyBytes) > 0 {
@@ -85,8 +86,8 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		// 验证签名
-		method := c.Request.Method
-		path := c.Request.URL.Path
+		method := req.Method
+		path := req.URL.Path
 		if !signatureHelper.VerifySignature(appSecret, method, path, bodyParams, timestamp, nonce, signature) {
 			controller.FailWithCode(c, constants.CodeInvalidSignature)
 			c.Abort()
@@ -104,10 +105,10 @@ func AuthMiddleware() gin.HandlerFunc {
 }
 
 // OptionalAuthMiddleware 可选认证中间件（不强制要求认证）
-func OptionalAuthMiddleware() gin.HandlerFunc {
+func OptionalAuthMiddleware() httpInterfaces.HandlerFunc {
 	appDao := dao.NewApplicationDAO()
 
-	return func(c *gin.Context) {
+	return func(c httpInterfaces.RouterContextInterface) {
 		appID := c.GetHeader("X-App-Id")
 		if appID == "" {
 			c.Next()

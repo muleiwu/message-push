@@ -2,3 +2,5 @@
 config.yaml
 /static/admin/
 /static/install/
+/.claude/settings.local.json
+/bin/

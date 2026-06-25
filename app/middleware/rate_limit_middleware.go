@@ -5,20 +5,20 @@ import (
 	"fmt"
 	"time"
 
+	"cnb.cool/mliev/open/go-web/pkg/helper"
+	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/controller"
-	"cnb.cool/mliev/push/message-push/internal/helper"
-	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 )
 
 // RateLimitMiddleware 限流中间件
-func RateLimitMiddleware(qps int) gin.HandlerFunc {
-	redisClient := helper.GetHelper().GetRedis()
+func RateLimitMiddleware(qps int) httpInterfaces.HandlerFunc {
+	redisClient := helper.GetRedis()
 
-	return func(c *gin.Context) {
-		appID, exists := c.Get("app_id")
-		if !exists {
+	return func(c httpInterfaces.RouterContextInterface) {
+		var appID any = c.Get("app_id")
+		if appID == nil {
 			// 如果没有app_id，使用IP限流
 			appID = c.ClientIP()
 		}
@@ -29,7 +29,7 @@ func RateLimitMiddleware(qps int) gin.HandlerFunc {
 		// 使用令牌桶算法
 		allowed, err := checkRateLimit(ctx, redisClient, key, qps)
 		if err != nil {
-			helper.GetHelper().GetLogger().Error(fmt.Sprintf("rate limit check error: %v", err))
+			helper.GetLogger().Error(fmt.Sprintf("rate limit check error: %v", err))
 			c.Next()
 			return
 		}
@@ -79,17 +79,16 @@ func checkRateLimit(ctx context.Context, client *redis.Client, key string, qps i
 }
 
 // RateLimitByAppIDMiddleware 按AppID限流
-func RateLimitByAppIDMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		_, exists := c.Get("app_id")
-		if !exists {
+func RateLimitByAppIDMiddleware() httpInterfaces.HandlerFunc {
+	return func(c httpInterfaces.RouterContextInterface) {
+		if c.Get("app_id") == nil {
 			c.Next()
 			return
 		}
 
 		// 从上下文获取该应用的QPS限制
-		rateLimit, exists := c.Get("rate_limit")
-		if !exists {
+		var rateLimit any = c.Get("rate_limit")
+		if rateLimit == nil {
 			rateLimit = 100 // 默认100 QPS
 		}
 

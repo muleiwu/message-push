@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"time"
 
+	"cnb.cool/mliev/open/go-web/pkg/helper"
+	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	appHelper "cnb.cool/mliev/push/message-push/app/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
-	"cnb.cool/mliev/push/message-push/app/registry"
-	"cnb.cool/mliev/push/message-push/app/sender"
-	"cnb.cool/mliev/push/message-push/internal/helper"
-	"github.com/gin-gonic/gin"
+	"cnb.cool/mliev/push/message-push/modules/sender"
+	registry "cnb.cool/mliev/push/message-push/modules/sender/domain"
 )
 
 // AdminProviderAccountService 服务商账号配置管理服务
@@ -25,7 +25,7 @@ func NewAdminProviderAccountService() *AdminProviderAccountService {
 
 // generateCallbackURL 生成回调地址
 // 仅当服务商支持回调时返回URL，否则返回空字符串
-func (s *AdminProviderAccountService) generateCallbackURL(c *gin.Context, accountID uint, providerCode string) string {
+func (s *AdminProviderAccountService) generateCallbackURL(c httpInterfaces.RouterContextInterface, accountID uint, providerCode string) string {
 	// 从注册中心检查是否支持回调
 	meta, err := registry.GetByCode(providerCode)
 	if err != nil || !meta.SupportsCallback {
@@ -136,8 +136,8 @@ func (s *AdminProviderAccountService) GetProviderConfigFields(providerCode strin
 }
 
 // CreateProviderAccount 创建服务商账号配置
-func (s *AdminProviderAccountService) CreateProviderAccount(c *gin.Context, req *dto.CreateProviderAccountRequest) (*dto.ProviderAccountResponse, error) {
-	logger := helper.GetHelper().GetLogger()
+func (s *AdminProviderAccountService) CreateProviderAccount(c httpInterfaces.RouterContextInterface, req *dto.CreateProviderAccountRequest) (*dto.ProviderAccountResponse, error) {
+	logger := helper.GetLogger()
 
 	// 验证服务商代码是否已注册
 	meta, err := registry.GetByCode(req.ProviderCode)
@@ -151,7 +151,7 @@ func (s *AdminProviderAccountService) CreateProviderAccount(c *gin.Context, req 
 	}
 
 	// 生成account_code
-	accountCode, err := generateRandomKey(8)
+	accountCode, err := appHelper.GenerateRandomKey(8)
 	if err != nil {
 		logger.Error("生成account_code失败")
 		return nil, fmt.Errorf("failed to generate account_code: %w", err)
@@ -198,7 +198,7 @@ func (s *AdminProviderAccountService) CreateProviderAccount(c *gin.Context, req 
 }
 
 // GetProviderAccountList 获取服务商账号列表
-func (s *AdminProviderAccountService) GetProviderAccountList(c *gin.Context, req *dto.ProviderAccountListRequest) (*dto.ProviderAccountListResponse, error) {
+func (s *AdminProviderAccountService) GetProviderAccountList(c httpInterfaces.RouterContextInterface, req *dto.ProviderAccountListRequest) (*dto.ProviderAccountListResponse, error) {
 	page := req.Page
 	if page <= 0 {
 		page = 1
@@ -249,7 +249,7 @@ func (s *AdminProviderAccountService) GetProviderAccountList(c *gin.Context, req
 }
 
 // GetProviderAccountByID 获取服务商账号详情
-func (s *AdminProviderAccountService) GetProviderAccountByID(c *gin.Context, id uint) (*dto.ProviderAccountResponse, error) {
+func (s *AdminProviderAccountService) GetProviderAccountByID(c httpInterfaces.RouterContextInterface, id uint) (*dto.ProviderAccountResponse, error) {
 	accountDAO := dao.NewProviderAccountDAO()
 	account, err := accountDAO.GetByID(id)
 	if err != nil {
@@ -379,13 +379,13 @@ func (s *AdminProviderAccountService) TestProviderAccount(id uint, req *dto.Test
 	sendReq := &sender.SendRequest{
 		Task:            task,
 		ProviderAccount: account,
-		Signature:       nil, // 测试时不加载签名，由服务商返回错误
+		Signature:       nil,         // 测试时不加载签名，由服务商返回错误
 		RenderedContent: req.Message, // 测试消息直接作为渲染内容
 	}
 
 	// 3. 获取发送器（使用服务商代码）
-	factory := sender.NewFactory()
-	msgSender, err := factory.GetSender(account.ProviderCode)
+	resolver := sender.GetResolver()
+	msgSender, err := resolver.GetSender(account.ProviderCode)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get sender: %w", err)
 	}

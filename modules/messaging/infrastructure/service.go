@@ -1,0 +1,284 @@
+package infrastructure
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	internalHelper "cnb.cool/mliev/open/go-web/pkg/helper"
+	"cnb.cool/mliev/push/message-push/app/constants"
+	"cnb.cool/mliev/push/message-push/app/dao"
+	"cnb.cool/mliev/push/message-push/app/dto"
+	"cnb.cool/mliev/push/message-push/app/helper"
+	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/modules/channel"
+	"cnb.cool/mliev/push/message-push/modules/delivery"
+	"cnb.cool/mliev/push/message-push/modules/messaging/domain"
+	"cnb.cool/mliev/push/message-push/modules/template"
+	"github.com/google/uuid"
+	"github.com/muleiwu/gsr"
+)
+
+// 确保 MessageService 实现 domain.Service 端口
+var _ domain.Service = (*MessageService)(nil)
+
+// MessageService 消息服务
+type MessageService struct {
+	logger             gsr.Logger
+	producer           delivery.Producer
+	selector           channel.Selector
+	taskDao            *dao.PushTaskDAO
+	appDao             *dao.ApplicationDAO
+	messageTemplateDao *dao.MessageTemplateDAO
+	templateHelper     template.Renderer
+}
+
+// NewMessageService 创建消息服务
+func NewMessageService() *MessageService {
+	return &MessageService{
+		logger:             internalHelper.GetLogger(),
+		producer:           delivery.GetProducer(),
+		selector:           channel.GetSelector(),
+		taskDao:            dao.NewPushTaskDAO(),
+		appDao:             dao.NewApplicationDAO(),
+		messageTemplateDao: dao.NewMessageTemplateDAO(),
+		templateHelper:     template.GetRenderer(),
+	}
+}
+
+// Send 发送消息
+func (s *MessageService) Send(ctx context.Context, req *dto.SendRequest) (*dto.SendResponse, error) {
+	// 1. 验证通道（获取 MessageTemplateID 和 Type）
+	var channel model.Channel
+	db := internalHelper.GetDatabase()
+	if err := db.First(&channel, req.ChannelID).Error; err != nil {
+		return nil, fmt.Errorf("invalid channel_id: %w", err)
+	}
+
+	// 检查通道状态
+	if channel.Status != 1 {
+		return nil, fmt.Errorf("channel is not active")
+	}
+
+	// 2. 校验接收者格式
+	validator := helper.GetReceiverValidator(channel.Type)
+	if err := validator.Validate(req.Receiver); err != nil {
+		return nil, fmt.Errorf("invalid receiver: %w", err)
+	}
+
+	// 检查通道是否有可用的模板绑定
+	// GetActiveByChannelID 查询条件：is_active=1 AND status=1（只查可用的绑定）
+	channelBindingDao := dao.NewChannelTemplateBindingDAO()
+	bindings, err := channelBindingDao.GetActiveByChannelID(uint(req.ChannelID))
+	if err != nil {
+		s.logger.Error(fmt.Sprintf("failed to check channel bindings channel_id=%d: %v", req.ChannelID, err))
+		return nil, fmt.Errorf("failed to check channel bindings: %w", err)
+	}
+	if len(bindings) == 0 {
+		s.logger.Error(fmt.Sprintf("no active template bindings configured channel_id=%d app_id=%s", req.ChannelID, req.AppID))
+		return nil, fmt.Errorf("no active template bindings configured for channel_id=%d", req.ChannelID)
+	}
+
+	// 2. 验证消息类型
+	if !s.isValidMessageType(channel.Type) {
+		return nil, fmt.Errorf("invalid message_type: %s", channel.Type)
+	}
+
+	// 3. 加载并渲染系统模板（使用 channel 的 MessageTemplateID）
+	messageTemplate, err := s.messageTemplateDao.GetByID(channel.MessageTemplateID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid message_template_id: %w", err)
+	}
+
+	if messageTemplate.Status != 1 {
+		return nil, fmt.Errorf("message template is not active")
+	}
+
+	// 验证模板参数
+	templateVars, err := messageTemplate.GetVariables()
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse template variables: %w", err)
+	}
+	if err := s.validateTemplateParams(templateVars, req.TemplateParams); err != nil {
+		return nil, err
+	}
+
+	// 4. 创建任务
+	taskID := uuid.New().String()
+	templateParamsJSON, _ := s.templateHelper.RenderJSON(req.TemplateParams)
+	task := &model.PushTask{
+		TaskID:         taskID,
+		AppID:          req.AppID,
+		ChannelID:      req.ChannelID,
+		MessageType:    channel.Type,
+		Receiver:       req.Receiver,
+		TemplateCode:   "", // 将由 worker 更新为实际使用的供应商模板代码
+		TemplateParams: templateParamsJSON,
+		Signature:      req.SignatureName, // 用户自定义签名名称
+		Status:         constants.TaskStatusPending,
+		RetryCount:     0,
+		MaxRetry:       3,
+		ScheduledAt:    req.ScheduledAt,
+		CreatedAt:      time.Now(),
+	}
+
+	// 保存任务到数据库
+	if err := s.taskDao.Create(task); err != nil {
+		return nil, fmt.Errorf("failed to create task: %w", err)
+	}
+
+	// 5. 推送到队列
+	if err := s.producer.Push(ctx, task); err != nil {
+		// 更新任务状态为失败
+		task.Status = constants.TaskStatusFailed
+		s.taskDao.Update(task)
+		return nil, fmt.Errorf("failed to push to queue: %w", err)
+	}
+
+	return &dto.SendResponse{
+		TaskID:    taskID,
+		Status:    constants.TaskStatusPending,
+		CreatedAt: task.CreatedAt,
+	}, nil
+}
+
+// BatchSend 批量发送消息
+func (s *MessageService) BatchSend(ctx context.Context, req *dto.BatchSendRequest) (*dto.BatchSendResponse, error) {
+	// 1. 验证通道（获取 MessageTemplateID 和 Type）
+	var channel model.Channel
+	db := internalHelper.GetDatabase()
+	if err := db.First(&channel, req.ChannelID).Error; err != nil {
+		return nil, fmt.Errorf("invalid channel_id: %w", err)
+	}
+
+	// 检查通道状态
+	if channel.Status != 1 {
+		return nil, fmt.Errorf("channel is not active")
+	}
+
+	// 2. 批量校验接收者格式
+	validator := helper.GetReceiverValidator(channel.Type)
+	if err := validator.ValidateBatch(req.Receivers); err != nil {
+		return nil, fmt.Errorf("invalid receivers: %w", err)
+	}
+
+	// 检查通道是否有可用的模板绑定
+	// GetActiveByChannelID 查询条件：is_active=1 AND status=1（只查可用的绑定）
+	channelBindingDao := dao.NewChannelTemplateBindingDAO()
+	bindings, err := channelBindingDao.GetActiveByChannelID(uint(req.ChannelID))
+	if err != nil {
+		s.logger.Error(fmt.Sprintf("failed to check channel bindings channel_id=%d: %v", req.ChannelID, err))
+		return nil, fmt.Errorf("failed to check channel bindings: %w", err)
+	}
+	if len(bindings) == 0 {
+		s.logger.Error(fmt.Sprintf("no active template bindings configured channel_id=%d app_id=%s", req.ChannelID, req.AppID))
+		return nil, fmt.Errorf("no active template bindings configured for channel_id=%d", req.ChannelID)
+	}
+
+	// 2. 加载系统模板（使用 channel 的 MessageTemplateID）
+	messageTemplate, err := s.messageTemplateDao.GetByID(channel.MessageTemplateID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid message_template_id: %w", err)
+	}
+
+	if messageTemplate.Status != 1 {
+		return nil, fmt.Errorf("message template is not active")
+	}
+
+	// 验证模板参数
+	templateVars, err := messageTemplate.GetVariables()
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse template variables: %w", err)
+	}
+	if err := s.validateTemplateParams(templateVars, req.TemplateParams); err != nil {
+		return nil, err
+	}
+
+	batchID := uuid.New().String()
+	var tasks []*model.PushTask
+	successCount := 0
+
+	templateParamsJSON, _ := s.templateHelper.RenderJSON(req.TemplateParams)
+
+	for _, receiver := range req.Receivers {
+		taskID := uuid.New().String()
+		task := &model.PushTask{
+			TaskID:         taskID,
+			AppID:          req.AppID,
+			ChannelID:      req.ChannelID,
+			MessageType:    channel.Type,
+			Receiver:       receiver,
+			TemplateCode:   "", // 将由 worker 更新为实际使用的供应商模板代码
+			TemplateParams: templateParamsJSON,
+			Signature:      req.SignatureName, // 用户自定义签名名称
+			Status:         constants.TaskStatusPending,
+			RetryCount:     0,
+			MaxRetry:       3,
+			ScheduledAt:    req.ScheduledAt,
+		}
+
+		tasks = append(tasks, task)
+	}
+
+	// 批量保存任务
+	for _, task := range tasks {
+		if err := s.taskDao.Create(task); err != nil {
+			s.logger.Error(fmt.Sprintf("failed to create task id=%s: %v", task.TaskID, err))
+			continue
+		}
+		successCount++
+	}
+
+	// 批量推送到队列
+	if err := s.producer.PushBatch(ctx, tasks); err != nil {
+		s.logger.Error(fmt.Sprintf("failed to push batch to queue: %v", err))
+	}
+
+	return &dto.BatchSendResponse{
+		BatchID:      batchID,
+		TotalCount:   len(req.Receivers),
+		SuccessCount: successCount,
+		FailedCount:  len(req.Receivers) - successCount,
+		CreatedAt:    time.Now(),
+	}, nil
+}
+
+// QueryTask 查询任务状态
+func (s *MessageService) QueryTask(ctx context.Context, taskID string) (*model.PushTask, error) {
+	task, err := s.taskDao.GetByTaskID(taskID)
+	if err != nil {
+		return nil, fmt.Errorf("task not found: %w", err)
+	}
+	return task, nil
+}
+
+// validateTemplateParams 验证模板参数是否完整
+func (s *MessageService) validateTemplateParams(templateVars []string, params map[string]string) error {
+	var missingVars []string
+	for _, v := range templateVars {
+		if _, ok := params[v]; !ok {
+			missingVars = append(missingVars, v)
+		}
+	}
+	if len(missingVars) > 0 {
+		return fmt.Errorf("missing template params: %v", missingVars)
+	}
+	return nil
+}
+
+// isValidMessageType 验证消息类型
+func (s *MessageService) isValidMessageType(messageType string) bool {
+	validTypes := []string{
+		constants.MessageTypeSMS,
+		constants.MessageTypeEmail,
+		constants.MessageTypeWeChatWork,
+		constants.MessageTypeDingTalk,
+	}
+
+	for _, t := range validTypes {
+		if t == messageType {
+			return true
+		}
+	}
+	return false
+}

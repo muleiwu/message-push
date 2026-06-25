@@ -1,8 +1,8 @@
 package dao
 
 import (
+	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
-	"cnb.cool/mliev/push/message-push/internal/helper"
 	"gorm.io/gorm"
 )
 
@@ -14,7 +14,7 @@ type WebhookConfigDAO struct {
 // NewWebhookConfigDAO 创建 WebhookConfigDAO
 func NewWebhookConfigDAO() *WebhookConfigDAO {
 	return &WebhookConfigDAO{
-		db: helper.GetHelper().GetDatabase(),
+		db: helper.GetDatabase(),
 	}
 }
 

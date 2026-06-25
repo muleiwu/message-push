@@ -1,14 +1,14 @@
 package admin
 
 import (
-	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
+
+	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
 
 	"cnb.cool/mliev/push/message-push/app/controller"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/helper"
-	"cnb.cool/mliev/push/message-push/internal/interfaces"
 )
 
 // AuthController 认证控制器
@@ -16,7 +16,7 @@ type AuthController struct {
 }
 
 // Login 管理员登录
-func (c AuthController) Login(ctx *gin.Context, h interfaces.HelperInterface) {
+func (c AuthController) Login(ctx httpInterfaces.RouterContextInterface) {
 	var req dto.LoginRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		controller.ErrorResponse(ctx, 400, "用户名和密码不能为空")
@@ -52,20 +52,20 @@ func (c AuthController) Login(ctx *gin.Context, h interfaces.HelperInterface) {
 }
 
 // Logout 管理员登出
-func (c AuthController) Logout(ctx *gin.Context, h interfaces.HelperInterface) {
-	controller.SuccessResponse(ctx, gin.H{"message": "退出成功"})
+func (c AuthController) Logout(ctx httpInterfaces.RouterContextInterface) {
+	controller.SuccessResponse(ctx, map[string]any{"message": "退出成功"})
 }
 
 // GetUserInfo 获取用户信息
-func (c AuthController) GetUserInfo(ctx *gin.Context, h interfaces.HelperInterface) {
+func (c AuthController) GetUserInfo(ctx httpInterfaces.RouterContextInterface) {
 	// 从上下文中获取用户信息
-	userID, exists := ctx.Get("user_id")
-	if !exists {
+	userID := ctx.Get("user_id")
+	if userID == nil {
 		controller.ErrorResponse(ctx, 401, "未授权")
 		return
 	}
 
-	username, _ := ctx.Get("username")
+	username := ctx.Get("username")
 
 	// 查询用户详细信息
 	userDAO := dao.NewAdminUserDAO()
@@ -91,7 +91,7 @@ func (c AuthController) GetUserInfo(ctx *gin.Context, h interfaces.HelperInterfa
 }
 
 // GetAccessCodes 获取权限码
-func (c AuthController) GetAccessCodes(ctx *gin.Context, h interfaces.HelperInterface) {
+func (c AuthController) GetAccessCodes(ctx httpInterfaces.RouterContextInterface) {
 	// 返回管理员权限码
 	codes := dto.AccessCodesResponse{
 		"AC_100000", // 超级管理员权限

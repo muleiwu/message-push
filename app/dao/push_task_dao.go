@@ -3,8 +3,8 @@ package dao
 import (
 	"time"
 
+	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
-	"cnb.cool/mliev/push/message-push/internal/helper"
 	"gorm.io/gorm"
 )
 
@@ -16,7 +16,7 @@ type PushTaskDAO struct {
 // NewPushTaskDAO 创建PushTaskDAO
 func NewPushTaskDAO() *PushTaskDAO {
 	return &PushTaskDAO{
-		db: helper.GetHelper().GetDatabase(),
+		db: helper.GetDatabase(),
 	}
 }
 

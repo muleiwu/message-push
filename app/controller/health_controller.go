@@ -4,10 +4,11 @@ import (
 	"context"
 	"time"
 
+	"cnb.cool/mliev/open/go-web/pkg/helper"
+	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
+
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dto"
-	"cnb.cool/mliev/push/message-push/internal/interfaces"
-	"github.com/gin-gonic/gin"
 )
 
 type HealthController struct {
@@ -15,7 +16,7 @@ type HealthController struct {
 }
 
 // GetHealth 健康检查接口
-func (receiver HealthController) GetHealth(c *gin.Context, helper interfaces.HelperInterface) {
+func (receiver HealthController) GetHealth(c httpInterfaces.RouterContextInterface) {
 	healthStatus := dto.HealthStatus{
 		Status:    "UP",
 		Timestamp: time.Now().Unix(),
@@ -23,11 +24,11 @@ func (receiver HealthController) GetHealth(c *gin.Context, helper interfaces.Hel
 	}
 
 	// 检查数据库连接
-	dbStatus := receiver.checkDatabase(helper)
+	dbStatus := receiver.checkDatabase()
 	healthStatus.Services["database"] = dbStatus
 
 	// 检查Redis连接
-	redisStatus := receiver.checkRedis(helper)
+	redisStatus := receiver.checkRedis()
 	healthStatus.Services["redis"] = redisStatus
 
 	// 如果任何服务不健康，整体状态设为DOWN
@@ -43,16 +44,16 @@ func (receiver HealthController) GetHealth(c *gin.Context, helper interfaces.Hel
 }
 
 // GetHealthSimple 简单健康检查接口
-func (receiver HealthController) GetHealthSimple(c *gin.Context, helper interfaces.HelperInterface) {
+func (receiver HealthController) GetHealthSimple(c httpInterfaces.RouterContextInterface) {
 	var baseResponse BaseResponse
-	baseResponse.Success(c, gin.H{
+	baseResponse.Success(c, map[string]any{
 		"status":    "UP",
 		"timestamp": time.Now().Unix(),
 	})
 }
 
 // checkDatabase 检查数据库连接
-func (receiver HealthController) checkDatabase(helper interfaces.HelperInterface) dto.ServiceStatus {
+func (receiver HealthController) checkDatabase() dto.ServiceStatus {
 	gormDB := helper.GetDatabase()
 	if gormDB == nil {
 		return dto.ServiceStatus{
@@ -82,7 +83,7 @@ func (receiver HealthController) checkDatabase(helper interfaces.HelperInterface
 }
 
 // checkRedis 检查Redis连接
-func (receiver HealthController) checkRedis(helper interfaces.HelperInterface) dto.ServiceStatus {
+func (receiver HealthController) checkRedis() dto.ServiceStatus {
 	redisHelper := helper.GetRedis()
 	if redisHelper == nil {
 		return dto.ServiceStatus{

@@ -2,17 +2,18 @@ package service
 
 import (
 	"bytes"
+	"cnb.cool/mliev/push/message-push/modules/ruleengine"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
 
+	internalHelper "cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/model"
-	"cnb.cool/mliev/push/message-push/app/queue"
-	internalHelper "cnb.cool/mliev/push/message-push/internal/helper"
+	"cnb.cool/mliev/push/message-push/modules/delivery"
 	"github.com/muleiwu/gsr"
 )
 
@@ -29,20 +30,19 @@ type ActionExecutor struct {
 	logger            gsr.Logger
 	taskDAO           *dao.PushTaskDAO
 	logDAO            *dao.PushLogDAO
-	producer          *queue.Producer
+	producer          delivery.Producer
 	httpClient        *http.Client
 	defaultWebhookURL string // 系统默认告警 Webhook URL
 }
 
 // NewActionExecutor 创建动作执行器
 func NewActionExecutor() *ActionExecutor {
-	h := internalHelper.GetHelper()
 	return &ActionExecutor{
-		logger:            h.GetLogger(),
+		logger:            internalHelper.GetLogger(),
 		taskDAO:           dao.NewPushTaskDAO(),
 		logDAO:            dao.NewPushLogDAO(),
-		producer:          queue.NewProducer(h.GetRedis()),
-		defaultWebhookURL: h.GetEnv().GetString("alert.default_webhook_url", ""),
+		producer:          delivery.GetProducer(),
+		defaultWebhookURL: internalHelper.GetEnv().GetString("alert.default_webhook_url", ""),
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -71,7 +71,7 @@ type ExecuteResult struct {
 }
 
 // Execute 执行规则动作
-func (e *ActionExecutor) Execute(ctx context.Context, result *EvaluateResult, execCtx *ExecuteContext) *ExecuteResult {
+func (e *ActionExecutor) Execute(ctx context.Context, result *ruleengine.EvaluateResult, execCtx *ExecuteContext) *ExecuteResult {
 	if result == nil || execCtx == nil || execCtx.Task == nil {
 		return &ExecuteResult{
 			Action:       model.RuleActionFail,
@@ -95,7 +95,7 @@ func (e *ActionExecutor) Execute(ctx context.Context, result *EvaluateResult, ex
 }
 
 // executeRetry 执行重试动作
-func (e *ActionExecutor) executeRetry(ctx context.Context, result *EvaluateResult, execCtx *ExecuteContext) *ExecuteResult {
+func (e *ActionExecutor) executeRetry(ctx context.Context, result *ruleengine.EvaluateResult, execCtx *ExecuteContext) *ExecuteResult {
 	task := execCtx.Task
 
 	// 获取重试配置
@@ -169,7 +169,7 @@ func (e *ActionExecutor) executeRetry(ctx context.Context, result *EvaluateResul
 }
 
 // executeSwitchProvider 执行切换供应商动作
-func (e *ActionExecutor) executeSwitchProvider(ctx context.Context, result *EvaluateResult, execCtx *ExecuteContext) *ExecuteResult {
+func (e *ActionExecutor) executeSwitchProvider(ctx context.Context, result *ruleengine.EvaluateResult, execCtx *ExecuteContext) *ExecuteResult {
 	task := execCtx.Task
 
 	// 获取切换配置
@@ -243,7 +243,7 @@ func (e *ActionExecutor) executeSwitchProvider(ctx context.Context, result *Eval
 }
 
 // executeFail 执行失败动作
-func (e *ActionExecutor) executeFail(ctx context.Context, result *EvaluateResult, execCtx *ExecuteContext) *ExecuteResult {
+func (e *ActionExecutor) executeFail(ctx context.Context, result *ruleengine.EvaluateResult, execCtx *ExecuteContext) *ExecuteResult {
 	task := execCtx.Task
 
 	// 更新任务状态为失败
@@ -282,7 +282,7 @@ func (e *ActionExecutor) executeFail(ctx context.Context, result *EvaluateResult
 }
 
 // executeAlert 执行告警动作
-func (e *ActionExecutor) executeAlert(ctx context.Context, result *EvaluateResult, execCtx *ExecuteContext) *ExecuteResult {
+func (e *ActionExecutor) executeAlert(ctx context.Context, result *ruleengine.EvaluateResult, execCtx *ExecuteContext) *ExecuteResult {
 	task := execCtx.Task
 
 	// 获取告警配置

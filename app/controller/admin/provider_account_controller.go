@@ -3,12 +3,10 @@ package admin
 import (
 	"strconv"
 
-	"github.com/gin-gonic/gin"
-
+	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
 	"cnb.cool/mliev/push/message-push/app/controller"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/service"
-	"cnb.cool/mliev/push/message-push/internal/interfaces"
 )
 
 // ProviderAccountController 服务商账号配置管理控制器
@@ -16,7 +14,7 @@ type ProviderAccountController struct {
 }
 
 // GetAvailableProviders 获取可用的服务商列表
-func (c ProviderAccountController) GetAvailableProviders(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ProviderAccountController) GetAvailableProviders(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminProviderAccountService()
 	providerType := ctx.Query("provider_type")
 
@@ -30,7 +28,7 @@ func (c ProviderAccountController) GetAvailableProviders(ctx *gin.Context, helpe
 }
 
 // GetProviderConfigFields 获取服务商配置字段定义
-func (c ProviderAccountController) GetProviderConfigFields(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ProviderAccountController) GetProviderConfigFields(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminProviderAccountService()
 	providerCode := ctx.Param("providerCode")
 
@@ -44,7 +42,7 @@ func (c ProviderAccountController) GetProviderConfigFields(ctx *gin.Context, hel
 }
 
 // CreateProviderAccount 创建服务商账号配置
-func (c ProviderAccountController) CreateProviderAccount(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ProviderAccountController) CreateProviderAccount(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminProviderAccountService()
 	var req dto.CreateProviderAccountRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -62,7 +60,7 @@ func (c ProviderAccountController) CreateProviderAccount(ctx *gin.Context, helpe
 }
 
 // GetProviderAccountList 获取服务商账号列表
-func (c ProviderAccountController) GetProviderAccountList(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ProviderAccountController) GetProviderAccountList(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminProviderAccountService()
 	var req dto.ProviderAccountListRequest
 	if err := ctx.ShouldBindQuery(&req); err != nil {
@@ -80,7 +78,7 @@ func (c ProviderAccountController) GetProviderAccountList(ctx *gin.Context, help
 }
 
 // GetProviderAccount 获取服务商账号详情
-func (c ProviderAccountController) GetProviderAccount(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ProviderAccountController) GetProviderAccount(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminProviderAccountService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -99,7 +97,7 @@ func (c ProviderAccountController) GetProviderAccount(ctx *gin.Context, helper i
 }
 
 // UpdateProviderAccount 更新服务商账号
-func (c ProviderAccountController) UpdateProviderAccount(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ProviderAccountController) UpdateProviderAccount(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminProviderAccountService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -119,11 +117,11 @@ func (c ProviderAccountController) UpdateProviderAccount(ctx *gin.Context, helpe
 		return
 	}
 
-	controller.SuccessResponse(ctx, gin.H{"message": "updated successfully"})
+	controller.SuccessResponse(ctx, map[string]any{"message": "updated successfully"})
 }
 
 // DeleteProviderAccount 删除服务商账号
-func (c ProviderAccountController) DeleteProviderAccount(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ProviderAccountController) DeleteProviderAccount(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminProviderAccountService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -137,11 +135,11 @@ func (c ProviderAccountController) DeleteProviderAccount(ctx *gin.Context, helpe
 		return
 	}
 
-	controller.SuccessResponse(ctx, gin.H{"message": "deleted successfully"})
+	controller.SuccessResponse(ctx, map[string]any{"message": "deleted successfully"})
 }
 
 // GetActiveProviderAccounts 获取活跃服务商账号列表
-func (c ProviderAccountController) GetActiveProviderAccounts(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ProviderAccountController) GetActiveProviderAccounts(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminProviderAccountService()
 	providerType := ctx.Query("provider_type")
 
@@ -155,7 +153,7 @@ func (c ProviderAccountController) GetActiveProviderAccounts(ctx *gin.Context, h
 }
 
 // TestProviderAccount 测试服务商账号配置
-func (c ProviderAccountController) TestProviderAccount(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c ProviderAccountController) TestProviderAccount(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminProviderAccountService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)

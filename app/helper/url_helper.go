@@ -4,17 +4,17 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gin-gonic/gin"
+	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
 )
 
 // GetBaseURL 获取基础URL，支持反向代理场景
 // 优先级：X-Forwarded headers > 请求 headers
 // 参数：
-//   - c: gin.Context
+//   - c: 请求上下文
 //   - path: 路径（如 "/api/callback"）
 //
 // 返回：完整的 URL（如 "https://example.com/api/callback"）
-func GetBaseURL(c *gin.Context, path string) string {
+func GetBaseURL(c httpInterfaces.RouterContextInterface, path string) string {
 	// 1. 检查反向代理 headers
 	forwardedProto := c.GetHeader("X-Forwarded-Proto")
 	forwardedHost := c.GetHeader("X-Forwarded-Host")
@@ -25,7 +25,7 @@ func GetBaseURL(c *gin.Context, path string) string {
 
 	// 2. 回退到请求信息
 	scheme := "http"
-	if c.Request.TLS != nil {
+	if c.Request().TLS != nil {
 		scheme = "https"
 	}
 
@@ -34,7 +34,7 @@ func GetBaseURL(c *gin.Context, path string) string {
 		scheme = forwardedProto
 	}
 
-	host := c.Request.Host
+	host := c.Request().Host
 	if forwardedHost != "" {
 		host = forwardedHost
 	}

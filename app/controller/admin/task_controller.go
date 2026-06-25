@@ -3,12 +3,10 @@ package admin
 import (
 	"strconv"
 
-	"github.com/gin-gonic/gin"
-
+	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
 	"cnb.cool/mliev/push/message-push/app/controller"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/service"
-	"cnb.cool/mliev/push/message-push/internal/interfaces"
 )
 
 // TaskController 任务管理控制器
@@ -16,7 +14,7 @@ type TaskController struct {
 }
 
 // GetPushTaskList 获取推送任务列表
-func (c TaskController) GetPushTaskList(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c TaskController) GetPushTaskList(ctx httpInterfaces.RouterContextInterface) {
 	taskService := service.NewAdminTaskService()
 	var req dto.PushTaskListRequest
 	if err := ctx.ShouldBindQuery(&req); err != nil {
@@ -34,7 +32,7 @@ func (c TaskController) GetPushTaskList(ctx *gin.Context, helper interfaces.Help
 }
 
 // GetPushTask 获取单个推送任务详情
-func (c TaskController) GetPushTask(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c TaskController) GetPushTask(ctx httpInterfaces.RouterContextInterface) {
 	taskService := service.NewAdminTaskService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 64)
@@ -53,7 +51,7 @@ func (c TaskController) GetPushTask(ctx *gin.Context, helper interfaces.HelperIn
 }
 
 // GetPushBatchTaskList 获取批量任务列表
-func (c TaskController) GetPushBatchTaskList(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c TaskController) GetPushBatchTaskList(ctx httpInterfaces.RouterContextInterface) {
 	taskService := service.NewAdminTaskService()
 	var req dto.PushBatchTaskListRequest
 	if err := ctx.ShouldBindQuery(&req); err != nil {
@@ -71,7 +69,7 @@ func (c TaskController) GetPushBatchTaskList(ctx *gin.Context, helper interfaces
 }
 
 // GetPushBatchTask 获取单个批量任务详情
-func (c TaskController) GetPushBatchTask(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c TaskController) GetPushBatchTask(ctx httpInterfaces.RouterContextInterface) {
 	taskService := service.NewAdminTaskService()
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 64)
@@ -90,7 +88,7 @@ func (c TaskController) GetPushBatchTask(ctx *gin.Context, helper interfaces.Hel
 }
 
 // GetBatchTaskDetails 获取批次下的所有任务
-func (c TaskController) GetBatchTaskDetails(ctx *gin.Context, helper interfaces.HelperInterface) {
+func (c TaskController) GetBatchTaskDetails(ctx httpInterfaces.RouterContextInterface) {
 	taskService := service.NewAdminTaskService()
 	batchID := ctx.Param("id")
 

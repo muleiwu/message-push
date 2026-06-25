@@ -3,14 +3,14 @@ package middleware
 import (
 	"strings"
 
+	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
 	"cnb.cool/mliev/push/message-push/app/controller"
 	"cnb.cool/mliev/push/message-push/app/helper"
-	"github.com/gin-gonic/gin"
 )
 
 // AdminJWTMiddleware 管理员 JWT 认证中间件
-func AdminJWTMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
+func AdminJWTMiddleware() httpInterfaces.HandlerFunc {
+	return func(c httpInterfaces.RouterContextInterface) {
 		// 从 Header 获取 Authorization
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {

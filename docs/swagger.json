@@ -1,0 +1,529 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "木雷消息服务 API",
+    "description": "木雷消息服务 API 接口文档，支持短信、邮件、企业微信、钉钉、Webhook、推送通知等多种消息类型。",
+    "version": "1.2.0",
+    "contact": {
+      "name": "API Support"
+    }
+  },
+  "host": "your-domain.com",
+  "basePath": "/api/v1",
+  "schemes": [
+    "https"
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "securityDefinitions": {
+    "AppAuth": {
+      "type": "apiKey",
+      "in": "header",
+      "name": "X-App-Id",
+      "description": "应用 ID"
+    },
+    "Signature": {
+      "type": "apiKey",
+      "in": "header",
+      "name": "X-Signature",
+      "description": "请求签名，使用 HMAC-SHA256 算法生成"
+    },
+    "Timestamp": {
+      "type": "apiKey",
+      "in": "header",
+      "name": "X-Timestamp",
+      "description": "Unix 时间戳（秒）"
+    },
+    "Nonce": {
+      "type": "apiKey",
+      "in": "header",
+      "name": "X-Nonce",
+      "description": "随机字符串（用于防重放攻击）"
+    }
+  },
+  "security": [
+    {
+      "AppAuth": [],
+      "Signature": [],
+      "Timestamp": [],
+      "Nonce": []
+    }
+  ],
+  "paths": {
+    "/messages": {
+      "post": {
+        "tags": [
+          "消息发送"
+        ],
+        "summary": "发送单条消息",
+        "description": "发送单条消息给指定接收者，通道已绑定消息类型和模板。",
+        "operationId": "sendMessage",
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "description": "消息发送请求",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SendMessageRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "schema": {
+              "$ref": "#/definitions/SendMessageResponse"
+            }
+          },
+          "400": {
+            "description": "请求参数错误",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "认证失败",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "429": {
+            "description": "超出速率限制",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "服务器内部错误",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/messages/batch": {
+      "post": {
+        "tags": [
+          "消息发送"
+        ],
+        "summary": "批量发送消息",
+        "description": "批量发送消息给多个接收者，所有接收者共用相同的模板参数。单次批量发送建议不超过 500 条。",
+        "operationId": "sendBatchMessage",
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "description": "批量消息发送请求",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SendBatchMessageRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "schema": {
+              "$ref": "#/definitions/SendBatchMessageResponse"
+            }
+          },
+          "400": {
+            "description": "请求参数错误",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "认证失败",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "429": {
+            "description": "超出速率限制",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "服务器内部错误",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/messages/{task_id}": {
+      "get": {
+        "tags": [
+          "任务查询"
+        ],
+        "summary": "查询任务状态",
+        "description": "根据任务 ID 查询发送状态。",
+        "operationId": "queryTask",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "type": "string",
+            "required": true,
+            "description": "任务 ID（UUID 格式）"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "schema": {
+              "$ref": "#/definitions/QueryTaskResponse"
+            }
+          },
+          "400": {
+            "description": "请求参数错误",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "认证失败",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "任务不存在",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "服务器内部错误",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "SendMessageRequest": {
+      "type": "object",
+      "required": [
+        "channel_id",
+        "receiver"
+      ],
+      "properties": {
+        "channel_id": {
+          "type": "integer",
+          "description": "通道 ID（通道绑定了消息类型和模板）",
+          "example": 1
+        },
+        "receiver": {
+          "type": "string",
+          "description": "接收者（手机号/邮箱/用户ID）",
+          "example": "13800138000"
+        },
+        "template_params": {
+          "type": "object",
+          "description": "模板参数（键值对）",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "example": {
+            "code": "123456",
+            "expire_time": "5"
+          }
+        },
+        "scheduled_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "定时发送时间（ISO 8601 格式）",
+          "example": "2025-11-25T22:00:00Z"
+        }
+      }
+    },
+    "SendBatchMessageRequest": {
+      "type": "object",
+      "required": [
+        "channel_id",
+        "receivers"
+      ],
+      "properties": {
+        "channel_id": {
+          "type": "integer",
+          "description": "通道 ID（通道绑定了消息类型和模板）",
+          "example": 1
+        },
+        "receivers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "接收者列表（手机号/邮箱/用户ID数组）",
+          "example": [
+            "13800138000",
+            "13800138001",
+            "13800138002"
+          ]
+        },
+        "template_params": {
+          "type": "object",
+          "description": "模板参数（所有接收者共用）",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "example": {
+            "content": "系统将于今晚22:00进行维护",
+            "duration": "2小时"
+          }
+        },
+        "scheduled_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "定时发送时间（ISO 8601 格式）",
+          "example": "2025-11-25T22:00:00Z"
+        }
+      }
+    },
+    "SendMessageResponse": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "description": "状态码，0 表示成功",
+          "example": 0
+        },
+        "message": {
+          "type": "string",
+          "description": "状态描述",
+          "example": "success"
+        },
+        "data": {
+          "$ref": "#/definitions/SendMessageData"
+        }
+      }
+    },
+    "SendMessageData": {
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "description": "任务 ID（UUID 格式）",
+          "example": "550e8400-e29b-41d4-a716-446655440000"
+        },
+        "status": {
+          "type": "string",
+          "description": "任务状态",
+          "enum": [
+            "pending",
+            "processing",
+            "success",
+            "failed"
+          ],
+          "example": "pending"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "创建时间",
+          "example": "2025-11-25T10:00:00Z"
+        }
+      }
+    },
+    "SendBatchMessageResponse": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "description": "状态码，0 表示成功",
+          "example": 0
+        },
+        "message": {
+          "type": "string",
+          "description": "状态描述",
+          "example": "success"
+        },
+        "data": {
+          "$ref": "#/definitions/SendBatchMessageData"
+        }
+      }
+    },
+    "SendBatchMessageData": {
+      "type": "object",
+      "properties": {
+        "batch_id": {
+          "type": "string",
+          "description": "批次 ID",
+          "example": "660e8400-e29b-41d4-a716-446655440001"
+        },
+        "total_count": {
+          "type": "integer",
+          "description": "总数量",
+          "example": 3
+        },
+        "success_count": {
+          "type": "integer",
+          "description": "成功入队数量",
+          "example": 3
+        },
+        "failed_count": {
+          "type": "integer",
+          "description": "失败数量",
+          "example": 0
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "创建时间",
+          "example": "2025-11-25T10:00:00Z"
+        }
+      }
+    },
+    "QueryTaskResponse": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "description": "状态码，0 表示成功",
+          "example": 0
+        },
+        "message": {
+          "type": "string",
+          "description": "状态描述",
+          "example": "success"
+        },
+        "data": {
+          "$ref": "#/definitions/TaskDetail"
+        }
+      }
+    },
+    "TaskDetail": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "description": "任务数据库 ID",
+          "example": 1
+        },
+        "task_id": {
+          "type": "string",
+          "description": "任务 ID（UUID 格式）",
+          "example": "550e8400-e29b-41d4-a716-446655440000"
+        },
+        "app_id": {
+          "type": "string",
+          "description": "应用 ID",
+          "example": "test_app_001"
+        },
+        "channel_id": {
+          "type": "integer",
+          "description": "通道 ID",
+          "example": 1
+        },
+        "message_type": {
+          "type": "string",
+          "description": "消息类型",
+          "enum": [
+            "sms",
+            "email",
+            "wechat_work",
+            "dingtalk",
+            "webhook",
+            "push"
+          ],
+          "example": "sms"
+        },
+        "receiver": {
+          "type": "string",
+          "description": "接收者",
+          "example": "13800138000"
+        },
+        "content": {
+          "type": "string",
+          "description": "消息内容",
+          "example": "您的验证码是123456，5分钟内有效。"
+        },
+        "status": {
+          "type": "string",
+          "description": "任务状态",
+          "enum": [
+            "pending",
+            "processing",
+            "success",
+            "failed"
+          ],
+          "example": "success"
+        },
+        "callback_status": {
+          "type": "string",
+          "description": "回调状态",
+          "enum": [
+            "delivered",
+            "failed",
+            "rejected"
+          ],
+          "example": "delivered"
+        },
+        "retry_count": {
+          "type": "integer",
+          "description": "已重试次数",
+          "example": 0
+        },
+        "max_retry": {
+          "type": "integer",
+          "description": "最大重试次数",
+          "example": 3
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "创建时间",
+          "example": "2025-11-25T10:00:00Z"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "更新时间",
+          "example": "2025-11-25T10:00:02Z"
+        }
+      }
+    },
+    "ErrorResponse": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "description": "错误码",
+          "example": 10001
+        },
+        "message": {
+          "type": "string",
+          "description": "错误描述",
+          "example": "请求参数错误"
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "消息发送",
+      "description": "消息发送相关接口"
+    },
+    {
+      "name": "任务查询",
+      "description": "任务状态查询接口"
+    }
+  ],
+  "externalDocs": {
+    "description": "完整 API 对接文档",
+    "url": "docs/API_INTEGRATION.md"
+  }
+}
+

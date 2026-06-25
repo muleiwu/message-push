@@ -2,7 +2,6 @@ package autoload
 
 import (
 	"cnb.cool/mliev/push/message-push/app/model"
-	envInterface "cnb.cool/mliev/push/message-push/internal/interfaces"
 )
 
 type Migration struct {
@@ -47,7 +46,7 @@ func (receiver Migration) Get() []any {
 	}
 }
 
-func (receiver Migration) InitConfig(helper envInterface.HelperInterface) map[string]any {
+func (receiver Migration) InitConfig() map[string]any {
 	return map[string]any{
 		"database.migration": receiver.Get(),
 	}

@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"log"
 
-	"cnb.cool/mliev/push/message-push/internal/helper"
+	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"github.com/pressly/goose/v3"
 )
 
@@ -26,7 +26,7 @@ func upInitialSchema(ctx context.Context, tx *sql.Tx) error {
 	log.Println("[initial_schema] 执行 GORM AutoMigrate...")
 
 	// 使用 GORM AutoMigrate 创建初始表结构
-	models := helper.GetHelper().GetConfig().Get("database.migration", []any{}).([]any)
+	models := helper.GetConfig().Get("database.migration", []any{}).([]any)
 	if err := db.AutoMigrate(models...); err != nil {
 		return err
 	}

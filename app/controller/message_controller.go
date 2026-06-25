@@ -1,10 +1,10 @@
 package controller
 
 import (
+	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
+
 	"cnb.cool/mliev/push/message-push/app/dto"
-	"cnb.cool/mliev/push/message-push/app/service"
-	"cnb.cool/mliev/push/message-push/internal/interfaces"
-	"github.com/gin-gonic/gin"
+	"cnb.cool/mliev/push/message-push/modules/messaging"
 )
 
 // MessageController 消息控制器
@@ -12,8 +12,8 @@ type MessageController struct {
 }
 
 // Send 发送消息
-func (ctrl MessageController) Send(c *gin.Context, helper interfaces.HelperInterface) {
-	messageService := service.NewMessageService()
+func (ctrl MessageController) Send(c httpInterfaces.RouterContextInterface) {
+	messageService := messaging.GetService()
 	var req dto.SendRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		FailWithMessage(c, "invalid request: "+err.Error())
@@ -21,10 +21,10 @@ func (ctrl MessageController) Send(c *gin.Context, helper interfaces.HelperInter
 	}
 
 	// 从上下文获取认证信息（已由中间件验证）
-	appID, _ := c.Get("app_id")
+	appID := c.Get("app_id")
 	req.AppID = appID.(string)
 
-	resp, err := messageService.Send(c.Request.Context(), &req)
+	resp, err := messageService.Send(c.Request().Context(), &req)
 	if err != nil {
 		FailWithMessage(c, err.Error())
 		return
@@ -34,8 +34,8 @@ func (ctrl MessageController) Send(c *gin.Context, helper interfaces.HelperInter
 }
 
 // BatchSend 批量发送消息
-func (ctrl MessageController) BatchSend(c *gin.Context, helper interfaces.HelperInterface) {
-	messageService := service.NewMessageService()
+func (ctrl MessageController) BatchSend(c httpInterfaces.RouterContextInterface) {
+	messageService := messaging.GetService()
 	var req dto.BatchSendRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		FailWithMessage(c, "invalid request: "+err.Error())
@@ -43,10 +43,10 @@ func (ctrl MessageController) BatchSend(c *gin.Context, helper interfaces.Helper
 	}
 
 	// 从上下文获取认证信息（已由中间件验证）
-	appID, _ := c.Get("app_id")
+	appID := c.Get("app_id")
 	req.AppID = appID.(string)
 
-	resp, err := messageService.BatchSend(c.Request.Context(), &req)
+	resp, err := messageService.BatchSend(c.Request().Context(), &req)
 	if err != nil {
 		FailWithMessage(c, err.Error())
 		return
@@ -56,15 +56,15 @@ func (ctrl MessageController) BatchSend(c *gin.Context, helper interfaces.Helper
 }
 
 // QueryTask 查询任务状态
-func (ctrl MessageController) QueryTask(c *gin.Context, helper interfaces.HelperInterface) {
-	messageService := service.NewMessageService()
+func (ctrl MessageController) QueryTask(c httpInterfaces.RouterContextInterface) {
+	messageService := messaging.GetService()
 	taskID := c.Param("task_id")
 	if taskID == "" {
 		FailWithMessage(c, "task_id is required")
 		return
 	}
 
-	task, err := messageService.QueryTask(c.Request.Context(), taskID)
+	task, err := messageService.QueryTask(c.Request().Context(), taskID)
 	if err != nil {
 		FailWithMessage(c, err.Error())
 		return

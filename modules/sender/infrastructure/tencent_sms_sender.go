@@ -1,0 +1,605 @@
+package infrastructure
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"regexp"
+	"time"
+
+	"cnb.cool/mliev/push/message-push/app/constants"
+	domain "cnb.cool/mliev/push/message-push/modules/sender/domain"
+	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
+	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
+	sms "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sms/v20210111"
+)
+
+func init() {
+	// 注册腾讯云短信服务商
+	domain.Register(&domain.ProviderMeta{
+		Code:        constants.ProviderTencentSMS,
+		Name:        "腾讯云短信",
+		Type:        constants.MessageTypeSMS,
+		Description: "腾讯云短信服务，支持国内短信和国际短信发送。注意：短信签名需在「签名管理」中单独配置",
+		ConfigFields: []domain.ConfigField{
+			{
+				Key:            "secret_id",
+				Label:          "SecretId",
+				Description:    "腾讯云账号的SecretId",
+				Type:           domain.FieldTypeText,
+				Required:       true,
+				Example:        "AKIDxxxxxxxxxxxxxxxx",
+				Placeholder:    "请输入SecretId",
+				ValidationRule: "min:16,max:64",
+				HelpLink:       "https://cloud.tencent.com/document/product/382/37794",
+			},
+			{
+				Key:            "secret_key",
+				Label:          "SecretKey",
+				Description:    "腾讯云账号的SecretKey",
+				Type:           domain.FieldTypePassword,
+				Required:       true,
+				Example:        "xxxxxxxxxxxxxxxxxxxxxx",
+				Placeholder:    "请输入SecretKey",
+				ValidationRule: "min:16,max:64",
+				HelpLink:       "https://cloud.tencent.com/document/product/382/37794",
+			},
+			{
+				Key:         "sdk_app_id",
+				Label:       "应用ID",
+				Description: "短信应用的SdkAppId",
+				Type:        domain.FieldTypeText,
+				Required:    true,
+				Example:     "1400000000",
+				Placeholder: "请输入SdkAppId",
+			},
+			{
+				Key:          "region",
+				Label:        "地域",
+				Description:  "腾讯云地域，默认为ap-guangzhou",
+				Type:         domain.FieldTypeText,
+				Required:     false,
+				Example:      "ap-guangzhou",
+				Placeholder:  "请输入地域",
+				DefaultValue: "ap-guangzhou",
+			},
+		},
+		// 能力声明
+		SupportsSend:        true,
+		SupportsBatchSend:   true,
+		SupportsCallback:    true,
+		SupportsStatusQuery: true,
+		// 扩展信息
+		Website:    "https://cloud.tencent.com/product/sms",
+		Icon:       "https://cloudcache.tencent-cloud.com/qcloud/favicon.ico",
+		DocsUrl:    "https://cloud.tencent.com/document/product/382",
+		ConsoleUrl: "https://console.cloud.tencent.com/smsv2",
+		PricingUrl: "https://cloud.tencent.com/product/sms/pricing",
+		SortOrder:  20,
+		Tags:       []string{"国内", "国际", "推荐"},
+		Regions:    []string{"中国大陆", "国际"},
+		Deprecated: false,
+	})
+}
+
+type TencentSMSSender struct {
+}
+
+func NewTencentSMSSender() *TencentSMSSender {
+	return &TencentSMSSender{}
+}
+
+func (s *TencentSMSSender) GetProviderCode() string {
+	return constants.ProviderTencentSMS
+}
+
+func (s *TencentSMSSender) Send(ctx context.Context, req *domain.SendRequest) (*domain.SendResponse, error) {
+	// 1. 获取配置
+	config, err := req.ProviderAccount.GetConfig()
+	if err != nil {
+		return nil, fmt.Errorf("invalid provider config: %w", err)
+	}
+
+	secretId, _ := config["secret_id"].(string)
+	secretKey, _ := config["secret_key"].(string)
+	region, _ := config["region"].(string)
+	sdkAppId, _ := config["sdk_app_id"].(string)
+
+	if secretId == "" || secretKey == "" || sdkAppId == "" {
+		return nil, fmt.Errorf("missing tencent sms config: secret_id, secret_key or sdk_app_id")
+	}
+	if region == "" {
+		region = "ap-guangzhou"
+	}
+
+	// 2. 初始化客户端
+	credential := common.NewCredential(secretId, secretKey)
+	cpf := profile.NewClientProfile()
+	cpf.HttpProfile.Endpoint = "sms.tencentcloudapi.com"
+	client, _ := sms.NewClient(credential, region, cpf)
+
+	// 3. 构造请求
+	request := sms.NewSendSmsRequest()
+	request.SmsSdkAppId = common.StringPtr(sdkAppId)
+
+	// 签名和模板
+	signName := ""
+	templateID := ""
+
+	// 从 ChannelTemplateBinding 获取模板信息
+	if req.ChannelTemplateBinding != nil && req.ChannelTemplateBinding.ProviderTemplate != nil {
+		templateID = req.ChannelTemplateBinding.ProviderTemplate.TemplateCode
+	}
+
+	// 从 Signature 获取签名
+	if req.Signature != nil {
+		signName = req.Signature.SignatureCode
+	}
+
+	// 兜底：从任务获取模板代码
+	if templateID == "" {
+		templateID = req.Task.TemplateCode
+	}
+
+	if templateID == "" {
+		return nil, fmt.Errorf("missing template_id")
+	}
+
+	request.SignName = common.StringPtr(signName)
+	request.TemplateId = common.StringPtr(templateID)
+
+	// 接收者
+	request.PhoneNumberSet = common.StringPtrs([]string{req.Task.Receiver})
+
+	// 模板参数
+	params := s.buildParamsFromMapping(req)
+	request.TemplateParamSet = common.StringPtrs(params)
+
+	// 4. 序列化请求数据用于日志
+	requestData, _ := json.Marshal(map[string]interface{}{
+		"sdk_app_id":   sdkAppId,
+		"sign_name":    signName,
+		"template_id":  templateID,
+		"phone_number": req.Task.Receiver,
+		"params":       params,
+	})
+
+	// 5. 发送
+	response, err := client.SendSms(request)
+	if err != nil {
+		return &domain.SendResponse{
+			Success:      false,
+			ErrorMessage: err.Error(),
+			TaskID:       req.Task.TaskID,
+			RequestData:  string(requestData),
+			ResponseData: "",
+		}, err
+	}
+
+	// 6. 序列化响应数据用于日志
+	responseData, _ := json.Marshal(response.Response)
+
+	// 7. 解析响应
+	// 腾讯云支持批量发送，这里我们只发了一条
+	if len(response.Response.SendStatusSet) > 0 {
+		status := response.Response.SendStatusSet[0]
+		if *status.Code == "Ok" {
+			return &domain.SendResponse{
+				Success:      true,
+				ProviderID:   *status.SerialNo,
+				TaskID:       req.Task.TaskID,
+				Status:       constants.TaskStatusSent, // 已发送，等待回调
+				RequestData:  string(requestData),
+				ResponseData: string(responseData),
+			}, nil
+		}
+		return &domain.SendResponse{
+			Success:      false,
+			ErrorCode:    *status.Code,
+			ErrorMessage: *status.Message,
+			TaskID:       req.Task.TaskID,
+			RequestData:  string(requestData),
+			ResponseData: string(responseData),
+		}, nil
+	}
+
+	return &domain.SendResponse{
+		Success:      false,
+		ErrorMessage: "empty response from tencent cloud",
+		TaskID:       req.Task.TaskID,
+		RequestData:  string(requestData),
+		ResponseData: string(responseData),
+	}, nil
+}
+
+// buildParamsFromMapping 从 MappedParams 构建有序参数数组
+// 腾讯云要求参数按模板占位符顺序排列
+func (s *TencentSMSSender) buildParamsFromMapping(req *domain.SendRequest) []string {
+	if len(req.MappedParams) == 0 {
+		return []string{}
+	}
+
+	// 获取模板内容
+	templateContent := ""
+	if req.ChannelTemplateBinding != nil && req.ChannelTemplateBinding.ProviderTemplate != nil {
+		templateContent = req.ChannelTemplateBinding.ProviderTemplate.TemplateContent
+	}
+
+	// 如果没有模板内容，直接返回 map 的值
+	if templateContent == "" {
+		var values []string
+		for _, v := range req.MappedParams {
+			values = append(values, v)
+		}
+		return values
+	}
+
+	// 从模板内容中提取占位符顺序
+	// 腾讯云模板格式：{1}, {2}, {3} 或 {var1}, {var2}
+	re := regexp.MustCompile(`\{(\w+)\}`)
+	matches := re.FindAllStringSubmatch(templateContent, -1)
+
+	if len(matches) == 0 {
+		var values []string
+		for _, v := range req.MappedParams {
+			values = append(values, v)
+		}
+		return values
+	}
+
+	// 按占位符出现顺序提取参数值
+	var values []string
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		key := match[1]
+		if v, ok := req.MappedParams[key]; ok {
+			values = append(values, v)
+		} else {
+			values = append(values, "")
+		}
+	}
+
+	return values
+}
+
+// buildParamsFromBatchMapping 从批量请求的 MappedParams 构建有序参数数组
+func (s *TencentSMSSender) buildParamsFromBatchMapping(req *domain.BatchSendRequest) []string {
+	if len(req.MappedParams) == 0 {
+		return []string{}
+	}
+
+	// 获取模板内容
+	templateContent := ""
+	if req.ChannelTemplateBinding != nil && req.ChannelTemplateBinding.ProviderTemplate != nil {
+		templateContent = req.ChannelTemplateBinding.ProviderTemplate.TemplateContent
+	}
+
+	// 如果没有模板内容，直接返回 map 的值
+	if templateContent == "" {
+		var values []string
+		for _, v := range req.MappedParams {
+			values = append(values, v)
+		}
+		return values
+	}
+
+	// 从模板内容中提取占位符顺序
+	re := regexp.MustCompile(`\{(\w+)\}`)
+	matches := re.FindAllStringSubmatch(templateContent, -1)
+
+	if len(matches) == 0 {
+		var values []string
+		for _, v := range req.MappedParams {
+			values = append(values, v)
+		}
+		return values
+	}
+
+	// 按占位符出现顺序提取参数值
+	var values []string
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		key := match[1]
+		if v, ok := req.MappedParams[key]; ok {
+			values = append(values, v)
+		} else {
+			values = append(values, "")
+		}
+	}
+
+	return values
+}
+
+// ==================== BatchSender 接口实现 ====================
+
+// SupportsBatchSend 是否支持批量发送
+func (s *TencentSMSSender) SupportsBatchSend() bool {
+	return true
+}
+
+// BatchSend 批量发送短信（腾讯云原生支持批量发送，最多200个号码）
+func (s *TencentSMSSender) BatchSend(ctx context.Context, req *domain.BatchSendRequest) (*domain.BatchSendResponse, error) {
+	if len(req.Tasks) == 0 {
+		return &domain.BatchSendResponse{Results: []*domain.SendResponse{}}, nil
+	}
+
+	// 1. 获取配置
+	config, err := req.ProviderAccount.GetConfig()
+	if err != nil {
+		return nil, fmt.Errorf("invalid provider config: %w", err)
+	}
+
+	secretId, _ := config["secret_id"].(string)
+	secretKey, _ := config["secret_key"].(string)
+	region, _ := config["region"].(string)
+	sdkAppId, _ := config["sdk_app_id"].(string)
+
+	if secretId == "" || secretKey == "" || sdkAppId == "" {
+		return nil, fmt.Errorf("missing tencent sms config: secret_id, secret_key or sdk_app_id")
+	}
+	if region == "" {
+		region = "ap-guangzhou"
+	}
+
+	// 2. 初始化客户端
+	credential := common.NewCredential(secretId, secretKey)
+	cpf := profile.NewClientProfile()
+	cpf.HttpProfile.Endpoint = "sms.tencentcloudapi.com"
+	client, _ := sms.NewClient(credential, region, cpf)
+
+	// 3. 构造请求
+	request := sms.NewSendSmsRequest()
+	request.SmsSdkAppId = common.StringPtr(sdkAppId)
+
+	// 签名和模板
+	signName := ""
+	templateID := ""
+
+	// 从 ChannelTemplateBinding 获取模板信息
+	if req.ChannelTemplateBinding != nil && req.ChannelTemplateBinding.ProviderTemplate != nil {
+		templateID = req.ChannelTemplateBinding.ProviderTemplate.TemplateCode
+	}
+
+	// 从 Signature 获取签名
+	if req.Signature != nil {
+		signName = req.Signature.SignatureCode
+	}
+
+	// 兜底：从第一个任务获取模板代码
+	if templateID == "" && len(req.Tasks) > 0 {
+		templateID = req.Tasks[0].TemplateCode
+	}
+
+	if templateID == "" {
+		return nil, fmt.Errorf("missing template_id")
+	}
+
+	request.SignName = common.StringPtr(signName)
+	request.TemplateId = common.StringPtr(templateID)
+
+	// 收集所有手机号
+	phoneNumbers := make([]string, len(req.Tasks))
+	taskIDMap := make(map[string]string) // phone -> taskID
+	for i, task := range req.Tasks {
+		phoneNumbers[i] = task.Receiver
+		taskIDMap[task.Receiver] = task.TaskID
+	}
+	request.PhoneNumberSet = common.StringPtrs(phoneNumbers)
+
+	// 模板参数（批量发送时所有号码使用相同模板参数）
+	params := s.buildParamsFromBatchMapping(req)
+	request.TemplateParamSet = common.StringPtrs(params)
+
+	// 4. 序列化请求数据用于日志
+	requestData, _ := json.Marshal(map[string]interface{}{
+		"sdk_app_id":    sdkAppId,
+		"sign_name":     signName,
+		"template_id":   templateID,
+		"phone_numbers": phoneNumbers,
+		"params":        params,
+	})
+
+	// 5. 发送
+	response, err := client.SendSms(request)
+	if err != nil {
+		return nil, err
+	}
+
+	// 6. 序列化响应数据用于日志
+	responseData, _ := json.Marshal(response.Response)
+
+	// 7. 解析响应
+	results := make([]*domain.SendResponse, 0, len(response.Response.SendStatusSet))
+	for i, status := range response.Response.SendStatusSet {
+		taskID := ""
+		if i < len(req.Tasks) {
+			taskID = req.Tasks[i].TaskID
+		}
+
+		if *status.Code == "Ok" {
+			results = append(results, &domain.SendResponse{
+				Success:      true,
+				ProviderID:   *status.SerialNo,
+				TaskID:       taskID,
+				Status:       constants.TaskStatusSent, // 已发送，等待回调
+				RequestData:  string(requestData),
+				ResponseData: string(responseData),
+			})
+		} else {
+			results = append(results, &domain.SendResponse{
+				Success:      false,
+				ErrorCode:    *status.Code,
+				ErrorMessage: *status.Message,
+				TaskID:       taskID,
+				RequestData:  string(requestData),
+				ResponseData: string(responseData),
+			})
+		}
+	}
+
+	return &domain.BatchSendResponse{Results: results}, nil
+}
+
+// ==================== StatusQuerier 接口实现 ====================
+
+// SupportsStatusQuery 是否支持状态查询
+func (s *TencentSMSSender) SupportsStatusQuery() bool {
+	return true
+}
+
+// QueryStatus 查询短信发送状态
+// 使用腾讯云 PullSmsSendStatusByPhoneNumber API
+func (s *TencentSMSSender) QueryStatus(ctx context.Context, req *domain.StatusQueryRequest) (*domain.StatusQueryResponse, error) {
+	// 1. 获取配置
+	config, err := req.ProviderAccount.GetConfig()
+	if err != nil {
+		return nil, fmt.Errorf("invalid provider config: %w", err)
+	}
+
+	secretId, _ := config["secret_id"].(string)
+	secretKey, _ := config["secret_key"].(string)
+	region, _ := config["region"].(string)
+	sdkAppId, _ := config["sdk_app_id"].(string)
+
+	if secretId == "" || secretKey == "" || sdkAppId == "" {
+		return nil, fmt.Errorf("missing tencent sms config: secret_id, secret_key or sdk_app_id")
+	}
+	if region == "" {
+		region = "ap-guangzhou"
+	}
+
+	// 2. 初始化客户端
+	credential := common.NewCredential(secretId, secretKey)
+	cpf := profile.NewClientProfile()
+	cpf.HttpProfile.Endpoint = "sms.tencentcloudapi.com"
+	client, _ := sms.NewClient(credential, region, cpf)
+
+	// 3. 构造查询请求
+	// 腾讯云按手机号拉取状态，需要指定时间范围
+	request := sms.NewPullSmsSendStatusByPhoneNumberRequest()
+	request.SmsSdkAppId = common.StringPtr(sdkAppId)
+	request.PhoneNumber = common.StringPtr(req.PhoneNumber)
+
+	// 设置时间范围：发送日期的开始和结束时间戳
+	beginTime := req.SendDate.Unix()
+	endTime := req.SendDate.Add(24 * time.Hour).Unix()
+	request.BeginTime = common.Uint64Ptr(uint64(beginTime))
+	request.EndTime = common.Uint64Ptr(uint64(endTime))
+	request.Offset = common.Uint64Ptr(0)
+	request.Limit = common.Uint64Ptr(100)
+
+	// 4. 发送查询请求
+	response, err := client.PullSmsSendStatusByPhoneNumber(request)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query send status: %w", err)
+	}
+
+	// 5. 转换结果
+	results := make([]*domain.StatusQueryResult, 0)
+	if response.Response != nil && response.Response.PullSmsSendStatusSet != nil {
+		for _, detail := range response.Response.PullSmsSendStatusSet {
+			status := constants.CallbackStatusFailed
+			if detail.ReportStatus != nil && *detail.ReportStatus == "SUCCESS" {
+				status = constants.CallbackStatusDelivered
+			}
+
+			// 获取 SerialNo
+			serialNo := ""
+			if detail.SerialNo != nil {
+				serialNo = *detail.SerialNo
+			}
+
+			// 如果指定了 ProviderMsgID，只返回匹配的记录
+			if req.ProviderMsgID != "" && serialNo != req.ProviderMsgID {
+				continue
+			}
+
+			// 获取接收时间
+			var reportTime time.Time
+			if detail.UserReceiveTime != nil {
+				reportTime = time.Unix(int64(*detail.UserReceiveTime), 0)
+			}
+
+			// 获取手机号
+			phoneNumber := ""
+			if detail.PhoneNumber != nil {
+				phoneNumber = *detail.PhoneNumber
+			}
+
+			// 获取描述信息
+			description := ""
+			if detail.Description != nil {
+				description = *detail.Description
+			}
+
+			results = append(results, &domain.StatusQueryResult{
+				ProviderMsgID: serialNo,
+				PhoneNumber:   phoneNumber,
+				Status:        status,
+				ErrorCode:     "",
+				ErrorMessage:  description,
+				ReportTime:    reportTime,
+			})
+		}
+	}
+
+	return &domain.StatusQueryResponse{Results: results}, nil
+}
+
+// ==================== CallbackHandler 接口实现 ====================
+
+// SupportsCallback 是否支持回调
+func (s *TencentSMSSender) SupportsCallback() bool {
+	return true
+}
+
+// HandleCallback 处理腾讯云短信回调
+// 腾讯云短信状态报告格式：
+// [{"user_receive_time":"2015-10-17 08:03:04","nationcode":"86","mobile":"13xxxxxxxxx","report_status":"SUCCESS","errmsg":"DELIVRD","description":"用户短信送达成功","sid":"xxxxxxx"}]
+func (s *TencentSMSSender) HandleCallback(ctx context.Context, req *domain.CallbackRequest) (domain.CallbackResponse, []*domain.CallbackResult, error) {
+	// 默认响应（腾讯云期望返回 {"result": 0, "errmsg": "OK"}）
+	resp := domain.CallbackResponse{
+		StatusCode: 200,
+		Body:       `{"result":0,"errmsg":"OK"}`,
+	}
+
+	// 解析回调数据
+	var reports []struct {
+		UserReceiveTime string `json:"user_receive_time"`
+		NationCode      string `json:"nationcode"`
+		Mobile          string `json:"mobile"`
+		ReportStatus    string `json:"report_status"`
+		ErrMsg          string `json:"errmsg"`
+		Description     string `json:"description"`
+		Sid             string `json:"sid"`
+	}
+
+	if err := json.Unmarshal(req.RawBody, &reports); err != nil {
+		// 即使解析失败也返回成功响应，避免服务商重复推送
+		return resp, nil, fmt.Errorf("invalid callback data: %w", err)
+	}
+
+	results := make([]*domain.CallbackResult, 0, len(reports))
+	for _, report := range reports {
+		status := constants.CallbackStatusDelivered
+		if report.ReportStatus != "SUCCESS" {
+			status = constants.CallbackStatusFailed
+		}
+
+		reportTime, _ := time.ParseInLocation("2006-01-02 15:04:05", report.UserReceiveTime, time.Local)
+
+		results = append(results, &domain.CallbackResult{
+			ProviderID:   report.Sid,
+			Status:       status,
+			ErrorCode:    report.ErrMsg,
+			ErrorMessage: report.Description,
+			ReportTime:   reportTime,
+		})
+	}
+
+	return resp, results, nil
+}

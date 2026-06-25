@@ -1,19 +1,16 @@
 package autoload
 
-import (
-	envInterface "cnb.cool/mliev/push/message-push/internal/interfaces"
-	"github.com/muleiwu/gsr"
-)
+import "cnb.cool/mliev/open/go-web/pkg/helper"
 
 type Redis struct {
-	env gsr.Enver
 }
 
-func (receiver Redis) InitConfig(helper envInterface.HelperInterface) map[string]any {
+func (receiver Redis) InitConfig() map[string]any {
+	env := helper.GetEnv()
 	return map[string]any{
-		"redis.host":     helper.GetEnv().GetString("redis.host", "localhost"),
-		"redis.port":     helper.GetEnv().GetInt("redis.port", 6379),
-		"redis.password": helper.GetEnv().GetString("redis.password", ""),
-		"redis.db":       helper.GetEnv().GetInt("redis.db", 0),
+		"redis.host":     env.GetString("redis.host", "localhost"),
+		"redis.port":     env.GetInt("redis.port", 6379),
+		"redis.password": env.GetString("redis.password", ""),
+		"redis.db":       env.GetInt("redis.db", 0),
 	}
 }

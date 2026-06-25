@@ -1,8 +1,8 @@
 package config
 
 import (
+	"cnb.cool/mliev/open/go-web/pkg/interfaces"
 	"cnb.cool/mliev/push/message-push/config/autoload"
-	"cnb.cool/mliev/push/message-push/internal/interfaces"
 )
 
 type Config struct {
@@ -16,6 +16,7 @@ func (receiver Config) Get() []interfaces.InitConfig {
 		autoload.StaticFs{},
 		autoload.Database{},
 		autoload.Redis{},
+		autoload.Migration{},
 		autoload.Middleware{},
 		autoload.Router{},
 	}
