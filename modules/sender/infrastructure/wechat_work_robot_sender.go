@@ -93,11 +93,16 @@ func (s *WeChatWorkRobotSender) Send(ctx context.Context, req *domain.SendReques
 	// 构造消息体
 	var payload map[string]interface{}
 	if msgType == "markdown" {
-		// Markdown 类型不支持 mentioned_list，如需 @ 请在内容中使用 <@userid>
+		// Markdown 类型不支持 mentioned_list，@ 提醒需在正文中使用 <@userid> 语法，
+		// 这里将接收者解析为 @ 前缀拼接到内容最前面。
+		markdownContent := content
+		if prefix := buildWeChatRobotMarkdownMentions(req.Task.Receiver); prefix != "" {
+			markdownContent = prefix + markdownContent
+		}
 		payload = map[string]interface{}{
 			"msgtype": "markdown",
 			"markdown": map[string]string{
-				"content": content,
+				"content": markdownContent,
 			},
 		}
 	} else {
@@ -186,6 +191,37 @@ func parseWeChatRobotMentions(receiver string) (mentionedList, mentionedMobileLi
 		}
 	}
 	return mentionedList, mentionedMobileList
+}
+
+// buildWeChatRobotMarkdownMentions 将接收者解析为企业微信 markdown 的 @ 语法前缀。
+// 企业微信 markdown 不支持 mentioned_list，只能在正文中使用 <@userid> 提醒成员；
+// @all/all 提醒所有人。注意：markdown 的 @ 仅支持 userid，手机号无法被解析为群成员，
+// 如需按手机号 @，请改用 text 消息格式。
+func buildWeChatRobotMarkdownMentions(receiver string) string {
+	if receiver == "" {
+		return ""
+	}
+	var mentions []string
+	for _, raw := range strings.Split(receiver, ",") {
+		item := strings.TrimSpace(raw)
+		if item == "" {
+			continue
+		}
+		if strings.EqualFold(item, "@all") || strings.EqualFold(item, "all") {
+			mentions = append(mentions, "<@all>")
+			continue
+		}
+		// markdown 的 @ 仅支持 userid，纯手机号无法解析为群成员，直接跳过避免渲染成无效字面文本
+		if isAllDigits(item) {
+			continue
+		}
+		mentions = append(mentions, "<@"+item+">")
+	}
+	if len(mentions) == 0 {
+		return ""
+	}
+	// 末尾加换行，让 @ 提醒独占一行，正文从下一行开始
+	return strings.Join(mentions, " ") + "\n"
 }
 
 func isAllDigits(s string) bool {
