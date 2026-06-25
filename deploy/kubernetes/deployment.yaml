@@ -26,6 +26,22 @@ spec:
           name: http
           protocol: TCP
         env:
+        # 安装标识：设为 "true" 跳过 Web 安装向导，启动时自动执行数据库迁移(建表)、
+        # 启动 worker/scheduler，并屏蔽 /api/install/* 接口。
+        - name: APP_INSTALLED
+          value: "true"
+        # 初始管理员引导：当 admin_users 表为空时，用以下凭据幂等创建初始管理员；
+        # 已存在任意管理员则自动跳过。仅在 APP_INSTALLED=true 时生效。
+        - name: ADMIN_USERNAME
+          valueFrom:
+            configMapKeyRef:
+              name: message-push-config
+              key: admin-username
+        - name: ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: message-push-secret
+              key: admin-password
         - name: APP_ENCRYPTION_KEY
           valueFrom:
             secretKeyRef:
@@ -136,6 +152,7 @@ data:
   mysql-database: "push_service"
   redis-host: "redis-service"
   redis-port: "6379"
+  admin-username: "admin"  # 初始管理员用户名
   config.yaml: |
     database:
       host: ${MYSQL_HOST}
@@ -175,6 +192,7 @@ stringData:
   mysql-username: "root"
   mysql-password: "your_password"  # 必须修改
   redis-password: ""  # 如果Redis有密码，在此设置
+  admin-password: "change_me_on_first_deploy"  # 初始管理员密码，必须修改
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
