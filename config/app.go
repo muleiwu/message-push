@@ -10,6 +10,7 @@ import (
 	loggerAssembly "cnb.cool/mliev/open/go-web/pkg/server/logger/assembly"
 	redisAssembly "cnb.cool/mliev/open/go-web/pkg/server/redis/assembly"
 	"cnb.cool/mliev/push/message-push/migration"
+	identityServer "cnb.cool/mliev/push/message-push/modules/identity/server"
 )
 
 // App 是 message-push 的 AppProvider 实现，声明 Assembly 与 Server 链。
@@ -32,10 +33,11 @@ func (a App) Assemblies() []interfaces.AssemblyInterface {
 	return base
 }
 
-// Servers 返回 Server 链（迁移 → worker/调度器 → HTTP 服务）。
+// Servers 返回 Server 链（迁移 → 初始管理员引导 → worker/调度器 → HTTP 服务）。
 func (a App) Servers() []interfaces.ServerInterface {
 	servers := []interfaces.ServerInterface{
 		&migration.Server{},
+		identityServer.NewBootstrapAdminServer(),
 	}
 	servers = append(servers, pushServers()...)
 	servers = append(servers, &httpService.HttpServer{})
