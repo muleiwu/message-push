@@ -42,7 +42,7 @@ func init() {
 		Code:        constants.ProviderNeteaseSMS,
 		Name:        "网易云信短信",
 		Type:        constants.MessageTypeSMS,
-		Description: "网易云信短信服务，支持模板短信与验证码短信发送、回执抄送。注意：短信签名已内嵌在已审核的模板内容中，无需在「签名管理」中单独配置",
+		Description: "网易云信短信服务，支持通知短信与验证码短信发送、回执抄送。注意：短信签名已内嵌在已审核的模板内容中，无需在「签名管理」中单独配置",
 		ConfigFields: []domain.ConfigField{
 			{
 				Key:         "app_key",
@@ -67,12 +67,12 @@ func init() {
 			{
 				Key:          "send_type",
 				Label:        "发送类型",
-				Description:  "选择短信发送接口：模板短信走 sendtemplate.action；验证码短信走 sendcode.action（验证码类模板必须选「验证码短信」，否则会报 template id not exist）",
+				Description:  "选择短信类型：通知短信走 sendtemplate.action；验证码短信走 sendcode.action（验证码类模板必须选「验证码短信」，否则会报 template id not exist）",
 				Type:         domain.FieldTypeSelect,
 				Required:     false,
 				DefaultValue: neteaseSendTypeTemplate,
 				Options: []domain.FieldOption{
-					{Value: neteaseSendTypeTemplate, Label: "模板短信"},
+					{Value: neteaseSendTypeTemplate, Label: "通知短信"},
 					{Value: neteaseSendTypeCode, Label: "验证码短信"},
 				},
 			},
