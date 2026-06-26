@@ -167,6 +167,41 @@ func TestNeteaseSendCode(t *testing.T) {
 	})
 }
 
+func TestNeteaseBatchSendSharesRealSendID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":200,"msg":"ok","obj":1490}`))
+	}))
+	defer srv.Close()
+
+	old := neteaseSendTemplateURL
+	neteaseSendTemplateURL = srv.URL
+	defer func() { neteaseSendTemplateURL = old }()
+
+	s := NewNeteaseSMSSender()
+	req := &domain.BatchSendRequest{
+		ProviderAccount: &model.ProviderAccount{Config: `{"app_key":"ak","app_secret":"sk"}`},
+		Tasks: []*model.PushTask{
+			{TaskID: "t1", Receiver: "13800000001", TemplateCode: "27194667"},
+			{TaskID: "t2", Receiver: "13800000002", TemplateCode: "27194667"},
+		},
+	}
+
+	resp, err := s.BatchSend(context.Background(), req)
+	if err != nil {
+		t.Fatalf("BatchSend error: %v", err)
+	}
+	if len(resp.Results) != 2 {
+		t.Fatalf("results len = %d, want 2", len(resp.Results))
+	}
+	// 整批共用同一真实 sendid，不再带 _0/_1 后缀（否则回执无法关联）
+	for i, r := range resp.Results {
+		if r.ProviderID != "1490" {
+			t.Errorf("results[%d].ProviderID = %q, want 1490 (real shared sendid, no suffix)", i, r.ProviderID)
+		}
+	}
+}
+
 func TestNeteaseHandleCallback(t *testing.T) {
 	s := NewNeteaseSMSSender()
 
@@ -188,19 +223,31 @@ func TestNeteaseHandleCallback(t *testing.T) {
 		if results[0].ProviderID != "1490" || results[0].Status != constants.CallbackStatusDelivered {
 			t.Errorf("result[0] = %+v, want delivered 1490", results[0])
 		}
+		if results[0].Type != constants.CallbackTypeReport || results[0].Mobile != "13800000000" {
+			t.Errorf("result[0] = %+v, want report type with mobile", results[0])
+		}
 		if results[1].Status != constants.CallbackStatusFailed || results[1].ErrorMessage != "空号" {
 			t.Errorf("result[1] = %+v, want failed with reason", results[1])
 		}
 	})
 
-	t.Run("uplink message ignored", func(t *testing.T) {
-		body := `{"eventType":"12","objects":[{"mobile":"13800000000","sendid":"1"}]}`
+	t.Run("uplink message parsed as upstream", func(t *testing.T) {
+		body := `{"eventType":"12","objects":[{"mobile":"13800000000","content":"TD","receiveTime":"2017-06-06 10:40:30"}]}`
 		_, results, err := s.HandleCallback(context.Background(), &domain.CallbackRequest{RawBody: []byte(body)})
 		if err != nil {
 			t.Fatalf("HandleCallback error: %v", err)
 		}
-		if len(results) != 0 {
-			t.Errorf("uplink results len = %d, want 0", len(results))
+		if len(results) != 1 {
+			t.Fatalf("uplink results len = %d, want 1", len(results))
+		}
+		if results[0].Type != constants.CallbackTypeUpstream {
+			t.Errorf("type = %q, want upstream", results[0].Type)
+		}
+		if results[0].Mobile != "13800000000" || results[0].Content != "TD" {
+			t.Errorf("result = %+v, want mobile 13800000000 content TD", results[0])
+		}
+		if results[0].ReceiveTime.IsZero() {
+			t.Error("receiveTime should be parsed")
 		}
 	})
 

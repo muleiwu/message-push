@@ -429,8 +429,10 @@ func (s *NeteaseSMSSender) batchSendChunk(ctx context.Context, appKey, appSecret
 			}
 		case sendID != "":
 			results[i] = &domain.SendResponse{
-				Success:      true,
-				ProviderID:   fmt.Sprintf("%s_%d", sendID, i), // 整批共用一个 sendid，为每条生成唯一标识
+				Success: true,
+				// 整批共用同一个真实 sendid（provider_msg_id 非唯一索引，允许重复）。
+				// 回执抄送携带原始 sendid + mobile，由回调服务按 (provider_msg_id + 接收方手机号) 关联到具体任务。
+				ProviderID:   sendID,
 				TaskID:       task.TaskID,
 				Status:       constants.TaskStatusSent,
 				RequestData:  string(requestData),
@@ -469,7 +471,11 @@ func (s *NeteaseSMSSender) SupportsCallback() bool {
 //	{"eventType":"11","objects":[{"mobile":"...","sendid":"1490","result":"DELIVRD",
 //	 "sendTime":"...","reportTime":"...","spliced":"1","templateId":1234,"reason":"..."}]}
 //
-// eventType=12 为上行短信（用户回复），非投递回执，直接忽略。
+// 上行短信 body（eventType=12，用户回复）：
+//
+//	{"eventType":"12","objects":[{"mobile":"...","content":"用户回复内容","receiveTime":"..."}]}
+//
+// 其它 eventType 暂不处理。
 func (s *NeteaseSMSSender) HandleCallback(ctx context.Context, req *domain.CallbackRequest) (domain.CallbackResponse, []*domain.CallbackResult, error) {
 	// 网易仅要求返回 HTTP 200
 	resp := domain.CallbackResponse{
@@ -480,12 +486,14 @@ func (s *NeteaseSMSSender) HandleCallback(ctx context.Context, req *domain.Callb
 	var payload struct {
 		EventType string `json:"eventType"`
 		Objects   []struct {
-			Mobile     string `json:"mobile"`
-			Sendid     string `json:"sendid"`
-			Result     string `json:"result"`
-			SendTime   string `json:"sendTime"`
-			ReportTime string `json:"reportTime"`
-			Reason     string `json:"reason"`
+			Mobile      string `json:"mobile"`
+			Sendid      string `json:"sendid"`
+			Result      string `json:"result"`
+			SendTime    string `json:"sendTime"`
+			ReportTime  string `json:"reportTime"`
+			Reason      string `json:"reason"`
+			Content     string `json:"content"`     // 上行：用户回复内容
+			ReceiveTime string `json:"receiveTime"` // 上行：用户回复时间
 		} `json:"objects"`
 	}
 
@@ -493,30 +501,51 @@ func (s *NeteaseSMSSender) HandleCallback(ctx context.Context, req *domain.Callb
 		return resp, nil, fmt.Errorf("failed to parse netease callback: %w, body: %s", err, string(req.RawBody))
 	}
 
-	// 仅处理下行投递回执
-	if payload.EventType != "11" {
+	switch payload.EventType {
+	case "11":
+		// 下行投递回执
+		results := make([]*domain.CallbackResult, 0, len(payload.Objects))
+		for _, obj := range payload.Objects {
+			if obj.Sendid == "" {
+				continue
+			}
+			status := constants.CallbackStatusDelivered
+			if obj.Result != "DELIVRD" {
+				status = constants.CallbackStatusFailed
+			}
+			reportTime, _ := time.ParseInLocation("2006-01-02 15:04:05", obj.ReportTime, time.Local)
+
+			results = append(results, &domain.CallbackResult{
+				Type:         constants.CallbackTypeReport,
+				ProviderID:   obj.Sendid,
+				Status:       status,
+				ErrorCode:    obj.Result,
+				ErrorMessage: obj.Reason,
+				ReportTime:   reportTime,
+				Mobile:       obj.Mobile, // 批量回执按 (sendid + mobile) 关联到具体任务
+			})
+		}
+		return resp, results, nil
+
+	case "12":
+		// 上行短信（用户回复）
+		results := make([]*domain.CallbackResult, 0, len(payload.Objects))
+		for _, obj := range payload.Objects {
+			if obj.Mobile == "" {
+				continue
+			}
+			receiveTime, _ := time.ParseInLocation("2006-01-02 15:04:05", obj.ReceiveTime, time.Local)
+			results = append(results, &domain.CallbackResult{
+				Type:        constants.CallbackTypeUpstream,
+				Mobile:      obj.Mobile,
+				Content:     obj.Content,
+				ReceiveTime: receiveTime,
+			})
+		}
+		return resp, results, nil
+
+	default:
+		// 其它事件类型暂不处理
 		return resp, nil, nil
 	}
-
-	results := make([]*domain.CallbackResult, 0, len(payload.Objects))
-	for _, obj := range payload.Objects {
-		if obj.Sendid == "" {
-			continue
-		}
-		status := constants.CallbackStatusDelivered
-		if obj.Result != "DELIVRD" {
-			status = constants.CallbackStatusFailed
-		}
-		reportTime, _ := time.ParseInLocation("2006-01-02 15:04:05", obj.ReportTime, time.Local)
-
-		results = append(results, &domain.CallbackResult{
-			ProviderID:   obj.Sendid,
-			Status:       status,
-			ErrorCode:    obj.Result,
-			ErrorMessage: obj.Reason,
-			ReportTime:   reportTime,
-		})
-	}
-
-	return resp, results, nil
 }

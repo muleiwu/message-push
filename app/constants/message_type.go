@@ -51,3 +51,11 @@ const (
 	CallbackStatusRejected  = "rejected"  // 被拒绝
 	CallbackStatusTimeout   = "timeout"   // 回调超时
 )
+
+// 服务商回调类型常量
+// report   = 下行投递回执（短信是否到达用户）
+// upstream = 上行短信（终端用户回复的短信内容）
+const (
+	CallbackTypeReport   = "report"   // 下行投递回执（默认）
+	CallbackTypeUpstream = "upstream" // 上行短信（用户回复）
+)

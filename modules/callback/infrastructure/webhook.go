@@ -13,6 +13,7 @@ import (
 	"time"
 
 	internalHelper "cnb.cool/mliev/open/go-web/pkg/helper"
+	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/modules/sender"
@@ -82,6 +83,41 @@ func (s *WebhookService) NotifyStatusChange(ctx context.Context, task *model.Pus
 		Extra: map[string]interface{}{
 			"provider_id": result.ProviderID,
 			"report_time": result.ReportTime.Format(time.RFC3339),
+		},
+	}
+
+	// 4. 发送 Webhook 请求
+	return s.sendWebhook(ctx, config, payload)
+}
+
+// NotifyUpstreamSMS 通知上行短信（用户回复）
+// 事件类型固定为 "upstream"，应用需在订阅事件中包含 upstream 才会收到。
+func (s *WebhookService) NotifyUpstreamSMS(ctx context.Context, appID, mobile, content, providerCode string, receiveTime time.Time) error {
+	// 1. 获取应用的 Webhook 配置
+	config, err := s.webhookConfigDao.GetEnabledByAppID(appID)
+	if err != nil {
+		s.logger.Debug(fmt.Sprintf("no webhook config for app_id=%s", appID))
+		return nil
+	}
+
+	// 2. 检查是否订阅 upstream 事件
+	const event = constants.CallbackTypeUpstream
+	if !config.ShouldNotify(event) {
+		s.logger.Debug(fmt.Sprintf("event %s not subscribed for app_id=%s", event, appID))
+		return nil
+	}
+
+	// 3. 构造 Webhook 数据
+	payload := &WebhookPayload{
+		Event:     event,
+		AppID:     appID,
+		Receiver:  mobile,
+		Timestamp: time.Now().Unix(),
+		Extra: map[string]interface{}{
+			"mobile":        mobile,
+			"content":       content,
+			"provider_code": providerCode,
+			"receive_time":  receiveTime.Format(time.RFC3339),
 		},
 	}
 

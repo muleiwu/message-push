@@ -65,6 +65,22 @@ func (d *PushLogDAO) GetByProviderMsgID(providerMsgID string) (*model.PushLog, e
 	return &log, nil
 }
 
+// GetByProviderMsgIDAndReceiver 根据服务商消息ID + 接收方手机号获取日志
+// 批量发送时整批共用同一个 provider_msg_id（非唯一），需结合回执携带的手机号定位到具体任务。
+// 通过 push_tasks.receiver 关联，取最新一条匹配的发送日志。
+func (d *PushLogDAO) GetByProviderMsgIDAndReceiver(providerMsgID, receiver string) (*model.PushLog, error) {
+	var log model.PushLog
+	err := d.db.
+		Joins("JOIN push_tasks ON push_tasks.task_id = push_logs.task_id").
+		Where("push_logs.provider_msg_id = ? AND push_tasks.receiver = ?", providerMsgID, receiver).
+		Order("push_logs.id DESC").
+		First(&log).Error
+	if err != nil {
+		return nil, err
+	}
+	return &log, nil
+}
+
 // List 获取日志列表（支持筛选）
 func (d *PushLogDAO) List(req *dto.LogListRequest) ([]*model.PushLog, int64, error) {
 	var logs []*model.PushLog
