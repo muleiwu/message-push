@@ -128,6 +128,22 @@ func (s *CallbackService) processCallbackResult(ctx context.Context, providerCod
 		RawData:        rawData,
 	})
 
+	// 2.5 回写供应商发送记录（push_logs）的最终投递状态
+	// push_log 代表本次向某服务商的发送记录，回执到达后同步更新为 success/failed
+	var logStatus string
+	switch result.Status {
+	case "delivered":
+		logStatus = constants.TaskStatusSuccess
+	case "failed", "rejected":
+		logStatus = constants.TaskStatusFailed
+	}
+	if logStatus != "" && pushLog.Status != logStatus {
+		if err := s.logDao.UpdateStatus(pushLog.ID, logStatus, result.ErrorMessage); err != nil {
+			// 不阻断后续任务状态更新，仅记录错误
+			s.logger.Error(fmt.Sprintf("failed to update push_log status id=%d: %v", pushLog.ID, err))
+		}
+	}
+
 	// 3. 更新任务状态
 	oldStatus := task.Status
 

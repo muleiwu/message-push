@@ -45,6 +45,16 @@ func (d *PushLogDAO) GetByID(id uint) (*model.PushLog, error) {
 	return &log, nil
 }
 
+// UpdateStatus 根据ID更新日志状态与错误信息
+// 用于回执回调回写供应商发送记录的最终投递结果（success/failed）
+func (d *PushLogDAO) UpdateStatus(id uint, status, errorMessage string) error {
+	updates := map[string]interface{}{"status": status}
+	if errorMessage != "" {
+		updates["error_message"] = errorMessage
+	}
+	return d.db.Model(&model.PushLog{}).Where("id = ?", id).Updates(updates).Error
+}
+
 // GetByProviderMsgID 根据服务商消息ID获取日志
 func (d *PushLogDAO) GetByProviderMsgID(providerMsgID string) (*model.PushLog, error) {
 	var log model.PushLog
