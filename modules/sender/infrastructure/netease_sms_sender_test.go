@@ -4,10 +4,14 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/hex"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"reflect"
 	"testing"
 
 	"cnb.cool/mliev/push/message-push/app/constants"
+	"cnb.cool/mliev/push/message-push/app/model"
 	domain "cnb.cool/mliev/push/message-push/modules/sender/domain"
 )
 
@@ -79,6 +83,88 @@ func TestBuildParamsFromMapping(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNeteaseSendCode(t *testing.T) {
+	t.Run("success builds sendcode request and parses sendid", func(t *testing.T) {
+		var gotForm url.Values
+		var gotHeaders http.Header
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_ = r.ParseForm()
+			gotForm = r.PostForm
+			gotHeaders = r.Header
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"code":200,"msg":"ok","obj":3996793}`))
+		}))
+		defer srv.Close()
+
+		old := neteaseSendCodeURL
+		neteaseSendCodeURL = srv.URL
+		defer func() { neteaseSendCodeURL = old }()
+
+		s := NewNeteaseSMSSender()
+		task := &model.PushTask{TaskID: "t1", Receiver: "18355190731"}
+		resp := s.sendCodeOne(context.Background(), "ak", "sk", "27194667", task, map[string]string{"code": "123214"})
+
+		if !resp.Success {
+			t.Fatalf("expected success, got %+v", resp)
+		}
+		if resp.ProviderID != "3996793" {
+			t.Errorf("ProviderID = %q, want 3996793", resp.ProviderID)
+		}
+		if resp.Status != constants.TaskStatusSent {
+			t.Errorf("Status = %q, want %q", resp.Status, constants.TaskStatusSent)
+		}
+
+		// 验证码接口为单手机号 + paramMap 对象
+		if gotForm.Get("mobile") != "18355190731" {
+			t.Errorf("mobile = %q, want 18355190731", gotForm.Get("mobile"))
+		}
+		if gotForm.Get("templateid") != "27194667" {
+			t.Errorf("templateid = %q, want 27194667", gotForm.Get("templateid"))
+		}
+		if gotForm.Get("paramMap") != `{"code":"123214"}` {
+			t.Errorf("paramMap = %q, want {\"code\":\"123214\"}", gotForm.Get("paramMap"))
+		}
+		// 不应携带模板短信的数组参数
+		if gotForm.Has("mobiles") || gotForm.Has("params") {
+			t.Errorf("sendcode request must not contain mobiles/params arrays: %v", gotForm)
+		}
+		// 鉴权头齐全
+		if gotHeaders.Get("AppKey") != "ak" || gotHeaders.Get("CheckSum") == "" ||
+			gotHeaders.Get("Nonce") == "" || gotHeaders.Get("CurTime") == "" {
+			t.Errorf("missing auth headers: %v", gotHeaders)
+		}
+	})
+
+	t.Run("business error 404 template id not exist", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"code":404,"msg":"template id not exist"}`))
+		}))
+		defer srv.Close()
+
+		old := neteaseSendCodeURL
+		neteaseSendCodeURL = srv.URL
+		defer func() { neteaseSendCodeURL = old }()
+
+		s := NewNeteaseSMSSender()
+		task := &model.PushTask{TaskID: "t2", Receiver: "18355190731"}
+		resp := s.sendCodeOne(context.Background(), "ak", "sk", "999", task, map[string]string{"code": "1"})
+
+		if resp.Success {
+			t.Fatalf("expected failure, got success: %+v", resp)
+		}
+		if resp.ErrorCode != "404" {
+			t.Errorf("ErrorCode = %q, want 404", resp.ErrorCode)
+		}
+		if resp.ErrorMessage != "template id not exist" {
+			t.Errorf("ErrorMessage = %q, want 'template id not exist'", resp.ErrorMessage)
+		}
+		if resp.ProviderID != "" {
+			t.Errorf("ProviderID = %q, want empty on failure", resp.ProviderID)
+		}
+	})
 }
 
 func TestNeteaseHandleCallback(t *testing.T) {
