@@ -15,10 +15,10 @@ type ProviderAccount struct {
 	ProviderCode string         `gorm:"type:varchar(50);not null;index:idx_provider_type;comment:服务商代码：aliyun_sms, tencent_sms, smtp等" json:"provider_code"`
 	ProviderType string         `gorm:"type:varchar(20);not null;index:idx_provider_type;comment:消息类型：sms, email, wechat_work, dingtalk, webhook, push" json:"provider_type"`
 	Config       string         `gorm:"type:json;not null;comment:服务商配置（API Key、Secret等）" json:"config"`
-	Status       int8           `gorm:"type:tinyint;default:1;index:idx_status;comment:状态：1=启用 0=禁用" json:"status"`
+	Status       int8           `gorm:"default:1;index:idx_status;comment:状态：1=启用 0=禁用" json:"status"`
 	Remark       string         `gorm:"type:text;comment:备注说明" json:"remark"`
 	CreatedAt    time.Time      `gorm:"type:timestamp;default:CURRENT_TIMESTAMP" json:"created_at"`
-	UpdatedAt    time.Time      `gorm:"type:timestamp;default:CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" json:"updated_at"`
+	UpdatedAt    time.Time      `gorm:"type:timestamp;default:CURRENT_TIMESTAMP" json:"updated_at"`
 	DeletedAt    gorm.DeletedAt `gorm:"index" json:"deleted_at"`
 }
 

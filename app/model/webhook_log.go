@@ -9,7 +9,7 @@ type WebhookLog struct {
 	ID              uint      `gorm:"primaryKey;autoIncrement" json:"id"`
 	TaskID          string    `gorm:"type:varchar(36);index:idx_task_id;comment:任务ID" json:"task_id"`
 	AppID           string    `gorm:"type:varchar(32);not null;index:idx_app_id;comment:应用ID" json:"app_id"`
-	WebhookConfigID uint      `gorm:"type:bigint unsigned;index:idx_webhook_config;comment:Webhook配置ID" json:"webhook_config_id"`
+	WebhookConfigID uint      `gorm:"index:idx_webhook_config;comment:Webhook配置ID" json:"webhook_config_id"`
 	WebhookURL      string    `gorm:"type:varchar(500);not null;comment:Webhook地址" json:"webhook_url"`
 	Event           string    `gorm:"type:varchar(20);not null;comment:事件类型" json:"event"`
 	RequestData     string    `gorm:"type:json;comment:请求数据" json:"request_data"`

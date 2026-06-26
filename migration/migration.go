@@ -1,7 +1,7 @@
 // Package migration 提供基于 goose 的版本化数据库迁移能力，以及 go-web ServerInterface 实现。
 //
-// 迁移文件为 Go 代码（migrations 包，通过 init() 注册到 goose 全局注册表），
-// 其中 initial_schema 通过 migrations.SetExternalDB 注入的 GORM 连接执行 AutoMigrate。
+// 迁移文件为按数据库方言分目录的 SQL 文件（内嵌于 migrations 包的 embed.FS），
+// 运行时根据 database.driver 选择 mysql/pgsql/sqlite 子目录执行。
 package migration
 
 import (
@@ -9,11 +9,9 @@ import (
 	"fmt"
 
 	"cnb.cool/mliev/open/go-web/pkg/helper"
-	// 导入迁移文件以触发 init() 注册
 	"cnb.cool/mliev/push/message-push/migrations"
 	"github.com/muleiwu/gsr"
 	"github.com/pressly/goose/v3"
-	"gorm.io/gorm"
 )
 
 // Logger 定义迁移过程使用的日志接口。
@@ -39,30 +37,21 @@ func (l *gsrLoggerAdapter) Info(msg string)  { l.logger.Info(msg) }
 func (l *gsrLoggerAdapter) Warn(msg string)  { l.logger.Warn(msg) }
 func (l *gsrLoggerAdapter) Error(msg string) { l.logger.Error(msg) }
 
-// RunGooseMigrations 执行 goose 版本化迁移（简单版本，供安装控制器使用）。
-// 安装控制器需要先调用 migrations.SetExternalDB() 设置 GORM 连接。
-// dialect: 数据库方言，如 mysql, postgres, sqlite3。
+// RunGooseMigrations 执行 goose 版本化迁移。
+// dialect: 数据库驱动名称，如 mysql, postgresql, sqlite。
 func RunGooseMigrations(db *sql.DB, dialect string, logger Logger) error {
-	return RunGooseMigrationsWithGorm(db, nil, dialect, logger)
-}
-
-// RunGooseMigrationsWithGorm 执行 goose 版本化迁移（完整版本）。
-// gormDB 用于 initial_schema 迁移中的 AutoMigrate。
-func RunGooseMigrationsWithGorm(db *sql.DB, gormDB *gorm.DB, dialect string, logger Logger) error {
 	if logger == nil {
 		logger = &simpleLogger{}
-	}
-
-	// 如果提供了 GORM DB，设置外部连接供 initial_schema 使用
-	if gormDB != nil {
-		migrations.SetExternalDB(gormDB)
-		defer migrations.ClearExternalDB()
 	}
 
 	gooseDialect := mapDriverToGooseDialect(dialect)
 	if err := goose.SetDialect(gooseDialect); err != nil {
 		return fmt.Errorf("设置 goose 方言失败 (%s -> %s): %w", dialect, gooseDialect, err)
 	}
+
+	// 使用内嵌的 SQL 迁移文件，并选择与方言匹配的子目录
+	goose.SetBaseFS(migrations.FS())
+	dir := migrations.DialectDir(dialect)
 
 	currentVersion, err := goose.GetDBVersion(db)
 	if err != nil {
@@ -74,7 +63,7 @@ func RunGooseMigrationsWithGorm(db *sql.DB, gormDB *gorm.DB, dialect string, log
 
 	// 使用 UpByOne 循环执行，便于逐条记录
 	for {
-		err := goose.UpByOne(db, ".")
+		err := goose.UpByOne(db, dir)
 		if err != nil {
 			if err == goose.ErrNoNextVersion {
 				break
@@ -135,7 +124,7 @@ func (receiver *Server) Run() error {
 
 	dialect := config.GetString("database.driver", "mysql")
 	logger := &gsrLoggerAdapter{helper.GetLogger()}
-	if err := RunGooseMigrationsWithGorm(sqlDB, gormDB, dialect, logger); err != nil {
+	if err := RunGooseMigrations(sqlDB, dialect, logger); err != nil {
 		return fmt.Errorf("[db migration] goose 迁移失败: %w", err)
 	}
 	return nil

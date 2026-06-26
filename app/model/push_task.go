@@ -12,7 +12,7 @@ type PushTask struct {
 	ID                 uint       `gorm:"primaryKey;autoIncrement" json:"id"`
 	TaskID             string     `gorm:"type:varchar(36);uniqueIndex:uk_task_id;not null;comment:任务UUID" json:"task_id"`
 	AppID              string     `gorm:"type:varchar(32);not null;index:idx_app_id_status;comment:应用ID" json:"app_id"`
-	ChannelID          uint       `gorm:"type:bigint unsigned;not null;index:idx_channel;comment:通道ID" json:"channel_id"`
+	ChannelID          uint       `gorm:"not null;index:idx_channel;comment:通道ID" json:"channel_id"`
 	MessageType        string     `gorm:"type:varchar(20);not null;comment:消息类型：sms, email等" json:"message_type"`
 	Receiver           string     `gorm:"type:varchar(100);not null;comment:接收者（手机号/邮箱/UserID等）" json:"receiver"`
 	TemplateCode       string     `gorm:"type:varchar(50);comment:模板代码" json:"template_code"`
@@ -26,7 +26,7 @@ type PushTask struct {
 	ExcludeProviderIDs string     `gorm:"type:json;comment:排除的供应商账号ID列表（规则引擎切换供应商使用）" json:"exclude_provider_ids"`
 	ScheduledAt        *time.Time `gorm:"type:timestamp;index:idx_status_scheduled;comment:定时发送时间" json:"scheduled_at"`
 	CreatedAt          time.Time  `gorm:"type:timestamp;default:CURRENT_TIMESTAMP;index:idx_created_at" json:"created_at"`
-	UpdatedAt          time.Time  `gorm:"type:timestamp;default:CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" json:"updated_at"`
+	UpdatedAt          time.Time  `gorm:"type:timestamp;default:CURRENT_TIMESTAMP" json:"updated_at"`
 	Channel            *Channel   `gorm:"foreignKey:ChannelID;references:ID" json:"channel,omitempty"`
 }
 
