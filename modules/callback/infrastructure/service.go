@@ -70,9 +70,15 @@ func (s *CallbackService) HandleCallback(ctx context.Context, providerCode strin
 		return resp
 	}
 
-	// 3. 更新任务状态
+	// 3. 按类型分流处理：上行短信(用户回复) vs 下行投递回执
 	rawData := buildRawDataJSON(req)
 	for _, result := range results {
+		if result.Type == constants.CallbackTypeUpstream {
+			if err := s.processUpstreamResult(ctx, providerCode, req.ProviderAccountID, result, rawData); err != nil {
+				s.logger.Error(fmt.Sprintf("failed to process upstream sms mobile=%s: %v", result.Mobile, err))
+			}
+			continue
+		}
 		if err := s.processCallbackResult(ctx, providerCode, result, rawData); err != nil {
 			s.logger.Error(fmt.Sprintf("failed to process callback result provider_id=%s: %v", result.ProviderID, err))
 			// 继续处理其他结果
@@ -82,16 +88,68 @@ func (s *CallbackService) HandleCallback(ctx context.Context, providerCode strin
 	return resp
 }
 
+// processUpstreamResult 处理上行短信（用户回复）
+// 上行无 provider_msg_id，按手机号尽力关联到最近一次发往该号码的应用；
+// 关联到应用则转发 Webhook，关联不到仍落库（app_id 为空）。
+func (s *CallbackService) processUpstreamResult(ctx context.Context, providerCode string, _ uint, result *sender.CallbackResult, rawData string) error {
+	// 1. 尽力解析应用（用户回复通常针对最后一条短信）
+	appID, err := s.taskDao.GetLatestReceiverApp(result.Mobile)
+	if err != nil {
+		s.logger.Warn(fmt.Sprintf("failed to resolve app for upstream mobile=%s: %v", result.Mobile, err))
+	}
+
+	receiveTime := result.ReceiveTime
+	if receiveTime.IsZero() {
+		receiveTime = time.Now()
+	}
+
+	// 2. 落库（统一存入 callback_logs，type=upstream）
+	if err := s.callbackLogDao.Create(&model.CallbackLog{
+		Type:         constants.CallbackTypeUpstream,
+		AppID:        appID,
+		ProviderCode: providerCode,
+		Mobile:       result.Mobile,
+		Content:      result.Content,
+		RawData:      rawData,
+		CreatedAt:    receiveTime,
+	}); err != nil {
+		return fmt.Errorf("failed to create upstream callback log: %w", err)
+	}
+
+	s.logger.Info(fmt.Sprintf("upstream sms recorded provider=%s mobile=%s app_id=%s", providerCode, result.Mobile, appID))
+
+	// 3. 关联到应用则转发 Webhook
+	if appID != "" {
+		go func() {
+			if err := s.webhookService.NotifyUpstreamSMS(context.Background(), appID, result.Mobile, result.Content, providerCode, receiveTime); err != nil {
+				s.logger.Error(fmt.Sprintf("failed to notify upstream webhook mobile=%s: %v", result.Mobile, err))
+			}
+		}()
+	}
+
+	return nil
+}
+
 // processCallbackResult 处理单个回调结果
 func (s *CallbackService) processCallbackResult(ctx context.Context, providerCode string, result *sender.CallbackResult, rawData string) error {
-	// 1. 通过 ProviderID 在 push_logs 中查找日志，再关联任务
-	pushLog, err := s.logDao.GetByProviderMsgID(result.ProviderID)
+	// 1. 通过 ProviderID(+手机号) 在 push_logs 中查找日志，再关联任务
+	// 批量发送整批共用同一 provider_msg_id，需结合回执携带的手机号定位到具体任务；
+	// 单发及阿里云/腾讯（消息ID唯一）时手机号仅作冗余安全过滤。
+	var pushLog *model.PushLog
+	var err error
+	if result.Mobile != "" {
+		pushLog, err = s.logDao.GetByProviderMsgIDAndReceiver(result.ProviderID, result.Mobile)
+	} else {
+		pushLog, err = s.logDao.GetByProviderMsgID(result.ProviderID)
+	}
 	if err != nil {
 		// 如果找不到日志，可能是回调延迟或者日志已被清理
 		// 仍然记录回调日志（无任务关联）
 		s.callbackLogDao.Create(&model.CallbackLog{
+			Type:           constants.CallbackTypeReport,
 			ProviderCode:   providerCode,
 			ProviderID:     result.ProviderID,
+			Mobile:         result.Mobile,
 			CallbackStatus: result.Status,
 			ErrorCode:      result.ErrorCode,
 			ErrorMessage:   result.ErrorMessage,
@@ -105,8 +163,10 @@ func (s *CallbackService) processCallbackResult(ctx context.Context, providerCod
 	task, err := s.taskDao.GetByTaskID(pushLog.TaskID)
 	if err != nil {
 		s.callbackLogDao.Create(&model.CallbackLog{
+			Type:           constants.CallbackTypeReport,
 			ProviderCode:   providerCode,
 			ProviderID:     result.ProviderID,
+			Mobile:         result.Mobile,
 			CallbackStatus: result.Status,
 			ErrorCode:      result.ErrorCode,
 			ErrorMessage:   result.ErrorMessage,
@@ -118,15 +178,33 @@ func (s *CallbackService) processCallbackResult(ctx context.Context, providerCod
 
 	// 2. 记录回调日志
 	s.callbackLogDao.Create(&model.CallbackLog{
+		Type:           constants.CallbackTypeReport,
 		TaskID:         task.TaskID,
 		AppID:          task.AppID,
 		ProviderCode:   providerCode,
 		ProviderID:     result.ProviderID,
+		Mobile:         result.Mobile,
 		CallbackStatus: result.Status,
 		ErrorCode:      result.ErrorCode,
 		ErrorMessage:   result.ErrorMessage,
 		RawData:        rawData,
 	})
+
+	// 2.5 回写供应商发送记录（push_logs）的最终投递状态
+	// push_log 代表本次向某服务商的发送记录，回执到达后同步更新为 success/failed
+	var logStatus string
+	switch result.Status {
+	case "delivered":
+		logStatus = constants.TaskStatusSuccess
+	case "failed", "rejected":
+		logStatus = constants.TaskStatusFailed
+	}
+	if logStatus != "" && pushLog.Status != logStatus {
+		if err := s.logDao.UpdateStatus(pushLog.ID, logStatus, result.ErrorMessage); err != nil {
+			// 不阻断后续任务状态更新，仅记录错误
+			s.logger.Error(fmt.Sprintf("failed to update push_log status id=%d: %v", pushLog.ID, err))
+		}
+	}
 
 	// 3. 更新任务状态
 	oldStatus := task.Status

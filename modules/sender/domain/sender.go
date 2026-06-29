@@ -35,6 +35,12 @@ type SendRequest struct {
 	Signature              *model.ProviderSignature      // 签名配置（用于SMS类型）
 	MappedParams           map[string]string             // 映射后的模板参数（供应商变量名到值的映射）
 	RenderedContent        string                        // 供应商模板渲染后的内容
+
+	// 以下字段由 worker 统一解析手机号后填充（仅 SMS 类型有值），供发送器直接按地区判断，避免各自重复解析。
+	PhoneRegion         string // 手机号地区码（如 "CN"）；非手机号/解析失败为空
+	PhoneCountryCode    string // 国家区号（如 "86"）
+	PhoneNationalNumber string // 国内号码（裸号码，如 "13800138000"）
+	PhoneE164           string // E.164 国际电话号码（如 "+8613800138000"）
 }
 
 // SendResponse 发送响应
@@ -90,21 +96,28 @@ type BatchSender interface {
 
 // CallbackRequest 回调请求
 type CallbackRequest struct {
-	ProviderCode string            // 服务商代码
-	RawBody      []byte            // 原始请求体
-	Headers      map[string]string // 请求头（用于签名验证等）
-	QueryParams  map[string]string // URL 查询参数
-	FormData     map[string]string // 表单数据（用于 form-data 请求）
+	ProviderCode      string            // 服务商代码
+	ProviderAccountID uint              // 服务商账号ID（上行短信用于归属应用）
+	RawBody           []byte            // 原始请求体
+	Headers           map[string]string // 请求头（用于签名验证等）
+	QueryParams       map[string]string // URL 查询参数
+	FormData          map[string]string // 表单数据（用于 form-data 请求）
 }
 
 // CallbackResult 回调结果
-// TaskID 由上层服务通过 ProviderID 反查获取
+// Type 区分下行回执与上行短信：
+//   - report（默认/空）：下行投递回执，TaskID 由上层服务通过 ProviderID + Mobile 反查获取
+//   - upstream：上行短信（用户回复），无 ProviderID，按 Mobile 尽力关联应用
 type CallbackResult struct {
-	ProviderID   string    // 服务商消息ID
+	Type         string    // 回调类型：constants.CallbackType*（空视为 report）
+	ProviderID   string    // 服务商消息ID（上行为空）
 	Status       string    // 状态：使用 constants.CallbackStatus* 常量
 	ErrorCode    string    // 错误码
 	ErrorMessage string    // 错误信息
 	ReportTime   time.Time // 回调时间
+	Mobile       string    // 手机号：回执=接收方（用于批量关联），上行=发送方
+	Content      string    // 上行短信回复内容
+	ReceiveTime  time.Time // 上行短信用户回复时间
 }
 
 // CallbackResponse 回调响应（返回给服务商）

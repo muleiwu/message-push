@@ -13,7 +13,7 @@ type AppQuotaStat struct {
 	SuccessCount int       `gorm:"type:int;default:0;comment:成功数" json:"success_count"`
 	FailedCount  int       `gorm:"type:int;default:0;comment:失败数" json:"failed_count"`
 	CreatedAt    time.Time `gorm:"type:timestamp;default:CURRENT_TIMESTAMP" json:"created_at"`
-	UpdatedAt    time.Time `gorm:"type:timestamp;default:CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" json:"updated_at"`
+	UpdatedAt    time.Time `gorm:"type:timestamp;default:CURRENT_TIMESTAMP" json:"updated_at"`
 }
 
 // TableName 指定表名

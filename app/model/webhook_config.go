@@ -11,12 +11,12 @@ type WebhookConfig struct {
 	WebhookURL  string    `gorm:"type:varchar(500);not null;comment:回调地址" json:"webhook_url"`
 	Secret      string    `gorm:"type:varchar(64);comment:签名密钥" json:"secret"`
 	Events      string    `gorm:"type:varchar(200);default:'success,failed';comment:订阅事件：success,failed,delivered" json:"events"`
-	Status      int       `gorm:"type:tinyint;default:1;comment:状态：0-禁用 1-启用" json:"status"`
+	Status      int       `gorm:"default:1;comment:状态：0-禁用 1-启用" json:"status"`
 	RetryCount  int       `gorm:"type:int;default:3;comment:最大重试次数" json:"retry_count"`
 	Timeout     int       `gorm:"type:int;default:5;comment:超时时间（秒）" json:"timeout"`
 	Description string    `gorm:"type:varchar(200);comment:描述" json:"description"`
 	CreatedAt   time.Time `gorm:"type:timestamp;default:CURRENT_TIMESTAMP" json:"created_at"`
-	UpdatedAt   time.Time `gorm:"type:timestamp;default:CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" json:"updated_at"`
+	UpdatedAt   time.Time `gorm:"type:timestamp;default:CURRENT_TIMESTAMP" json:"updated_at"`
 }
 
 // TableName 指定表名

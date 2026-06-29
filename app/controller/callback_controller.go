@@ -67,11 +67,12 @@ func (ctrl CallbackController) Handle(c httpInterfaces.RouterContextInterface) {
 
 	// 构造回调请求
 	req := &sender.CallbackRequest{
-		ProviderCode: providerCode,
-		RawBody:      rawBody,
-		Headers:      make(map[string]string),
-		QueryParams:  make(map[string]string),
-		FormData:     formData,
+		ProviderCode:      providerCode,
+		ProviderAccountID: account.ID, // 上行短信用于归属应用
+		RawBody:           rawBody,
+		Headers:           make(map[string]string),
+		QueryParams:       make(map[string]string),
+		FormData:          formData,
 	}
 
 	// 收集请求头

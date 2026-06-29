@@ -12,7 +12,11 @@ import (
 	"time"
 
 	"cnb.cool/mliev/push/message-push/app/constants"
-	domain "cnb.cool/mliev/push/message-push/modules/sender/domain"
+	"cnb.cool/mliev/push/message-push/app/dao"
+	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/modules/sender/domain"
+
+	"github.com/nyaruka/phonenumbers"
 )
 
 // 掌榕网 API 端点
@@ -28,7 +32,7 @@ func init() {
 		Code:        constants.ProviderZrwinfoSMS,
 		Name:        "掌榕网短信",
 		Type:        constants.MessageTypeSMS,
-		Description: "掌榕网融合通信产品，提供短信、国际短信、语音、5G智慧短信等服务。注意：短信签名需在「签名管理」中单独配置",
+		Description: "掌榕网融合通信产品，提供国内短信、语音、5G智慧短信等服务。注意：当前仅支持国内短信发送，接收者必须为中国大陆手机号；短信签名需在「签名管理」中单独配置",
 		ConfigFields: []domain.ConfigField{
 			{
 				Key:         "accesskey",
@@ -60,8 +64,8 @@ func init() {
 		DocsUrl:    "http://e.cryun.com/static/index.html#/home/developer/interface/info/1",
 		ConsoleUrl: "http://e.cryun.com/",
 		SortOrder:  20,
-		Tags:       []string{"国内", "国际"},
-		Regions:    []string{"中国大陆", "国际"},
+		Tags:       []string{"国内"},
+		Regions:    []string{"中国大陆"},
 		Deprecated: false,
 	})
 }
@@ -71,13 +75,78 @@ type ZrwinfoSMSSender struct {
 	client *http.Client
 }
 
-// NewZrwinfoSMSSender 创建掌榕网短信发送器
+// NewZrwinfoSMSSender 创建掌榕网短信发送器。
+// 注意：此处不解析数据库等运行时依赖（DI 容器装配阶段 *gorm.DB 可能尚未注册），
+// callback_logs 落库所需的 DAO 在真正用到时再延迟创建。
 func NewZrwinfoSMSSender() *ZrwinfoSMSSender {
 	return &ZrwinfoSMSSender{
 		client: &http.Client{
 			Timeout: time.Duration(domain.DefaultTimeout) * time.Second,
 		},
 	}
+}
+
+// 自定义错误码：接收者不是有效的国内手机号
+const zrwinfoErrCodeInvalidReceiver = "INVALID_RECEIVER"
+
+// normalizeCNMobile 解析并校验中国大陆手机号，返回裸 11 位号码。
+// 掌榕网仅支持国内短信，不需要国际区号；非国内/无效号码返回 error。
+// 支持入参格式：纯 11 位、+86、0086、86 前缀。
+func (s *ZrwinfoSMSSender) normalizeCNMobile(receiver string) (string, error) {
+	receiver = strings.TrimSpace(receiver)
+	if receiver == "" {
+		return "", fmt.Errorf("phone number cannot be empty")
+	}
+
+	num, err := phonenumbers.Parse(receiver, "CN")
+	if err != nil {
+		return "", fmt.Errorf("非国内手机号: %s (%v)", receiver, err)
+	}
+
+	if !phonenumbers.IsValidNumber(num) || phonenumbers.GetRegionCodeForNumber(num) != "CN" {
+		return "", fmt.Errorf("非国内手机号: %s", receiver)
+	}
+
+	switch phonenumbers.GetNumberType(num) {
+	case phonenumbers.MOBILE, phonenumbers.FIXED_LINE_OR_MOBILE:
+		// ok
+	default:
+		return "", fmt.Errorf("非国内手机号: %s", receiver)
+	}
+
+	return fmt.Sprintf("%d", num.GetNationalNumber()), nil
+}
+
+// resolveCNMobile 解析单发请求的手机号，优先使用 worker 预解析的地区信息（按地区直接判断），
+// 缺失时兜底自行解析。返回裸 11 位国内号码；非国内/无效号码返回 error。
+func (s *ZrwinfoSMSSender) resolveCNMobile(req *domain.SendRequest) (string, error) {
+	if req.PhoneRegion != "" {
+		if req.PhoneRegion != "CN" {
+			return "", fmt.Errorf("非国内手机号: %s", req.Task.Receiver)
+		}
+		if req.PhoneNationalNumber != "" {
+			return req.PhoneNationalNumber, nil
+		}
+	}
+	// 兜底：未预解析（如直接调用方未填充字段）时自行解析
+	return s.normalizeCNMobile(req.Task.Receiver)
+}
+
+// recordInvalidReceiver 把一条非国内号码的发送失败写入 callback_logs，便于观测。
+func (s *ZrwinfoSMSSender) recordInvalidReceiver(task *model.PushTask, errMsg string) {
+	if task == nil {
+		return
+	}
+	_ = dao.NewCallbackLogDAO().Create(&model.CallbackLog{
+		Type:           constants.CallbackTypeReport,
+		TaskID:         task.TaskID,
+		AppID:          task.AppID,
+		ProviderCode:   constants.ProviderZrwinfoSMS,
+		Mobile:         task.Receiver,
+		CallbackStatus: constants.CallbackStatusFailed,
+		ErrorCode:      zrwinfoErrCodeInvalidReceiver,
+		ErrorMessage:   errMsg,
+	})
 }
 
 // GetProviderCode 获取服务商代码
@@ -130,27 +199,41 @@ func (s *ZrwinfoSMSSender) Send(ctx context.Context, req *domain.SendRequest) (*
 		return nil, fmt.Errorf("missing template_code")
 	}
 
-	// 3. 转换模板参数
+	// 3. 校验并归一化手机号（掌榕网仅支持国内手机号，按地区直接判断）
+	mobile, err := s.resolveCNMobile(req)
+	if err != nil {
+		s.recordInvalidReceiver(req.Task, err.Error())
+		return &domain.SendResponse{
+			Success:      false,
+			ErrorCode:    zrwinfoErrCodeInvalidReceiver,
+			ErrorMessage: err.Error(),
+			TaskID:       req.Task.TaskID,
+			RequestData:  "{}",
+			ResponseData: "",
+		}, nil
+	}
+
+	// 4. 转换模板参数
 	content := s.buildContentFromMapping(templateContent, req.MappedParams)
 
-	// 4. 构造请求参数
+	// 5. 构造请求参数
 	params := url.Values{}
 	params.Set("accesskey", accesskey)
 	params.Set("secret", secret)
 	params.Set("sign", signName)
 	params.Set("templateId", templateCode)
-	params.Set("mobile", req.Task.Receiver)
+	params.Set("mobile", mobile)
 	params.Set("content", content)
 
-	// 5. 序列化请求数据用于日志（不记录敏感信息）
+	// 6. 序列化请求数据用于日志（不记录敏感信息）
 	requestData, _ := json.Marshal(map[string]interface{}{
 		"sign":        signName,
 		"template_id": templateCode,
-		"mobile":      req.Task.Receiver,
+		"mobile":      mobile,
 		"content":     content,
 	})
 
-	// 6. 发送请求
+	// 7. 发送请求
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", zrwinfoSingleSendURL, strings.NewReader(params.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -180,7 +263,7 @@ func (s *ZrwinfoSMSSender) Send(ctx context.Context, req *domain.SendRequest) (*
 		}, nil
 	}
 
-	// 7. 解析响应
+	// 8. 解析响应
 	var result struct {
 		Code   string `json:"code"`
 		Msg    string `json:"msg"`
@@ -316,10 +399,33 @@ func (s *ZrwinfoSMSSender) BatchSend(ctx context.Context, req *domain.BatchSendR
 
 // batchSendSameContent 批量发送相同内容的短信
 func (s *ZrwinfoSMSSender) batchSendSameContent(ctx context.Context, req *domain.BatchSendRequest, accesskey, secret, signName, templateCode, templateContent string) (*domain.BatchSendResponse, error) {
-	// 收集所有手机号
-	mobiles := make([]string, len(req.Tasks))
+	// 结果与 req.Tasks 一一对应
+	results := make([]*domain.SendResponse, len(req.Tasks))
+
+	// 校验并归一化手机号：有效的进入批量请求，非国内号码标记失败并落库 callback_logs
+	var validIdx []int
+	var validMobiles []string
 	for i, task := range req.Tasks {
-		mobiles[i] = task.Receiver
+		mobile, err := s.normalizeCNMobile(task.Receiver)
+		if err != nil {
+			s.recordInvalidReceiver(task, err.Error())
+			results[i] = &domain.SendResponse{
+				Success:      false,
+				ErrorCode:    zrwinfoErrCodeInvalidReceiver,
+				ErrorMessage: err.Error(),
+				TaskID:       task.TaskID,
+				RequestData:  "{}",
+				ResponseData: "",
+			}
+			continue
+		}
+		validIdx = append(validIdx, i)
+		validMobiles = append(validMobiles, mobile)
+	}
+
+	// 全部为非国内号码，无需发送
+	if len(validMobiles) == 0 {
+		return &domain.BatchSendResponse{Results: results}, nil
 	}
 
 	// 转换模板参数
@@ -331,16 +437,24 @@ func (s *ZrwinfoSMSSender) batchSendSameContent(ctx context.Context, req *domain
 	params.Set("secret", secret)
 	params.Set("sign", signName)
 	params.Set("templateId", templateCode)
-	params.Set("mobile", strings.Join(mobiles, ","))
+	params.Set("mobile", strings.Join(validMobiles, ","))
 	params.Set("content", content)
 
 	// 序列化请求数据用于日志
 	requestData, _ := json.Marshal(map[string]interface{}{
 		"sign":        signName,
 		"template_id": templateCode,
-		"mobiles":     mobiles,
+		"mobiles":     validMobiles,
 		"content":     content,
 	})
+
+	// fillValid 为所有有效号码填充相同的结果
+	fillValid := func(fn func(idx int) *domain.SendResponse) *domain.BatchSendResponse {
+		for _, idx := range validIdx {
+			results[idx] = fn(idx)
+		}
+		return &domain.BatchSendResponse{Results: results}
+	}
 
 	// 发送请求
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", zrwinfoBatchSendURL, strings.NewReader(params.Encode()))
@@ -351,33 +465,29 @@ func (s *ZrwinfoSMSSender) batchSendSameContent(ctx context.Context, req *domain
 
 	resp, err := s.client.Do(httpReq)
 	if err != nil {
-		results := make([]*domain.SendResponse, len(req.Tasks))
-		for i, task := range req.Tasks {
-			results[i] = &domain.SendResponse{
+		return fillValid(func(idx int) *domain.SendResponse {
+			return &domain.SendResponse{
 				Success:      false,
 				ErrorMessage: err.Error(),
-				TaskID:       task.TaskID,
+				TaskID:       req.Tasks[idx].TaskID,
 				RequestData:  string(requestData),
 				ResponseData: "",
 			}
-		}
-		return &domain.BatchSendResponse{Results: results}, nil
+		}), nil
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		results := make([]*domain.SendResponse, len(req.Tasks))
-		for i, task := range req.Tasks {
-			results[i] = &domain.SendResponse{
+		return fillValid(func(idx int) *domain.SendResponse {
+			return &domain.SendResponse{
 				Success:      false,
 				ErrorMessage: fmt.Sprintf("failed to read response: %v", err),
-				TaskID:       task.TaskID,
+				TaskID:       req.Tasks[idx].TaskID,
 				RequestData:  string(requestData),
 				ResponseData: "",
 			}
-		}
-		return &domain.BatchSendResponse{Results: results}, nil
+		}), nil
 	}
 
 	// 解析响应
@@ -388,45 +498,38 @@ func (s *ZrwinfoSMSSender) batchSendSameContent(ctx context.Context, req *domain
 	}
 
 	if err := json.Unmarshal(body, &result); err != nil {
-		results := make([]*domain.SendResponse, len(req.Tasks))
-		for i, task := range req.Tasks {
-			results[i] = &domain.SendResponse{
+		return fillValid(func(idx int) *domain.SendResponse {
+			return &domain.SendResponse{
 				Success:      false,
 				ErrorMessage: fmt.Sprintf("failed to parse response: %v, body: %s", err, string(body)),
-				TaskID:       task.TaskID,
+				TaskID:       req.Tasks[idx].TaskID,
 				RequestData:  string(requestData),
 				ResponseData: string(body),
 			}
-		}
-		return &domain.BatchSendResponse{Results: results}, nil
+		}), nil
 	}
 
-	results := make([]*domain.SendResponse, len(req.Tasks))
 	isSuccess := result.Code == "0"
-
-	for i, task := range req.Tasks {
+	return fillValid(func(idx int) *domain.SendResponse {
 		if isSuccess {
-			results[i] = &domain.SendResponse{
+			return &domain.SendResponse{
 				Success:      true,
-				ProviderID:   fmt.Sprintf("%s_%d", result.BatchId, i), // 为每条记录生成唯一标识
-				TaskID:       task.TaskID,
+				ProviderID:   fmt.Sprintf("%s_%d", result.BatchId, idx), // 为每条记录生成唯一标识
+				TaskID:       req.Tasks[idx].TaskID,
 				Status:       constants.TaskStatusSent, // 已发送，等待回调
 				RequestData:  string(requestData),
 				ResponseData: string(body),
 			}
-		} else {
-			results[i] = &domain.SendResponse{
-				Success:      false,
-				ErrorCode:    result.Code,
-				ErrorMessage: result.Msg,
-				TaskID:       task.TaskID,
-				RequestData:  string(requestData),
-				ResponseData: string(body),
-			}
 		}
-	}
-
-	return &domain.BatchSendResponse{Results: results}, nil
+		return &domain.SendResponse{
+			Success:      false,
+			ErrorCode:    result.Code,
+			ErrorMessage: result.Msg,
+			TaskID:       req.Tasks[idx].TaskID,
+			RequestData:  string(requestData),
+			ResponseData: string(body),
+		}
+	}), nil
 }
 
 // ==================== StatusPuller 接口实现 ====================

@@ -95,6 +95,24 @@ func (d *PushTaskDAO) GetScheduledTasks(limit int) ([]*model.PushTask, error) {
 	return tasks, nil
 }
 
+// GetLatestReceiverApp 获取最近一次发往该手机号的任务所属应用ID
+// 用于上行短信（无 provider_msg_id）尽力关联应用：用户回复通常针对最后一条短信。
+// 找不到时返回空字符串、不报错。
+func (d *PushTaskDAO) GetLatestReceiverApp(receiver string) (string, error) {
+	var task model.PushTask
+	err := d.db.Select("app_id").
+		Where("receiver = ?", receiver).
+		Order("created_at DESC").
+		First(&task).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return "", nil
+		}
+		return "", err
+	}
+	return task.AppID, nil
+}
+
 // IncrementRetryCount 增加重试次数
 func (d *PushTaskDAO) IncrementRetryCount(taskID string) error {
 	return d.db.Model(&model.PushTask{}).

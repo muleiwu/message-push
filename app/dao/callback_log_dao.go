@@ -2,6 +2,7 @@ package dao
 
 import (
 	"cnb.cool/mliev/open/go-web/pkg/helper"
+	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"gorm.io/gorm"
 )
@@ -47,22 +48,34 @@ func (dao *CallbackLogDAO) GetByProviderID(providerID string) ([]*model.Callback
 	return logs, nil
 }
 
-// List 获取回调日志列表（分页）
-func (dao *CallbackLogDAO) List(appID string, page, pageSize int) ([]*model.CallbackLog, int64, error) {
+// List 获取回调日志列表（支持筛选 + 分页）
+func (dao *CallbackLogDAO) List(req *dto.CallbackListRequest) ([]*model.CallbackLog, int64, error) {
 	var logs []*model.CallbackLog
 	var total int64
 
 	query := dao.db.Model(&model.CallbackLog{})
-	if appID != "" {
-		query = query.Where("app_id = ?", appID)
+	if req.Type != "" {
+		query = query.Where("type = ?", req.Type)
+	}
+	if req.AppID != "" {
+		query = query.Where("app_id = ?", req.AppID)
+	}
+	if req.Mobile != "" {
+		query = query.Where("mobile = ?", req.Mobile)
+	}
+	if req.StartDate != "" {
+		query = query.Where("created_at >= ?", req.StartDate+" 00:00:00")
+	}
+	if req.EndDate != "" {
+		query = query.Where("created_at <= ?", req.EndDate+" 23:59:59")
 	}
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	offset := (page - 1) * pageSize
-	err := query.Offset(offset).Limit(pageSize).
+	offset := (req.Page - 1) * req.PageSize
+	err := query.Offset(offset).Limit(req.PageSize).
 		Order("created_at DESC").
 		Find(&logs).Error
 

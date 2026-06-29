@@ -15,6 +15,7 @@ const (
 	ProviderAliyunSMS  = "aliyun_sms"  // 阿里云短信
 	ProviderTencentSMS = "tencent_sms" // 腾讯云短信
 	ProviderZrwinfoSMS = "zrwinfo_sms" // 掌榕网短信
+	ProviderNeteaseSMS = "netease_sms" // 网易云信短信
 	ProviderSMTP       = "smtp"        // SMTP邮件
 	ProviderWeChatWork = "wechat_work" // 企业微信（应用消息）
 	ProviderDingTalk   = "dingtalk"    // 钉钉（工作通知）
@@ -36,7 +37,7 @@ func IsValidMessageType(msgType string) bool {
 // IsValidProviderCode 检查服务商代码是否有效
 func IsValidProviderCode(code string) bool {
 	switch code {
-	case ProviderAliyunSMS, ProviderTencentSMS, ProviderZrwinfoSMS, ProviderSMTP, ProviderWeChatWork, ProviderDingTalk, ProviderWeChatWorkRobot, ProviderDingTalkRobot:
+	case ProviderAliyunSMS, ProviderTencentSMS, ProviderZrwinfoSMS, ProviderNeteaseSMS, ProviderSMTP, ProviderWeChatWork, ProviderDingTalk, ProviderWeChatWorkRobot, ProviderDingTalkRobot:
 		return true
 	default:
 		return false
@@ -49,4 +50,12 @@ const (
 	CallbackStatusFailed    = "failed"    // 发送失败
 	CallbackStatusRejected  = "rejected"  // 被拒绝
 	CallbackStatusTimeout   = "timeout"   // 回调超时
+)
+
+// 服务商回调类型常量
+// report   = 下行投递回执（短信是否到达用户）
+// upstream = 上行短信（终端用户回复的短信内容）
+const (
+	CallbackTypeReport   = "report"   // 下行投递回执（默认）
+	CallbackTypeUpstream = "upstream" // 上行短信（用户回复）
 )

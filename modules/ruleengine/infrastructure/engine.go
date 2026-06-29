@@ -148,7 +148,7 @@ func (s *RuleEngineService) RefreshCache() {
 
 	sendRules, err := s.ruleDAO.GetActiveByScene(model.RuleSceneSendFailure)
 	if err != nil {
-		s.logger.Error(fmt.Sprintf("failed to load send_failure rules: %v", err))
+		s.logRefreshError("send_failure", err)
 	} else {
 		s.cache.rules[model.RuleSceneSendFailure] = sendRules
 		s.logger.Info(fmt.Sprintf("loaded send_failure rules count=%d", len(sendRules)))
@@ -156,9 +156,30 @@ func (s *RuleEngineService) RefreshCache() {
 
 	callbackRules, err := s.ruleDAO.GetActiveByScene(model.RuleSceneCallbackFailure)
 	if err != nil {
-		s.logger.Error(fmt.Sprintf("failed to load callback_failure rules: %v", err))
+		s.logRefreshError("callback_failure", err)
 	} else {
 		s.cache.rules[model.RuleSceneCallbackFailure] = callbackRules
 		s.logger.Info(fmt.Sprintf("loaded callback_failure rules count=%d", len(callbackRules)))
 	}
+}
+
+// logRefreshError 记录规则加载失败。首次启动时 RefreshCache 在数据库迁移之前
+// 于装配阶段执行，failure_rules 表尚未创建，此时降级为 Warn，避免误导性的错误日志。
+func (s *RuleEngineService) logRefreshError(scene string, err error) {
+	if isUndefinedTableErr(err) {
+		s.logger.Warn(fmt.Sprintf("skip loading %s rules: failure_rules table not ready yet (will load after migration): %v", scene, err))
+		return
+	}
+	s.logger.Error(fmt.Sprintf("failed to load %s rules: %v", scene, err))
+}
+
+// isUndefinedTableErr 判断是否为「表不存在」错误（PostgreSQL 42P01 / MySQL 1146）。
+func isUndefinedTableErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "42p01") ||
+		strings.Contains(msg, "does not exist") ||
+		strings.Contains(msg, "doesn't exist")
 }

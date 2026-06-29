@@ -170,6 +170,12 @@ func (receiver Router) InitConfig() map[string]any {
 					logs.GET("/task/:task_id/webhook", admin.LogController{}.GetWebhookLogsByTaskID)
 				}
 
+				// 服务商回调记录（统一下行回执与上行短信，按 type 区分）
+				callbacks := adminGroup.Group("/callbacks")
+				{
+					callbacks.GET("", admin.CallbackController{}.GetCallbackList)
+				}
+
 				// 任务管理
 				pushTasks := adminGroup.Group("/push-tasks")
 				{

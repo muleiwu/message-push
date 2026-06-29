@@ -10,7 +10,6 @@ import (
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/migration"
-	"cnb.cool/mliev/push/message-push/migrations"
 	"cnb.cool/mliev/push/message-push/modules/identity"
 )
 
@@ -147,10 +146,6 @@ func (ic InstallController) SubmitInstall(c httpInterfaces.RouterContextInterfac
 		ic.Error(c, constants.CodeInternalError, "获取数据库连接失败: "+err.Error())
 		return
 	}
-
-	// 设置外部数据库连接供 initial_schema 迁移使用
-	migrations.SetExternalDB(testDB)
-	defer migrations.ClearExternalDB()
 
 	// 执行 goose 迁移，使用用户选择的数据库驱动作为方言
 	dialect := req.Database.Driver

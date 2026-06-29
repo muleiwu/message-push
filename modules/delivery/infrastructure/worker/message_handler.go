@@ -160,6 +160,16 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 		RenderedContent:        renderedContent,
 	}
 
+	// 统一解析手机号，供发送器按地区直接判断（仅 SMS 类型）
+	if task.MessageType == constants.MessageTypeSMS {
+		if phone := helper.ParsePhoneNumber(task.Receiver); phone.Valid {
+			sendReq.PhoneRegion = phone.Region
+			sendReq.PhoneCountryCode = phone.CountryCode
+			sendReq.PhoneNationalNumber = phone.NationalNumber
+			sendReq.PhoneE164 = phone.E164
+		}
+	}
+
 	resp, err := messageSender.Send(ctx, sendReq)
 	if err != nil {
 		h.logger.Error(fmt.Sprintf("sender error task_id=%s: %v", taskID, err))

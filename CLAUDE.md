@@ -10,7 +10,9 @@ Mulei Message Service (mliev-push) is a high-performance, multi-channel message 
 
 ### Database Migrations
 
-Migrations run **automatically at server bootstrap** (`internal/service/migration` runs goose `UpByOne` until current). Normally you don't run them manually — just `make dev`.
+Migrations run **automatically at server bootstrap** (the `migration` package runs goose `UpByOne` until current). Normally you don't run them manually — just `make dev`.
+
+Migrations are **dialect-specific SQL files** embedded via `embed.FS`, organized by database into `migrations/mysql/`, `migrations/pgsql/`, and `migrations/sqlite/`. At runtime the runner (`migration/migration.go`) picks the subfolder matching `database.driver`. Each dialect folder holds the same set of goose-versioned files (identical `YYYYMMDDNNNNNN_*.sql` prefixes); `0001` builds the base schema and later files replay incremental changes. To add a migration, create the **same-named `.sql` file in all three folders** with `-- +goose Up` / `-- +goose Down` sections, keeping index names table-prefixed (SQLite requires globally-unique index names).
 
 Note: the `make migrate-*` targets in the Makefile reference `cmd/migrate/main.go`, which does not exist in the current tree, so they fail. Migrations are applied via the bootstrap path and the install controller instead.
 
@@ -85,7 +87,7 @@ All assemblies and servers implement interfaces defined in `internal/interfaces/
   - `service/` — Internal services (migration, worker_service, scheduler_service)
 - `config/` — Assembly and server wiring
   - `autoload/` — Configuration initializers (Go code, not YAML). Each file returns config maps loaded by Viper. Includes `router.go` (all route definitions), `middleware.go`, `database.go`, `redis.go`, etc.
-- `migrations/` — Goose migration files (Go-based, named `YYYYMMDDNNNNNN_description.go`)
+- `migrations/` — Goose SQL migration files split by dialect into `mysql/`, `pgsql/`, `sqlite/` (named `YYYYMMDDNNNNNN_description.sql`); embedded via `migrations/embed.go`
 
 ### Helper Pattern
 
@@ -165,7 +167,7 @@ Key config areas: app, database, redis, logger, jwt, middleware (rate limits, qu
 ## Important Notes
 
 - Graceful reload via `SIGHUP` signal or API endpoint (triggers full re-assembly)
-- Database migrations use goose with Go-based migration files in `migrations/`
+- Database migrations use goose with dialect-specific SQL files in `migrations/{mysql,pgsql,sqlite}/` (embedded via `embed.FS`; runner selects the folder by `database.driver`)
 - Rule engine caches rules in memory; admin changes require `RefreshCache()` or the admin API endpoint `/api/admin/failure-rules/refresh-cache`
 - Channel selector caches bindings (30s TTL); call `InvalidateCacheForBinding()` after changes
 - Worker pool uses Redis Streams consumer groups; failed messages go to dead letter queue
