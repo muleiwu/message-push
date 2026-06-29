@@ -72,17 +72,17 @@ func init() {
 
 // ZrwinfoSMSSender 掌榕网短信发送器
 type ZrwinfoSMSSender struct {
-	client         *http.Client
-	callbackLogDao *dao.CallbackLogDAO
+	client *http.Client
 }
 
-// NewZrwinfoSMSSender 创建掌榕网短信发送器
+// NewZrwinfoSMSSender 创建掌榕网短信发送器。
+// 注意：此处不解析数据库等运行时依赖（DI 容器装配阶段 *gorm.DB 可能尚未注册），
+// callback_logs 落库所需的 DAO 在真正用到时再延迟创建。
 func NewZrwinfoSMSSender() *ZrwinfoSMSSender {
 	return &ZrwinfoSMSSender{
 		client: &http.Client{
 			Timeout: time.Duration(domain.DefaultTimeout) * time.Second,
 		},
-		callbackLogDao: dao.NewCallbackLogDAO(),
 	}
 }
 
@@ -137,7 +137,7 @@ func (s *ZrwinfoSMSSender) recordInvalidReceiver(task *model.PushTask, errMsg st
 	if task == nil {
 		return
 	}
-	_ = s.callbackLogDao.Create(&model.CallbackLog{
+	_ = dao.NewCallbackLogDAO().Create(&model.CallbackLog{
 		Type:           constants.CallbackTypeReport,
 		TaskID:         task.TaskID,
 		AppID:          task.AppID,
