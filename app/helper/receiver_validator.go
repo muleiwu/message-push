@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"cnb.cool/mliev/push/message-push/app/constants"
+
+	"github.com/nyaruka/phonenumbers"
 )
 
 // ReceiverValidator 接收者校验器接口
@@ -41,6 +43,38 @@ var (
 	// 邮箱正则
 	emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
 )
+
+// PhoneInfo 手机号解析结果
+type PhoneInfo struct {
+	Region         string // 地区码（如 "CN"）
+	CountryCode    string // 国家区号（如 "86"）
+	NationalNumber string // 国内号码（裸号码，如 "13800138000"）
+	E164           string // E.164 国际电话号码（如 "+8613800138000"）
+	Valid          bool   // 是否为有效手机号
+}
+
+// ParsePhoneNumber 解析手机号，返回地区、裸号码与 E.164 格式。
+// 以中国大陆（CN）为默认地区，兼容纯 11 位、+86、0086、86 前缀及带国家码的国际号码。
+// 解析失败或非有效号码时返回 Valid=false（其余字段为空）。
+func ParsePhoneNumber(receiver string) PhoneInfo {
+	receiver = strings.TrimSpace(receiver)
+	if receiver == "" {
+		return PhoneInfo{}
+	}
+
+	num, err := phonenumbers.Parse(receiver, "CN")
+	if err != nil || !phonenumbers.IsValidNumber(num) {
+		return PhoneInfo{}
+	}
+
+	return PhoneInfo{
+		Region:         phonenumbers.GetRegionCodeForNumber(num),
+		CountryCode:    fmt.Sprintf("%d", num.GetCountryCode()),
+		NationalNumber: fmt.Sprintf("%d", num.GetNationalNumber()),
+		E164:           phonenumbers.Format(num, phonenumbers.E164),
+		Valid:          true,
+	}
+}
 
 // GetReceiverValidator 根据消息类型获取对应的校验器
 func GetReceiverValidator(messageType string) ReceiverValidator {

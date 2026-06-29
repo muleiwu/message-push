@@ -12,6 +12,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/muleiwu/gomander v1.1.0
 	github.com/muleiwu/gsr v1.1.0
+	github.com/nyaruka/phonenumbers v1.8.0
 	github.com/pressly/goose/v3 v3.27.1
 	github.com/redis/go-redis/v9 v9.20.0
 	github.com/spf13/viper v1.21.0

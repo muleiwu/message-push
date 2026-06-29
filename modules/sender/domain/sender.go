@@ -35,6 +35,12 @@ type SendRequest struct {
 	Signature              *model.ProviderSignature      // 签名配置（用于SMS类型）
 	MappedParams           map[string]string             // 映射后的模板参数（供应商变量名到值的映射）
 	RenderedContent        string                        // 供应商模板渲染后的内容
+
+	// 以下字段由 worker 统一解析手机号后填充（仅 SMS 类型有值），供发送器直接按地区判断，避免各自重复解析。
+	PhoneRegion         string // 手机号地区码（如 "CN"）；非手机号/解析失败为空
+	PhoneCountryCode    string // 国家区号（如 "86"）
+	PhoneNationalNumber string // 国内号码（裸号码，如 "13800138000"）
+	PhoneE164           string // E.164 国际电话号码（如 "+8613800138000"）
 }
 
 // SendResponse 发送响应
