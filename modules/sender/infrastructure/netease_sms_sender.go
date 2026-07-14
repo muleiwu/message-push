@@ -207,8 +207,11 @@ func (s *NeteaseSMSSender) buildParamsFromMapping(templateContent string, params
 }
 
 // postForm 发送表单请求并解析网易标准响应 {code,msg,obj}
-// 返回：sendID(成功时为 obj/sendid)、响应码、响应消息、原始响应体、错误
-func (s *NeteaseSMSSender) postForm(ctx context.Context, endpoint, appKey, appSecret string, form url.Values) (sendID, respCode, respMsg string, body []byte, err error) {
+// 返回：obj、响应码、响应消息(msg)、原始响应体、错误。
+// 注意两个接口的字段含义相反，sendid 取处由调用方决定：
+//   - sendtemplate.action：obj = sendid，msg = 发送条数
+//   - sendcode.action：msg = sendid，obj = 验证码
+func (s *NeteaseSMSSender) postForm(ctx context.Context, endpoint, appKey, appSecret string, form url.Values) (obj, respCode, respMsg string, body []byte, err error) {
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, strings.NewReader(form.Encode()))
 	if err != nil {
 		return "", "", "", nil, fmt.Errorf("failed to create request: %w", err)
@@ -228,24 +231,22 @@ func (s *NeteaseSMSSender) postForm(ctx context.Context, endpoint, appKey, appSe
 		return "", "", "", nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	// 响应：{"code":200,"msg":"...","obj":<sendid>}，obj 为数字，用 json.Number 保留精度
+	// 响应：{"code":200,"msg":"...","obj":...}，msg/obj 可能为数字或字符串，宽松解析
 	var result struct {
-		Code int         `json:"code"`
-		Msg  string      `json:"msg"`
-		Obj  json.Number `json:"obj"`
+		Code int               `json:"code"`
+		Msg  neteaseFlexString `json:"msg"`
+		Obj  neteaseFlexString `json:"obj"`
 	}
-	dec := json.NewDecoder(bytes.NewReader(body))
-	dec.UseNumber()
-	if err := dec.Decode(&result); err != nil {
+	if err := json.Unmarshal(body, &result); err != nil {
 		return "", "", "", body, fmt.Errorf("failed to parse response: %w, body: %s", err, string(body))
 	}
 
 	respCode = strconv.Itoa(result.Code)
-	respMsg = result.Msg
+	respMsg = string(result.Msg)
 	if result.Code != 200 {
 		return "", respCode, respMsg, body, nil
 	}
-	return result.Obj.String(), respCode, respMsg, body, nil
+	return string(result.Obj), respCode, respMsg, body, nil
 }
 
 // buildSendResponse 根据 postForm 的结果构造统一的发送响应
@@ -333,7 +334,12 @@ func (s *NeteaseSMSSender) sendCodeOne(ctx context.Context, appKey, appSecret, t
 		"paramMap":   mappedParams,
 	})
 
-	sendID, respCode, respMsg, body, err := s.postForm(ctx, neteaseSendCodeURL, appKey, appSecret, form)
+	// sendcode.action 的 sendid 在 msg 字段（obj 为验证码，不能当 sendid 用，否则回执关联不上）
+	_, respCode, respMsg, body, err := s.postForm(ctx, neteaseSendCodeURL, appKey, appSecret, form)
+	sendID := ""
+	if err == nil && respCode == "200" {
+		sendID = respMsg
+	}
 	return buildSendResponse(task.TaskID, string(requestData), sendID, respCode, respMsg, body, err)
 }
 
@@ -454,6 +460,24 @@ func (s *NeteaseSMSSender) batchSendChunk(ctx context.Context, appKey, appSecret
 
 // ==================== CallbackHandler 接口实现 ====================
 
+// neteaseFlexString 兼容字符串和数字两种 JSON 形式。
+// 网易文档中 eventType 为字符串（"11"），实际回调下发的是数字（11），两种都需接受。
+type neteaseFlexString string
+
+func (f *neteaseFlexString) UnmarshalJSON(data []byte) error {
+	data = bytes.TrimSpace(data)
+	if len(data) > 0 && data[0] == '"' {
+		var s string
+		if err := json.Unmarshal(data, &s); err != nil {
+			return err
+		}
+		*f = neteaseFlexString(s)
+		return nil
+	}
+	*f = neteaseFlexString(data)
+	return nil
+}
+
 // SupportsCallback 是否支持回调
 func (s *NeteaseSMSSender) SupportsCallback() bool {
 	return true
@@ -484,16 +508,16 @@ func (s *NeteaseSMSSender) HandleCallback(ctx context.Context, req *domain.Callb
 	}
 
 	var payload struct {
-		EventType string `json:"eventType"`
+		EventType neteaseFlexString `json:"eventType"`
 		Objects   []struct {
-			Mobile      string `json:"mobile"`
-			Sendid      string `json:"sendid"`
-			Result      string `json:"result"`
-			SendTime    string `json:"sendTime"`
-			ReportTime  string `json:"reportTime"`
-			Reason      string `json:"reason"`
-			Content     string `json:"content"`     // 上行：用户回复内容
-			ReceiveTime string `json:"receiveTime"` // 上行：用户回复时间
+			Mobile      neteaseFlexString `json:"mobile"`
+			Sendid      neteaseFlexString `json:"sendid"`
+			Result      string            `json:"result"`
+			SendTime    string            `json:"sendTime"`
+			ReportTime  string            `json:"reportTime"`
+			Reason      string            `json:"reason"`
+			Content     string            `json:"content"`     // 上行：用户回复内容
+			ReceiveTime string            `json:"receiveTime"` // 上行：用户回复时间
 		} `json:"objects"`
 	}
 
@@ -501,7 +525,7 @@ func (s *NeteaseSMSSender) HandleCallback(ctx context.Context, req *domain.Callb
 		return resp, nil, fmt.Errorf("failed to parse netease callback: %w, body: %s", err, string(req.RawBody))
 	}
 
-	switch payload.EventType {
+	switch string(payload.EventType) {
 	case "11":
 		// 下行投递回执
 		results := make([]*domain.CallbackResult, 0, len(payload.Objects))
@@ -517,12 +541,12 @@ func (s *NeteaseSMSSender) HandleCallback(ctx context.Context, req *domain.Callb
 
 			results = append(results, &domain.CallbackResult{
 				Type:         constants.CallbackTypeReport,
-				ProviderID:   obj.Sendid,
+				ProviderID:   string(obj.Sendid),
 				Status:       status,
 				ErrorCode:    obj.Result,
 				ErrorMessage: obj.Reason,
 				ReportTime:   reportTime,
-				Mobile:       obj.Mobile, // 批量回执按 (sendid + mobile) 关联到具体任务
+				Mobile:       string(obj.Mobile), // 批量回执按 (sendid + mobile) 关联到具体任务
 			})
 		}
 		return resp, results, nil
@@ -537,7 +561,7 @@ func (s *NeteaseSMSSender) HandleCallback(ctx context.Context, req *domain.Callb
 			receiveTime, _ := time.ParseInLocation("2006-01-02 15:04:05", obj.ReceiveTime, time.Local)
 			results = append(results, &domain.CallbackResult{
 				Type:        constants.CallbackTypeUpstream,
-				Mobile:      obj.Mobile,
+				Mobile:      string(obj.Mobile),
 				Content:     obj.Content,
 				ReceiveTime: receiveTime,
 			})
