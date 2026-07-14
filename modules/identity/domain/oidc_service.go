@@ -19,6 +19,9 @@ type OIDCService interface {
 	Enabled() bool
 	// DisplayName 返回登录页 SSO 按钮的显示名称。
 	DisplayName() string
+	// PasswordLoginDisabled 返回是否禁用密码登录（仅当 OIDC 可用时才会为 true，
+	// 避免误配置导致完全无法登录）。
+	PasswordLoginDisabled() bool
 	// BuildAuthURL 生成 IdP 授权地址，state 与 nonce 写入 Redis（10 分钟有效）。
 	BuildAuthURL(ctx context.Context) (string, error)
 	// HandleCallback 处理 IdP 回调：校验 state、换码、验 ID Token 与 nonce，

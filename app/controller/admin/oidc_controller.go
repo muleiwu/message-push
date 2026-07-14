@@ -31,8 +31,9 @@ type OIDCController struct {
 func (c OIDCController) GetStatus(ctx httpInterfaces.RouterContextInterface) {
 	svc := identity.GetOIDCService()
 	controller.SuccessResponse(ctx, dto.OIDCStatusResponse{
-		Enabled:     svc.Enabled(),
-		DisplayName: svc.DisplayName(),
+		Enabled:               svc.Enabled(),
+		PasswordLoginDisabled: svc.PasswordLoginDisabled(),
+		DisplayName:           svc.DisplayName(),
 	})
 }
 

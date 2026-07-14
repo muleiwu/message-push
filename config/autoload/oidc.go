@@ -23,5 +23,8 @@ func (receiver Oidc) InitConfig() map[string]any {
 		"oidc.display_name": env.GetString("oidc.display_name", "SSO 登录"),
 		// 回调成功后跳转的前端落地路径（或绝对地址），带 ?code= 一次性码
 		"oidc.frontend_callback": env.GetString("oidc.frontend_callback", "/auth/sso-callback"),
+		// 禁用用户名密码登录，仅允许 OIDC SSO 登录；
+		// 仅在 OIDC 配置完整可用时生效，避免误配置导致无法登录
+		"oidc.disable_password_login": env.GetBool("oidc.disable_password_login", false),
 	}
 }

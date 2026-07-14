@@ -9,6 +9,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/helper"
+	"cnb.cool/mliev/push/message-push/modules/identity"
 )
 
 // AuthController 认证控制器
@@ -17,6 +18,12 @@ type AuthController struct {
 
 // Login 管理员登录
 func (c AuthController) Login(ctx httpInterfaces.RouterContextInterface) {
+	// 开启「仅 OIDC 登录」时拒绝密码登录（服务端硬拦截，前端隐藏表单只是展示层）
+	if identity.GetOIDCService().PasswordLoginDisabled() {
+		controller.ErrorResponse(ctx, 403, "密码登录已禁用，请使用 SSO 登录")
+		return
+	}
+
 	var req dto.LoginRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		controller.ErrorResponse(ctx, 400, "用户名和密码不能为空")

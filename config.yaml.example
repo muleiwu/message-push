@@ -72,6 +72,8 @@ jwt:
 #   scopes: openid profile email
 #   display_name: SSO 登录
 #   frontend_callback: /auth/sso-callback
+#   # 禁用用户名密码登录，仅允许 SSO（仅当 OIDC 配置完整可用时生效，防止把自己锁在门外）
+#   disable_password_login: false
 
 # 短链接配置
 shortlink:

@@ -72,6 +72,12 @@ func (s *OIDCService) DisplayName() string {
 	return helper.GetConfig().GetString("oidc.display_name", "SSO 登录")
 }
 
+// PasswordLoginDisabled 返回是否禁用密码登录。仅在 OIDC 配置完整可用时生效，
+// 防止 OIDC 误配置时把所有登录入口都关掉。
+func (s *OIDCService) PasswordLoginDisabled() bool {
+	return helper.GetConfig().GetBool("oidc.disable_password_login", false) && s.Enabled()
+}
+
 // getProvider 懒初始化并缓存 OIDC provider（issuer 变更时重新发现）。
 func (s *OIDCService) getProvider(ctx context.Context) (*oidc.Provider, error) {
 	issuer := helper.GetConfig().GetString("oidc.issuer", "")

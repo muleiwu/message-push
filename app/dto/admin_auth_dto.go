@@ -25,8 +25,10 @@ type AccessCodesResponse []string
 
 // OIDCStatusResponse OIDC 登录状态响应
 type OIDCStatusResponse struct {
-	Enabled     bool   `json:"enabled"`
-	DisplayName string `json:"displayName"`
+	Enabled bool `json:"enabled"`
+	// PasswordLoginDisabled 为 true 时登录页应隐藏用户名密码表单，仅保留 SSO 入口
+	PasswordLoginDisabled bool   `json:"passwordLoginDisabled"`
+	DisplayName           string `json:"displayName"`
 }
 
 // OIDCAuthorizeResponse OIDC 授权地址响应
