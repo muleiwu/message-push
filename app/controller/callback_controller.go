@@ -2,6 +2,7 @@ package controller
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"strconv"
 
@@ -53,6 +54,9 @@ func (ctrl CallbackController) Handle(c httpInterfaces.RouterContextInterface) {
 
 	// 重置 Body 以便后续解析表单数据（因为 Body 只能读取一次）
 	c.Request().Body = io.NopCloser(bytes.NewBuffer(rawBody))
+
+	helper.GetRequestLogger(c).Info(fmt.Sprintf("callback received: account_id=%d provider=%s method=%s content_type=%s query=%s body=%s",
+		account.ID, providerCode, c.Request().Method, c.Request().Header.Get("Content-Type"), c.Request().URL.RawQuery, string(rawBody)))
 
 	// 解析表单数据（支持 application/x-www-form-urlencoded 和 multipart/form-data）
 	_ = c.Request().ParseMultipartForm(32 << 20) // 32MB
