@@ -18,6 +18,8 @@ func (receiver Config) Get() []interfaces.InitConfig {
 		autoload.Redis{},
 		autoload.Migration{},
 		autoload.Middleware{},
+		autoload.Jwt{},
+		autoload.Oidc{},
 		autoload.Router{},
 	}
 }

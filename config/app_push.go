@@ -31,6 +31,7 @@ func pushAssemblies() []interfaces.AssemblyInterface {
 		&callbackAssembly.Callback{},
 		&identityAssembly.ApplicationService{},
 		&identityAssembly.UserService{},
+		&identityAssembly.OIDCService{},
 	}
 }
 

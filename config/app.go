@@ -36,6 +36,7 @@ func (a App) Assemblies() []interfaces.AssemblyInterface {
 // Servers 返回 Server 链（迁移 → 初始管理员引导 → worker/调度器 → HTTP 服务）。
 func (a App) Servers() []interfaces.ServerInterface {
 	servers := []interfaces.ServerInterface{
+		identityServer.NewJWTConfigServer(),
 		&migration.Server{},
 		identityServer.NewBootstrapAdminServer(),
 	}

@@ -67,6 +67,12 @@ func (receiver Router) InitConfig() map[string]any {
 			{
 				adminAuth.POST("/login", admin.AuthController{}.Login)
 				adminAuth.POST("/logout", admin.AuthController{}.Logout)
+
+				// OIDC SSO 登录
+				adminAuth.GET("/oidc/status", admin.OIDCController{}.GetStatus)
+				adminAuth.GET("/oidc/authorize", admin.OIDCController{}.Authorize)
+				adminAuth.GET("/oidc/callback", admin.OIDCController{}.Callback)
+				adminAuth.POST("/oidc/exchange", admin.OIDCController{}.Exchange)
 			}
 
 			// Admin API - 管理后台业务接口（需要 JWT 认证）

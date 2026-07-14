@@ -23,6 +23,22 @@ type UserInfoResponse struct {
 // AccessCodesResponse 权限码响应
 type AccessCodesResponse []string
 
+// OIDCStatusResponse OIDC 登录状态响应
+type OIDCStatusResponse struct {
+	Enabled     bool   `json:"enabled"`
+	DisplayName string `json:"displayName"`
+}
+
+// OIDCAuthorizeResponse OIDC 授权地址响应
+type OIDCAuthorizeResponse struct {
+	URL string `json:"url"`
+}
+
+// OIDCExchangeRequest OIDC 一次性码换取 token 请求
+type OIDCExchangeRequest struct {
+	Code string `json:"code" binding:"required"`
+}
+
 // CreateAdminUserRequest 创建管理员用户请求
 type CreateAdminUserRequest struct {
 	Username string `json:"username" binding:"required,min=3,max=50"`

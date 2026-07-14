@@ -53,9 +53,25 @@ log:
   compress: true
 
 # JWT 配置（管理后台认证使用）
+# 环境变量：JWT_SECRET / JWT_EXPIRE_HOURS；多副本部署必须显式设置且各副本一致
 jwt:
   secret: your-secret-key-change-in-production
   expire_hours: 24
+
+# OIDC SSO 登录（管理后台，可选）
+# 环境变量：OIDC_ENABLED / OIDC_ISSUER / OIDC_CLIENT_ID / OIDC_CLIENT_SECRET /
+#          OIDC_REDIRECT_URL / OIDC_SCOPES / OIDC_DISPLAY_NAME / OIDC_FRONTEND_CALLBACK
+# 注意：issuer 必须与 IdP discovery 文档中的值完全一致（含末尾斜杠）；
+#      redirect_url 必须是浏览器可达的外部地址，指向后端回调接口
+# oidc:
+#   enabled: true
+#   issuer: https://idp.example.com/realms/main
+#   client_id: mliev-push
+#   client_secret: your-client-secret
+#   redirect_url: https://push.example.com/api/admin/auth/oidc/callback
+#   scopes: openid profile email
+#   display_name: SSO 登录
+#   frontend_callback: /auth/sso-callback
 
 # 短链接配置
 shortlink:
