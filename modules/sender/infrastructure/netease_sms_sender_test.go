@@ -94,7 +94,8 @@ func TestNeteaseSendCode(t *testing.T) {
 			gotForm = r.PostForm
 			gotHeaders = r.Header
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"code":200,"msg":"ok","obj":3996793}`))
+			// 真实响应：msg 为 sendid，obj 为验证码（与 sendtemplate 相反）
+			_, _ = w.Write([]byte(`{"code":200,"msg":"2202","obj":"123214"}`))
 		}))
 		defer srv.Close()
 
@@ -109,8 +110,8 @@ func TestNeteaseSendCode(t *testing.T) {
 		if !resp.Success {
 			t.Fatalf("expected success, got %+v", resp)
 		}
-		if resp.ProviderID != "3996793" {
-			t.Errorf("ProviderID = %q, want 3996793", resp.ProviderID)
+		if resp.ProviderID != "2202" {
+			t.Errorf("ProviderID = %q, want 2202 (msg 字段的 sendid，而非 obj 的验证码)", resp.ProviderID)
 		}
 		if resp.Status != constants.TaskStatusSent {
 			t.Errorf("Status = %q, want %q", resp.Status, constants.TaskStatusSent)
@@ -228,6 +229,24 @@ func TestNeteaseHandleCallback(t *testing.T) {
 		}
 		if results[1].Status != constants.CallbackStatusFailed || results[1].ErrorMessage != "空号" {
 			t.Errorf("result[1] = %+v, want failed with reason", results[1])
+		}
+	})
+
+	t.Run("downlink receipt with numeric eventType and spliced", func(t *testing.T) {
+		// 真实回调报文：文档中 eventType/spliced 为字符串，实际下发为数字
+		body := `{"objects":[{"result":"DELIVRD","reason":"已送达","sendid":"2202","spliced":1,"mobile":"15385390860","templateId":27194667,"sendTime":"2026-07-14 18:41:20","reportTime":"2026-07-14 18:41:32"}],"eventType":11}`
+		_, results, err := s.HandleCallback(context.Background(), &domain.CallbackRequest{RawBody: []byte(body)})
+		if err != nil {
+			t.Fatalf("HandleCallback error: %v", err)
+		}
+		if len(results) != 1 {
+			t.Fatalf("results len = %d, want 1", len(results))
+		}
+		if results[0].ProviderID != "2202" || results[0].Status != constants.CallbackStatusDelivered {
+			t.Errorf("result = %+v, want delivered 2202", results[0])
+		}
+		if results[0].Mobile != "15385390860" {
+			t.Errorf("mobile = %q, want 15385390860", results[0].Mobile)
 		}
 	})
 
