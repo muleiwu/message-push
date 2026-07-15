@@ -15,7 +15,11 @@ type (
 	ApplicationService = domain.ApplicationService
 	UserService        = domain.UserService
 	InstallService     = domain.InstallService
+	OIDCService        = domain.OIDCService
 )
+
+// ErrUserDisabled 表示 OIDC 对应的本地账号已被禁用。
+var ErrUserDisabled = domain.ErrUserDisabled
 
 // GetApplicationService 从 DI 容器解析应用管理服务。
 func GetApplicationService() domain.ApplicationService {
@@ -25,6 +29,11 @@ func GetApplicationService() domain.ApplicationService {
 // GetUserService 从 DI 容器解析管理员用户服务。
 func GetUserService() domain.UserService {
 	return container.MustGet[domain.UserService]()
+}
+
+// GetOIDCService 从 DI 容器解析 OIDC SSO 登录服务。
+func GetOIDCService() domain.OIDCService {
+	return container.MustGet[domain.OIDCService]()
 }
 
 // NewInstallService 以指定数据库连接创建安装服务（安装流程使用待校验的连接）。

@@ -56,11 +56,13 @@ func (p *Producer) Push(ctx context.Context, task *model.PushTask) error {
 
 // pushScheduled 推送定时任务
 func (p *Producer) pushScheduled(ctx context.Context, task *model.PushTask) error {
-	// 推送到Sorted Set，score为定时发送时间
-	score := float64(task.ScheduledAt.Unix())
+	return p.PushDelayed(ctx, task, *task.ScheduledAt)
+}
 
+// PushDelayed 延迟投递：写入定时有序集合，到期由调度器扫描入队（崩溃安全）
+func (p *Producer) PushDelayed(ctx context.Context, task *model.PushTask, at time.Time) error {
 	return p.redis.ZAdd(ctx, "push:scheduled:tasks", redis.Z{
-		Score:  score,
+		Score:  float64(at.Unix()),
 		Member: task.TaskID,
 	}).Err()
 }

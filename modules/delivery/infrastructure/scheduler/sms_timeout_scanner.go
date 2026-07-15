@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"cnb.cool/mliev/open/go-web/pkg/helper"
-	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dao"
+	"cnb.cool/mliev/push/message-push/modules/delivery/infrastructure/lock"
 	"github.com/muleiwu/gsr"
 )
 
@@ -15,9 +15,12 @@ import (
 // 用于处理：
 // 1. 长时间处于 sent 状态未收到回调的短信任务
 // 2. 长时间处于 processing 状态的任务（如邮件发送阻塞）
+// 分布式安全：tick 级分布式锁保证同一时刻只有一个实例扫描；
+// DAO 层使用条件化 UPDATE（CAS），即使锁失效并发执行也不会覆盖回调结果。
 type SMSTimeoutScanner struct {
 	logger            gsr.Logger
 	taskDao           *dao.PushTaskDAO
+	lock              *lock.RedisLock
 	interval          time.Duration // 扫描间隔
 	timeout           time.Duration // sent 状态超时阈值（短信回调）
 	processingTimeout time.Duration // processing 状态超时阈值（发送阻塞）
@@ -30,10 +33,11 @@ func NewSMSTimeoutScanner() *SMSTimeoutScanner {
 	return &SMSTimeoutScanner{
 		logger:            helper.GetLogger(),
 		taskDao:           dao.NewPushTaskDAO(),
-		interval:          10 * time.Second,  // 每10秒扫描一次
-		timeout:           60 * time.Second,  // 60秒未收到回调视为超时
-		processingTimeout: 120 * time.Second, // 120秒处理中视为超时（考虑发送重试等情况）
-		limit:             100,               // 每次最多处理100个
+		lock:              lock.NewRedisLock(helper.GetRedis(), "sms_timeout_scanner", 30*time.Second), // TTL 须大于两条有界 UPDATE 的耗时
+		interval:          10 * time.Second,                                                            // 每10秒扫描一次
+		timeout:           60 * time.Second,                                                            // 60秒未收到回调视为超时
+		processingTimeout: 120 * time.Second,                                                           // 120秒处理中视为超时（考虑发送重试等情况）
+		limit:             100,                                                                         // 每次最多处理100个
 		stopCh:            make(chan struct{}),
 	}
 }
@@ -49,8 +53,14 @@ func (s *SMSTimeoutScanner) Start(ctx context.Context) error {
 		for {
 			select {
 			case <-ticker.C:
+				// 分布式锁：拿不到说明其他实例正在扫描（或 Redis 异常），跳过本轮
+				ok, err := s.lock.TryLock(ctx)
+				if err != nil || !ok {
+					continue
+				}
 				s.scanSentTasks(ctx)
 				s.scanProcessingTasks(ctx)
+				_ = s.lock.Unlock(ctx)
 			case <-s.stopCh:
 				return
 			case <-ctx.Done():
@@ -68,61 +78,28 @@ func (s *SMSTimeoutScanner) Stop() {
 	s.logger.Info("message timeout scanner stopped")
 }
 
-// scanSentTasks 扫描超时的 sent 状态短信任务
+// scanSentTasks 扫描超时的 sent 状态短信任务：保持 sent 状态，仅将回调状态置为超时
 func (s *SMSTimeoutScanner) scanSentTasks(ctx context.Context) {
-	// 获取超时的 sent 状态任务
-	tasks, err := s.taskDao.GetTimeoutSentTasks(s.timeout, s.limit)
+	affected, err := s.taskDao.MarkTimeoutSentTasksCallback(s.timeout, s.limit)
 	if err != nil {
-		s.logger.Error(fmt.Sprintf("failed to get timeout sent tasks: %v", err))
+		s.logger.Error(fmt.Sprintf("failed to mark timeout sent tasks: %v", err))
 		return
 	}
 
-	if len(tasks) == 0 {
-		return
-	}
-
-	s.logger.Info(fmt.Sprintf("found %d timeout sent tasks to process", len(tasks)))
-
-	// 处理每个超时任务：保持 sent 状态，仅更新回调状态为超时
-	for _, task := range tasks {
-		task.CallbackStatus = constants.CallbackStatusTimeout
-
-		now := time.Now()
-		task.CallbackTime = &now
-
-		if err := s.taskDao.Update(task); err != nil {
-			s.logger.Error(fmt.Sprintf("failed to update timeout sent task task_id=%s: %v", task.TaskID, err))
-			continue
-		}
-
-		s.logger.Info(fmt.Sprintf("sent task callback_status marked as timeout: task_id=%s", task.TaskID))
+	if affected > 0 {
+		s.logger.Info(fmt.Sprintf("marked %d sent tasks callback_status as timeout", affected))
 	}
 }
 
-// scanProcessingTasks 扫描超时的 processing 状态任务（所有消息类型）
+// scanProcessingTasks 扫描超时的 processing 状态任务（所有消息类型）：标记为失败
 func (s *SMSTimeoutScanner) scanProcessingTasks(ctx context.Context) {
-	// 获取超时的 processing 状态任务
-	tasks, err := s.taskDao.GetTimeoutProcessingTasks(s.processingTimeout, s.limit)
+	affected, err := s.taskDao.MarkTimeoutProcessingTasksFailed(s.processingTimeout, s.limit)
 	if err != nil {
-		s.logger.Error(fmt.Sprintf("failed to get timeout processing tasks: %v", err))
+		s.logger.Error(fmt.Sprintf("failed to mark timeout processing tasks: %v", err))
 		return
 	}
 
-	if len(tasks) == 0 {
-		return
-	}
-
-	s.logger.Info(fmt.Sprintf("found %d timeout processing tasks to process", len(tasks)))
-
-	// 处理每个超时任务：标记为失败
-	for _, task := range tasks {
-		task.Status = constants.TaskStatusFailed
-
-		if err := s.taskDao.Update(task); err != nil {
-			s.logger.Error(fmt.Sprintf("failed to update timeout processing task task_id=%s: %v", task.TaskID, err))
-			continue
-		}
-
-		s.logger.Info(fmt.Sprintf("processing task marked as failed due to timeout: task_id=%s message_type=%s", task.TaskID, task.MessageType))
+	if affected > 0 {
+		s.logger.Info(fmt.Sprintf("marked %d processing tasks as failed due to timeout", affected))
 	}
 }

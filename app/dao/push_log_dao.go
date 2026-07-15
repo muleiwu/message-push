@@ -3,6 +3,7 @@ package dao
 import (
 	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/dto"
+	apphelper "cnb.cool/mliev/push/message-push/app/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"gorm.io/gorm"
 )
@@ -68,17 +69,41 @@ func (d *PushLogDAO) GetByProviderMsgID(providerMsgID string) (*model.PushLog, e
 // GetByProviderMsgIDAndReceiver 根据服务商消息ID + 接收方手机号获取日志
 // 批量发送时整批共用同一个 provider_msg_id（非唯一），需结合回执携带的手机号定位到具体任务。
 // 通过 push_tasks.receiver 关联，取最新一条匹配的发送日志。
+// 任务 receiver 存的是调用方传入的原始格式（+86 前缀、裸号码、0086 等），而回执回传的是
+// 发送时按服务商规则格式化后的号码，两者可能不一致，因此按同一号码的等价格式集合匹配。
 func (d *PushLogDAO) GetByProviderMsgIDAndReceiver(providerMsgID, receiver string) (*model.PushLog, error) {
 	var log model.PushLog
 	err := d.db.
 		Joins("JOIN push_tasks ON push_tasks.task_id = push_logs.task_id").
-		Where("push_logs.provider_msg_id = ? AND push_tasks.receiver = ?", providerMsgID, receiver).
+		Where("push_logs.provider_msg_id = ? AND push_tasks.receiver IN ?", providerMsgID, receiverCandidates(receiver)).
 		Order("push_logs.id DESC").
 		First(&log).Error
 	if err != nil {
 		return nil, err
 	}
 	return &log, nil
+}
+
+// receiverCandidates 生成同一手机号的等价书写格式集合，用于回执手机号与任务 receiver 的匹配。
+// 解析失败时仅返回原值。
+func receiverCandidates(receiver string) []string {
+	candidates := []string{receiver}
+	info := apphelper.ParsePhoneNumber(receiver)
+	if !info.Valid {
+		return candidates
+	}
+	for _, v := range []string{
+		info.E164,                                          // +8618751973856
+		info.NationalNumber,                                // 18751973856
+		info.CountryCode + info.NationalNumber,             // 8618751973856
+		"00" + info.CountryCode + info.NationalNumber,      // 008618751973856
+		"+" + info.CountryCode + "-" + info.NationalNumber, // +86-18751973856（网易非大陆发送格式）
+	} {
+		if v != receiver {
+			candidates = append(candidates, v)
+		}
+	}
+	return candidates
 }
 
 // List 获取日志列表（支持筛选）

@@ -30,6 +30,25 @@ func (d *AdminUserDAO) GetByID(id uint) (*model.AdminUser, error) {
 	return &user, err
 }
 
+// GetByOidcSub 根据 OIDC subject 获取管理员（不过滤 status，由调用方区分禁用与不存在）
+func (d *AdminUserDAO) GetByOidcSub(sub string) (*model.AdminUser, error) {
+	var user model.AdminUser
+	err := d.db.Where("oidc_sub = ?", sub).First(&user).Error
+	return &user, err
+}
+
+// GetByEmail 根据邮箱获取管理员（不过滤 status，由调用方区分禁用与不存在）
+func (d *AdminUserDAO) GetByEmail(email string) (*model.AdminUser, error) {
+	var user model.AdminUser
+	err := d.db.Where("email = ?", email).First(&user).Error
+	return &user, err
+}
+
+// BindOidcSub 为已有账号绑定 OIDC subject
+func (d *AdminUserDAO) BindOidcSub(id uint, sub string) error {
+	return d.db.Model(&model.AdminUser{}).Where("id = ?", id).Update("oidc_sub", sub).Error
+}
+
 // Create 创建管理员
 func (d *AdminUserDAO) Create(user *model.AdminUser) error {
 	return d.db.Create(user).Error

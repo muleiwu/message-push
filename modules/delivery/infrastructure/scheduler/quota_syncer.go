@@ -8,6 +8,7 @@ import (
 	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/modules/delivery/infrastructure/lock"
 	"cnb.cool/mliev/push/message-push/modules/quota"
 	"github.com/muleiwu/gsr"
 	"github.com/redis/go-redis/v9"
@@ -21,6 +22,7 @@ type QuotaSyncer struct {
 	redis    *redis.Client
 	db       *gorm.DB
 	appDao   *dao.ApplicationDAO
+	lock     *lock.RedisLock
 	interval time.Duration
 	stopCh   chan struct{}
 }
@@ -32,7 +34,8 @@ func NewQuotaSyncer() *QuotaSyncer {
 		redis:    helper.GetRedis(),
 		db:       helper.GetDatabase(),
 		appDao:   dao.NewApplicationDAO(),
-		interval: 1 * time.Hour, // 每小时同步一次
+		lock:     lock.NewRedisLock(helper.GetRedis(), "quota_syncer", 10*time.Minute), // TTL 须覆盖遍历全部应用的最长耗时（无自动续期）
+		interval: 1 * time.Hour,                                                        // 每小时同步一次
 		stopCh:   make(chan struct{}),
 	}
 }
@@ -71,11 +74,20 @@ func (s *QuotaSyncer) Stop() {
 
 // sync 同步配额数据
 func (s *QuotaSyncer) sync(ctx context.Context) {
-	s.logger.Info("starting quota sync...")
 	if !helper.GetConfig().GetBool("app.installed", false) {
 		helper.GetLogger().Warn("数据库未安装，不执行")
 		return
 	}
+
+	// 分布式锁：多实例部署时仅一个实例执行同步（业务本身幂等，锁用于避免重复劳动）
+	ok, err := s.lock.TryLock(ctx)
+	if err != nil || !ok {
+		s.logger.Info("quota sync skipped: another instance is syncing or lock unavailable")
+		return
+	}
+	defer func() { _ = s.lock.Unlock(ctx) }()
+
+	s.logger.Info("starting quota sync...")
 
 	// 1. 获取所有应用
 	// 这里假设应用数量不多，可以直接全部获取。如果很多，需要分页。

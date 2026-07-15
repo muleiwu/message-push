@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"cnb.cool/mliev/push/message-push/app/constants"
+	"cnb.cool/mliev/push/message-push/app/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
 	domain "cnb.cool/mliev/push/message-push/modules/sender/domain"
 )
@@ -173,6 +174,25 @@ func resolveNeteaseTemplate(binding *model.ChannelTemplateBinding, fallbackCode 
 	return templateCode, templateContent
 }
 
+// formatNeteaseMobile 按网易云信规则格式化目标手机号：
+// 中国大陆号码传裸 11 位（不带 +86 前缀）；非大陆号码需带国家/地区代码且用连字符分隔，
+// 如美国 +1-xxxxxxxxxx、香港 +852-xxxxxxxx，否则网易返回 414 "mobile 'xxx' bad format!"。
+// region/countryCode/nationalNumber 为 worker 预解析结果，缺失时兜底自行解析；
+// 解析失败时原样返回，交由网易侧校验报错。
+func formatNeteaseMobile(region, countryCode, nationalNumber, raw string) string {
+	if region == "" || countryCode == "" || nationalNumber == "" {
+		info := helper.ParsePhoneNumber(raw)
+		if !info.Valid {
+			return raw
+		}
+		region, countryCode, nationalNumber = info.Region, info.CountryCode, info.NationalNumber
+	}
+	if region == "CN" {
+		return nationalNumber
+	}
+	return fmt.Sprintf("+%s-%s", countryCode, nationalNumber)
+}
+
 // buildParamsFromMapping 从模板内容解析占位符顺序，按序从映射参数取值，返回有序字符串切片
 // 用于模板短信（sendtemplate.action）的 params 数组参数
 func (s *NeteaseSMSSender) buildParamsFromMapping(templateContent string, params map[string]string) []string {
@@ -294,16 +314,19 @@ func (s *NeteaseSMSSender) Send(ctx context.Context, req *domain.SendRequest) (*
 		return nil, fmt.Errorf("missing template_code")
 	}
 
-	// 3. 按发送类型分流
+	// 3. 按网易规则格式化手机号（大陆裸号码 / 非大陆 +国家码-号码）
+	mobile := formatNeteaseMobile(req.PhoneRegion, req.PhoneCountryCode, req.PhoneNationalNumber, req.Task.Receiver)
+
+	// 4. 按发送类型分流
 	if sendType == neteaseSendTypeCode {
-		return s.sendCodeOne(ctx, appKey, appSecret, templateCode, req.Task, req.MappedParams), nil
+		return s.sendCodeOne(ctx, appKey, appSecret, templateCode, mobile, req.Task, req.MappedParams), nil
 	}
-	return s.sendTemplateOne(ctx, appKey, appSecret, templateCode, templateContent, req.Task, req.MappedParams), nil
+	return s.sendTemplateOne(ctx, appKey, appSecret, templateCode, templateContent, mobile, req.Task, req.MappedParams), nil
 }
 
 // sendTemplateOne 通过 sendtemplate.action 发送单条模板短信
-func (s *NeteaseSMSSender) sendTemplateOne(ctx context.Context, appKey, appSecret, templateCode, templateContent string, task *model.PushTask, mappedParams map[string]string) *domain.SendResponse {
-	mobiles := []string{task.Receiver}
+func (s *NeteaseSMSSender) sendTemplateOne(ctx context.Context, appKey, appSecret, templateCode, templateContent, mobile string, task *model.PushTask, mappedParams map[string]string) *domain.SendResponse {
+	mobiles := []string{mobile}
 	params := s.buildParamsFromMapping(templateContent, mappedParams)
 
 	form := s.buildTemplateForm(templateCode, mobiles, params)
@@ -319,9 +342,9 @@ func (s *NeteaseSMSSender) sendTemplateOne(ctx context.Context, appKey, appSecre
 
 // sendCodeOne 通过 sendcode.action 发送单条验证码短信
 // 验证码接口为单手机号，paramMap 为「变量名->值」的 JSON 对象，直接复用映射后的参数
-func (s *NeteaseSMSSender) sendCodeOne(ctx context.Context, appKey, appSecret, templateCode string, task *model.PushTask, mappedParams map[string]string) *domain.SendResponse {
+func (s *NeteaseSMSSender) sendCodeOne(ctx context.Context, appKey, appSecret, templateCode, mobile string, task *model.PushTask, mappedParams map[string]string) *domain.SendResponse {
 	form := url.Values{}
-	form.Set("mobile", task.Receiver)
+	form.Set("mobile", mobile)
 	form.Set("templateid", templateCode)
 	if len(mappedParams) > 0 {
 		paramMapJSON, _ := json.Marshal(mappedParams)
@@ -330,7 +353,7 @@ func (s *NeteaseSMSSender) sendCodeOne(ctx context.Context, appKey, appSecret, t
 
 	requestData, _ := json.Marshal(map[string]interface{}{
 		"templateid": templateCode,
-		"mobile":     task.Receiver,
+		"mobile":     mobile,
 		"paramMap":   mappedParams,
 	})
 
@@ -383,10 +406,12 @@ func (s *NeteaseSMSSender) BatchSend(ctx context.Context, req *domain.BatchSendR
 	}
 
 	// 3. 验证码短信为单手机号接口，逐条发送
+	// 批量请求未携带预解析的手机号信息，由 formatNeteaseMobile 兜底解析
 	if sendType == neteaseSendTypeCode {
 		results := make([]*domain.SendResponse, len(req.Tasks))
 		for i, task := range req.Tasks {
-			results[i] = s.sendCodeOne(ctx, appKey, appSecret, templateCode, task, req.MappedParams)
+			mobile := formatNeteaseMobile("", "", "", task.Receiver)
+			results[i] = s.sendCodeOne(ctx, appKey, appSecret, templateCode, mobile, task, req.MappedParams)
 		}
 		return &domain.BatchSendResponse{Results: results}, nil
 	}
@@ -410,7 +435,7 @@ func (s *NeteaseSMSSender) BatchSend(ctx context.Context, req *domain.BatchSendR
 func (s *NeteaseSMSSender) batchSendChunk(ctx context.Context, appKey, appSecret, templateCode string, params []string, tasks []*model.PushTask) []*domain.SendResponse {
 	mobiles := make([]string, len(tasks))
 	for i, task := range tasks {
-		mobiles[i] = task.Receiver
+		mobiles[i] = formatNeteaseMobile("", "", "", task.Receiver)
 	}
 
 	form := s.buildTemplateForm(templateCode, mobiles, params)

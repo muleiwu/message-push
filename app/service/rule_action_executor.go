@@ -132,8 +132,10 @@ func (e *ActionExecutor) executeRetry(ctx context.Context, result *ruleengine.Ev
 	// 计算重试延迟（指数退避）
 	delay := e.calculateBackoff(task.RetryCount, config)
 
-	// 更新任务重试次数
+	// 更新任务重试次数，状态重置为 pending：消费侧以 CAS pending→processing 抢占，
+	// 非 pending 的重复消息会被跳过，重试消息必须回到 pending 才能被再次处理
 	task.RetryCount++
+	task.Status = constants.TaskStatusPending
 	if err := e.taskDAO.Update(task); err != nil {
 		e.logger.Error(fmt.Sprintf("failed to update task retry count: %v", err))
 	}
@@ -149,13 +151,10 @@ func (e *ActionExecutor) executeRetry(ctx context.Context, result *ruleengine.Ev
 		ErrorMessage:      execCtx.ErrorMessage,
 	})
 
-	// 延迟后重新推送到队列
-	go func() {
-		time.Sleep(delay)
-		if err := e.producer.Push(context.Background(), task); err != nil {
-			e.logger.Error(fmt.Sprintf("failed to push task to queue for retry task_id=%s: %v", task.TaskID, err))
-		}
-	}()
+	// 延迟投递走定时有序集合（崩溃安全）；goroutine 内 sleep 后 Push 会在进程退出时丢失重试
+	if err := e.producer.PushDelayed(ctx, task, time.Now().Add(delay)); err != nil {
+		e.logger.Error(fmt.Sprintf("failed to push task to queue for retry task_id=%s: %v", task.TaskID, err))
+	}
 
 	e.logger.Info(fmt.Sprintf("task scheduled for retry task_id=%s retry_count=%d delay=%v",
 		task.TaskID, task.RetryCount, delay))
@@ -205,8 +204,9 @@ func (e *ActionExecutor) executeSwitchProvider(ctx context.Context, result *rule
 			task.TaskID, execCtx.ProviderAccountID, task.GetExcludeProviderIDs()))
 	}
 
-	// 更新任务重试次数和排除列表
+	// 更新任务重试次数和排除列表，状态重置为 pending 以通过消费侧的 CAS 抢占
 	task.RetryCount++
+	task.Status = constants.TaskStatusPending
 	if err := e.taskDAO.Update(task); err != nil {
 		e.logger.Error(fmt.Sprintf("failed to update task for switch provider: %v", err))
 	}
@@ -222,14 +222,11 @@ func (e *ActionExecutor) executeSwitchProvider(ctx context.Context, result *rule
 		ErrorMessage:      fmt.Sprintf("switching provider, exclude current: %v, excluded providers: %v", config.ExcludeCurrent, task.GetExcludeProviderIDs()),
 	})
 
-	// 重新推送到队列（选择器会根据 ExcludeProviderIDs 选择其他供应商）
-	go func() {
-		// 稍微延迟一下再推送
-		time.Sleep(1 * time.Second)
-		if err := e.producer.Push(context.Background(), task); err != nil {
-			e.logger.Error(fmt.Sprintf("failed to push task to queue for switch provider task_id=%s: %v", task.TaskID, err))
-		}
-	}()
+	// 立即重新推送到队列（选择器会根据 ExcludeProviderIDs 选择其他供应商）；
+	// 同步推送避免 goroutine 延迟窗口内进程退出丢失切换重试
+	if err := e.producer.Push(ctx, task); err != nil {
+		e.logger.Error(fmt.Sprintf("failed to push task to queue for switch provider task_id=%s: %v", task.TaskID, err))
+	}
 
 	e.logger.Info(fmt.Sprintf("task scheduled for switch provider retry task_id=%s exclude_current=%v excluded_providers=%v",
 		task.TaskID, config.ExcludeCurrent, task.GetExcludeProviderIDs()))
