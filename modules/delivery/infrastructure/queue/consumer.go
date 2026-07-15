@@ -95,28 +95,54 @@ func (c *Consumer) MoveToDeadLetter(ctx context.Context, message *Message) error
 	return err
 }
 
-// GetPendingMessages 获取待处理的消息（超时未确认）
-func (c *Consumer) GetPendingMessages(ctx context.Context) ([]string, error) {
-	// 获取pending消息列表
-	pending, err := c.redis.XPendingExt(ctx, &redis.XPendingExtArgs{
-		Stream: c.streamName,
-		Group:  c.consumerGroup,
-		Start:  "-",
-		End:    "+",
-		Count:  100,
+// ReclaimStale 用 XAUTOCLAIM 将组内闲置超过 minIdle 的 pending 消息认领到当前 consumer。
+// consumer 名含 hostname-pid，实例崩溃/滚动重启后旧 consumer 不再被复用，
+// 其 PEL 中未 Ack 的消息必须由存活实例定期回收，否则永久滞留。
+func (c *Consumer) ReclaimStale(ctx context.Context, minIdle time.Duration, count int64) ([]*Message, error) {
+	msgs, _, err := c.redis.XAutoClaim(ctx, &redis.XAutoClaimArgs{
+		Stream:   c.streamName,
+		Group:    c.consumerGroup,
+		Consumer: c.consumerName,
+		MinIdle:  minIdle,
+		Start:    "0-0",
+		Count:    count,
 	}).Result()
-
 	if err != nil {
 		return nil, err
 	}
 
-	var messageIDs []string
-	for _, p := range pending {
-		// 如果消息超过5分钟未确认，则重新处理
-		if p.Idle > 5*time.Minute {
-			messageIDs = append(messageIDs, p.ID)
+	var messages []*Message
+	for _, msg := range msgs {
+		message := &Message{
+			ID:   msg.ID,
+			Data: msg.Values,
 		}
+		if taskID, ok := msg.Values["task_id"].(string); ok {
+			message.TaskID = taskID
+		}
+		messages = append(messages, message)
+	}
+	return messages, nil
+}
+
+// CleanupIdleConsumers 删除组内无 pending 且闲置超过 minIdle 的 consumer 记录，
+// 防止滚动重启产生的死 consumer 无限累积。
+// XGROUP DELCONSUMER 会丢弃该 consumer 的 pending 消息，因此仅在 Pending==0 时删除；
+// 存活 consumer 的阻塞读会持续刷新 idle，不会被误删。
+func (c *Consumer) CleanupIdleConsumers(ctx context.Context, minIdle time.Duration) (int, error) {
+	consumers, err := c.redis.XInfoConsumers(ctx, c.streamName, c.consumerGroup).Result()
+	if err != nil {
+		return 0, err
 	}
 
-	return messageIDs, nil
+	removed := 0
+	for _, consumer := range consumers {
+		if consumer.Name == c.consumerName || consumer.Pending > 0 || consumer.Idle < minIdle {
+			continue
+		}
+		if err := c.redis.XGroupDelConsumer(ctx, c.streamName, c.consumerGroup, consumer.Name).Err(); err == nil {
+			removed++
+		}
+	}
+	return removed, nil
 }

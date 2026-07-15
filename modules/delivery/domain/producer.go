@@ -4,6 +4,7 @@ package domain
 
 import (
 	"context"
+	"time"
 
 	"cnb.cool/mliev/push/message-push/app/model"
 )
@@ -14,6 +15,10 @@ import (
 type Producer interface {
 	// Push 推送单个任务到队列
 	Push(ctx context.Context, task *model.PushTask) error
+	// PushDelayed 延迟投递：写入定时有序集合，到期由调度器扫描入队。
+	// 持久化于 Redis，进程崩溃不丢（对比 goroutine 内 sleep 后 Push）；
+	// 实际投递时间受调度器扫描间隔影响（约 10s 粒度）。
+	PushDelayed(ctx context.Context, task *model.PushTask, at time.Time) error
 	// PushBatch 批量推送任务到队列
 	PushBatch(ctx context.Context, tasks []*model.PushTask) error
 }

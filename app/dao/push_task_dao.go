@@ -50,6 +50,16 @@ func (d *PushTaskDAO) Update(task *model.PushTask) error {
 	return d.db.Save(task).Error
 }
 
+// ClaimForProcessing 以 CAS 方式将 pending 任务抢占为 processing。
+// 队列是 at-least-once 语义（崩溃重放、租约到期重投都会产生重复消息），
+// 只有抢占成功的消费者才能继续发送，重复消息返回 false 直接跳过，避免重复下发。
+func (d *PushTaskDAO) ClaimForProcessing(taskID string) (bool, error) {
+	res := d.db.Model(&model.PushTask{}).
+		Where("task_id = ? AND status = ?", taskID, "pending").
+		Update("status", "processing")
+	return res.RowsAffected > 0, res.Error
+}
+
 // UpdateStatus 更新任务状态
 func (d *PushTaskDAO) UpdateStatus(taskID, status string) error {
 	return d.db.Model(&model.PushTask{}).

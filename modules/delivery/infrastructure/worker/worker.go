@@ -103,29 +103,35 @@ func (w *Worker) processMessages(ctx context.Context) {
 
 // handleMessage 处理单条消息
 func (w *Worker) handleMessage(ctx context.Context, msg *queue.Message) error {
-	w.logger.Info(fmt.Sprintf("processing message worker_id=%d message_id=%s task_id=%s", w.id, msg.ID, msg.TaskID))
+	return handleQueueMessage(ctx, w.consumer, w.handler, w.logger, fmt.Sprintf("worker_id=%d", w.id), msg)
+}
+
+// handleQueueMessage 处理单条消息：失败移入死信队列；无论成败均 Ack，避免重复处理
+func handleQueueMessage(ctx context.Context, consumer *queue.Consumer, handler MessageHandlerFunc, logger gsr.Logger, label string, msg *queue.Message) error {
+	logger.Info(fmt.Sprintf("processing message %s message_id=%s task_id=%s", label, msg.ID, msg.TaskID))
 
 	// 执行业务逻辑
-	if err := w.handler(ctx, msg); err != nil {
-		w.logger.Error(fmt.Sprintf("handler error worker_id=%d message_id=%s err=%v", w.id, msg.ID, err))
+	if err := handler(ctx, msg); err != nil {
+		logger.Error(fmt.Sprintf("handler error %s message_id=%s err=%v", label, msg.ID, err))
 
 		// 移入死信队列
-		if dlErr := w.consumer.MoveToDeadLetter(ctx, msg); dlErr != nil {
-			w.logger.Error(fmt.Sprintf("failed to move to dead letter worker_id=%d message_id=%s err=%v", w.id, msg.ID, dlErr))
+		if dlErr := consumer.MoveToDeadLetter(ctx, msg); dlErr != nil {
+			logger.Error(fmt.Sprintf("failed to move to dead letter %s message_id=%s err=%v", label, msg.ID, dlErr))
 		}
 
 		// 即使失败也要Ack，避免重复处理
-		return w.consumer.Ack(ctx, msg.ID)
+		return consumer.Ack(ctx, msg.ID)
 	}
 
 	// 确认消息
-	return w.consumer.Ack(ctx, msg.ID)
+	return consumer.Ack(ctx, msg.ID)
 }
 
 // WorkerPool 工作者池
 type WorkerPool struct {
-	workers []*Worker
-	logger  gsr.Logger
+	workers   []*Worker
+	reclaimer *Reclaimer
+	logger    gsr.Logger
 }
 
 // NewWorkerPool 创建工作者池
@@ -136,12 +142,13 @@ func NewWorkerPool(size int, redisClient *redis.Client, handler MessageHandlerFu
 	}
 
 	return &WorkerPool{
-		workers: workers,
-		logger:  helper.GetLogger(),
+		workers:   workers,
+		reclaimer: NewReclaimer(redisClient, handler),
+		logger:    helper.GetLogger(),
 	}
 }
 
-// Start 启动所有工作者
+// Start 启动所有工作者和孤儿消息回收器
 func (p *WorkerPool) Start(ctx context.Context) error {
 	for _, worker := range p.workers {
 		if err := worker.Start(ctx); err != nil {
@@ -149,11 +156,13 @@ func (p *WorkerPool) Start(ctx context.Context) error {
 		}
 	}
 
+	p.reclaimer.Start(ctx)
+
 	p.logger.Info(fmt.Sprintf("worker pool started size=%d", len(p.workers)))
 	return nil
 }
 
-// Stop 停止所有工作者
+// Stop 停止所有工作者和回收器
 func (p *WorkerPool) Stop() {
 	var wg sync.WaitGroup
 	for _, worker := range p.workers {
@@ -165,5 +174,6 @@ func (p *WorkerPool) Stop() {
 	}
 
 	wg.Wait()
+	p.reclaimer.Stop()
 	p.logger.Info("worker pool stopped")
 }

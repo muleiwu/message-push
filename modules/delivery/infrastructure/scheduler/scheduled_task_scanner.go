@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"cnb.cool/mliev/push/message-push/modules/delivery/infrastructure/queue"
 	"github.com/muleiwu/gsr"
 	"github.com/redis/go-redis/v9"
+	"gorm.io/gorm"
 )
 
 // claimScript 租约认领脚本：仅当成员仍到期（score <= now）时，将其 score 原子推到租约时间。
@@ -122,8 +124,13 @@ func (s *ScheduledTaskScanner) scan(ctx context.Context) {
 		task, err := s.taskDao.GetByTaskID(taskID)
 		if err != nil {
 			s.logger.Error(fmt.Sprintf("failed to get task id=%s: %v", taskID, err))
-			// 删除无效的任务ID
-			s.redis.ZRem(ctx, sortedSetKey, taskID)
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				// 任务确实不存在，删除无效的任务ID
+				s.redis.ZRem(ctx, sortedSetKey, taskID)
+			} else {
+				// 瞬时数据库错误：回补原 score 等下轮重试，不能误删排期
+				s.redis.ZAdd(ctx, sortedSetKey, redis.Z{Score: origScore, Member: taskID})
+			}
 			continue
 		}
 

@@ -73,9 +73,17 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 		return err
 	}
 
-	// 更新任务状态为处理中
+	// CAS 抢占（pending→processing）：队列 at-least-once 语义下重复消息抢占失败，直接 Ack 跳过
+	claimed, err := h.taskDao.ClaimForProcessing(taskID)
+	if err != nil {
+		h.logger.Error(fmt.Sprintf("failed to claim task id=%s: %v", taskID, err))
+		return err
+	}
+	if !claimed {
+		h.logger.Info(fmt.Sprintf("skip duplicate message: task not in pending status task_id=%s status=%s", taskID, task.Status))
+		return nil
+	}
 	task.Status = constants.TaskStatusProcessing
-	h.taskDao.Update(task)
 
 	// 选择通道
 	node, err := h.selectChannel(ctx, task)
