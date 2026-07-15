@@ -121,32 +121,60 @@ func (d *PushTaskDAO) IncrementRetryCount(taskID string) error {
 		UpdateColumn("retry_count", gorm.Expr("retry_count + 1")).Error
 }
 
-// GetTimeoutSentTasks 获取超时的 sent 状态短信任务
-func (d *PushTaskDAO) GetTimeoutSentTasks(timeout time.Duration, limit int) ([]*model.PushTask, error) {
-	var tasks []*model.PushTask
+// MarkTimeoutSentTasksCallback 将超时未回调的 sent 状态短信任务的回调状态置为 timeout。
+// 条件化更新（CAS）：UPDATE 的 WHERE 复查状态与时间，回调若已并发写入结果则不覆盖；
+// 多实例重复执行时 RowsAffected 为 0，天然幂等。
+// 分两步（先限量查 ID 再条件更新）是因为 UPDATE ... LIMIT 仅 MySQL 方言支持。
+func (d *PushTaskDAO) MarkTimeoutSentTasksCallback(timeout time.Duration, limit int) (int64, error) {
 	cutoff := time.Now().Add(-timeout)
-	err := d.db.Where("status = ? AND message_type = ? AND updated_at < ?",
-		"sent", "sms", cutoff).
+	pendingCallback := []string{"", "pending"}
+
+	var ids []uint
+	err := d.db.Model(&model.PushTask{}).
+		Where("status = ? AND message_type = ? AND updated_at < ?", "sent", "sms", cutoff).
+		Where("(callback_status IS NULL OR callback_status IN ?)", pendingCallback).
 		Limit(limit).
-		Find(&tasks).Error
+		Pluck("id", &ids).Error
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
-	return tasks, nil
+	if len(ids) == 0 {
+		return 0, nil
+	}
+
+	res := d.db.Model(&model.PushTask{}).
+		Where("id IN ?", ids).
+		Where("status = ? AND updated_at < ?", "sent", cutoff).
+		Where("(callback_status IS NULL OR callback_status IN ?)", pendingCallback).
+		Updates(map[string]interface{}{
+			"callback_status": "timeout",
+			"callback_time":   time.Now(),
+		})
+	return res.RowsAffected, res.Error
 }
 
-// GetTimeoutProcessingTasks 获取超时的 processing 状态任务（所有消息类型）
-func (d *PushTaskDAO) GetTimeoutProcessingTasks(timeout time.Duration, limit int) ([]*model.PushTask, error) {
-	var tasks []*model.PushTask
+// MarkTimeoutProcessingTasksFailed 将超时的 processing 状态任务（所有消息类型）标记为失败。
+// 条件化更新（CAS）：worker 并发改为 success/sent 的行不会被覆盖；重复执行 RowsAffected 为 0。
+func (d *PushTaskDAO) MarkTimeoutProcessingTasksFailed(timeout time.Duration, limit int) (int64, error) {
 	cutoff := time.Now().Add(-timeout)
-	err := d.db.Where("status = ? AND updated_at < ?",
-		"processing", cutoff).
+
+	var ids []uint
+	err := d.db.Model(&model.PushTask{}).
+		Where("status = ? AND updated_at < ?", "processing", cutoff).
 		Limit(limit).
-		Find(&tasks).Error
+		Pluck("id", &ids).Error
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
-	return tasks, nil
+	if len(ids) == 0 {
+		return 0, nil
+	}
+
+	res := d.db.Model(&model.PushTask{}).
+		Where("id IN ?", ids).
+		Where("status = ? AND updated_at < ?", "processing", cutoff).
+		Update("status", "failed")
+	return res.RowsAffected, res.Error
 }
 
 // List 获取任务列表（分页）

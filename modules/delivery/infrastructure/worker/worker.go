@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -14,6 +15,16 @@ import (
 
 // MessageHandlerFunc 消息处理函数
 type MessageHandlerFunc func(ctx context.Context, message *queue.Message) error
+
+// instanceID 实例唯一标识（hostname-pid），K8s 下 hostname 即 Pod 名。
+// 多实例部署时保证 consumer 名在 consumer group 内不重名，避免 PEL 归属混淆。
+var instanceID = func() string {
+	host, err := os.Hostname()
+	if err != nil {
+		host = "unknown"
+	}
+	return fmt.Sprintf("%s-%d", host, os.Getpid())
+}()
 
 // Worker 工作者
 type Worker struct {
@@ -27,7 +38,7 @@ type Worker struct {
 
 // NewWorker 创建工作者
 func NewWorker(id int, redisClient *redis.Client, handler MessageHandlerFunc) *Worker {
-	consumerName := fmt.Sprintf("worker-%d", id)
+	consumerName := fmt.Sprintf("worker-%s-%d", instanceID, id)
 	return &Worker{
 		id:       id,
 		consumer: queue.NewConsumer(redisClient, consumerName),
