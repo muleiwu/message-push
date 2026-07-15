@@ -40,6 +40,37 @@ func TestNeteaseBuildAuthHeaders(t *testing.T) {
 	}
 }
 
+func TestFormatNeteaseMobile(t *testing.T) {
+	tests := []struct {
+		name                                string
+		region, countryCode, nationalNumber string
+		raw                                 string
+		want                                string
+	}{
+		// 大陆号码：无论入参格式，统一传裸 11 位（+86 前缀会被网易 414 拒绝）
+		{"CN E.164 fallback parse", "", "", "", "+8618751973856", "18751973856"},
+		{"CN bare 11 digits", "", "", "", "18751973856", "18751973856"},
+		{"CN 0086 prefix", "", "", "", "008618751973856", "18751973856"},
+		{"CN pre-parsed", "CN", "86", "18751973856", "+8618751973856", "18751973856"},
+		// 非大陆号码：+国家码-号码，连字符分隔
+		{"HK pre-parsed", "HK", "852", "61234567", "+85261234567", "+852-61234567"},
+		{"HK fallback parse", "", "", "", "+85261234567", "+852-61234567"},
+		{"US pre-parsed", "US", "1", "4155552671", "+14155552671", "+1-4155552671"},
+		// 解析失败：原样透传，交由网易侧校验
+		{"unparseable passthrough", "", "", "", "not-a-phone", "not-a-phone"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := formatNeteaseMobile(tt.region, tt.countryCode, tt.nationalNumber, tt.raw)
+			if got != tt.want {
+				t.Errorf("formatNeteaseMobile(%q, %q, %q, %q) = %q, want %q",
+					tt.region, tt.countryCode, tt.nationalNumber, tt.raw, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestBuildParamsFromMapping(t *testing.T) {
 	s := NewNeteaseSMSSender()
 
@@ -105,7 +136,7 @@ func TestNeteaseSendCode(t *testing.T) {
 
 		s := NewNeteaseSMSSender()
 		task := &model.PushTask{TaskID: "t1", Receiver: "18355190731"}
-		resp := s.sendCodeOne(context.Background(), "ak", "sk", "27194667", task, map[string]string{"code": "123214"})
+		resp := s.sendCodeOne(context.Background(), "ak", "sk", "27194667", task.Receiver, task, map[string]string{"code": "123214"})
 
 		if !resp.Success {
 			t.Fatalf("expected success, got %+v", resp)
@@ -151,7 +182,7 @@ func TestNeteaseSendCode(t *testing.T) {
 
 		s := NewNeteaseSMSSender()
 		task := &model.PushTask{TaskID: "t2", Receiver: "18355190731"}
-		resp := s.sendCodeOne(context.Background(), "ak", "sk", "999", task, map[string]string{"code": "1"})
+		resp := s.sendCodeOne(context.Background(), "ak", "sk", "999", task.Receiver, task, map[string]string{"code": "1"})
 
 		if resp.Success {
 			t.Fatalf("expected failure, got success: %+v", resp)

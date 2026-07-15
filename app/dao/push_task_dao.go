@@ -98,10 +98,11 @@ func (d *PushTaskDAO) GetScheduledTasks(limit int) ([]*model.PushTask, error) {
 // GetLatestReceiverApp 获取最近一次发往该手机号的任务所属应用ID
 // 用于上行短信（无 provider_msg_id）尽力关联应用：用户回复通常针对最后一条短信。
 // 找不到时返回空字符串、不报错。
+// 上行回传的号码格式可能与任务 receiver 的原始格式不一致，按等价格式集合匹配。
 func (d *PushTaskDAO) GetLatestReceiverApp(receiver string) (string, error) {
 	var task model.PushTask
 	err := d.db.Select("app_id").
-		Where("receiver = ?", receiver).
+		Where("receiver IN ?", receiverCandidates(receiver)).
 		Order("created_at DESC").
 		First(&task).Error
 	if err != nil {
