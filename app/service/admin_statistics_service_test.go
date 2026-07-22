@@ -74,7 +74,7 @@ func TestAdminStatisticsCountsTasksInsteadOfProviderAttempts(t *testing.T) {
 	if stats.Summary.TotalCount != 3 || stats.Summary.SuccessCount != 1 || stats.Summary.FailureCount != 1 {
 		t.Fatalf("unexpected summary: %+v", stats.Summary)
 	}
-	if len(stats.Daily) != 1 || stats.Daily[0].TotalCount != 3 || stats.Daily[0].FailureCount != 1 {
+	if len(stats.Daily) != 1 || stats.Daily[0].Date != date || stats.Daily[0].TotalCount != 3 || stats.Daily[0].FailureCount != 1 {
 		t.Fatalf("unexpected daily statistics: %+v", stats.Daily)
 	}
 
@@ -131,5 +131,27 @@ func TestAdminStatisticsCountsTasksInsteadOfProviderAttempts(t *testing.T) {
 		if activity.AppName == "未知应用" {
 			t.Fatalf("admin test appeared as an unknown application: %+v", recent)
 		}
+	}
+}
+
+func TestStatisticsDateRangesUseLocalCalendarDays(t *testing.T) {
+	originalLocal := time.Local
+	time.Local = time.FixedZone("UTC+8", 8*60*60)
+	t.Cleanup(func() { time.Local = originalLocal })
+
+	start, end, err := statisticsDateRange("2026-07-23", "2026-07-23")
+	if err != nil {
+		t.Fatalf("statistics date range: %v", err)
+	}
+	if got, want := start.Format(time.RFC3339), "2026-07-23T00:00:00+08:00"; got != want {
+		t.Fatalf("start = %s, want %s", got, want)
+	}
+	if got, want := end.Format(time.RFC3339), "2026-07-24T00:00:00+08:00"; got != want {
+		t.Fatalf("end = %s, want %s", got, want)
+	}
+
+	todayStart, tomorrowStart := localDayRange(time.Date(2026, 7, 23, 0, 0, 1, 0, time.Local))
+	if !todayStart.Equal(start) || !tomorrowStart.Equal(end) {
+		t.Fatalf("local day range = [%s, %s), want [%s, %s)", todayStart, tomorrowStart, start, end)
 	}
 }

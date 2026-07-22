@@ -21,6 +21,32 @@ func (s *AdminStatisticsService) userTaskQuery() *gorm.DB {
 	return s.db.Model(&model.PushTask{}).Where("app_id <> ?", adminTestAppID)
 }
 
+const statisticsDateLayout = "2006-01-02"
+
+// statisticsDateRange converts inclusive local calendar dates into a half-open
+// timestamp range. Comparing timestamps keeps the created_at index usable and
+// avoids database-specific DATE() timezone conversion at local midnight.
+func statisticsDateRange(startDate, endDate string) (time.Time, time.Time, error) {
+	start, err := time.ParseInLocation(statisticsDateLayout, startDate, time.Local)
+	if err != nil {
+		return time.Time{}, time.Time{}, fmt.Errorf("invalid start date %q: %w", startDate, err)
+	}
+	end, err := time.ParseInLocation(statisticsDateLayout, endDate, time.Local)
+	if err != nil {
+		return time.Time{}, time.Time{}, fmt.Errorf("invalid end date %q: %w", endDate, err)
+	}
+	if end.Before(start) {
+		return time.Time{}, time.Time{}, fmt.Errorf("end date %q is before start date %q", endDate, startDate)
+	}
+	return start, end.AddDate(0, 0, 1), nil
+}
+
+func localDayRange(now time.Time) (time.Time, time.Time) {
+	localNow := now.In(time.Local)
+	start := time.Date(localNow.Year(), localNow.Month(), localNow.Day(), 0, 0, 0, 0, time.Local)
+	return start, start.AddDate(0, 0, 1)
+}
+
 // NewAdminStatisticsService 创建统计分析服务实例
 func NewAdminStatisticsService() *AdminStatisticsService {
 	return &AdminStatisticsService{db: helper.GetDatabase()}
@@ -29,9 +55,13 @@ func NewAdminStatisticsService() *AdminStatisticsService {
 // GetStatistics 获取推送统计
 func (s *AdminStatisticsService) GetStatistics(req *dto.StatisticsRequest) (*dto.StatisticsResponse, error) {
 	db := s.db
+	start, end, err := statisticsDateRange(req.StartDate, req.EndDate)
+	if err != nil {
+		return nil, err
+	}
 
 	// 基本查询
-	query := s.userTaskQuery().Where("DATE(created_at) >= ? AND DATE(created_at) <= ?", req.StartDate, req.EndDate)
+	query := s.userTaskQuery().Where("created_at >= ? AND created_at < ?", start, end)
 
 	// 条件过滤
 	if req.AppID > 0 {
@@ -76,9 +106,15 @@ func (s *AdminStatisticsService) GetStatistics(req *dto.StatisticsRequest) (*dto
 	}
 
 	// 复用同一个筛选查询，确保汇总和每日趋势的应用、通道口径一致。
+	dateExpression := "DATE(created_at)"
+	if db.Dialector.Name() == "sqlite" {
+		// SQLite normalizes timestamps carrying an offset to UTC before DATE().
+		// Convert them back to the application's local timezone for day buckets.
+		dateExpression = "DATE(created_at, 'localtime')"
+	}
 	query.Session(&gorm.Session{}).
-		Select("DATE(created_at) as date, COUNT(*) as total, SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success, SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed").
-		Group("DATE(created_at)").
+		Select(dateExpression + " as date, COUNT(*) as total, SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success, SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed").
+		Group(dateExpression).
 		Order("date ASC").
 		Scan(&dailyStats)
 
@@ -129,8 +165,7 @@ func (s *AdminStatisticsService) GetDashboard() (*dto.DashboardResponse, error) 
 	db.Model(&model.ProviderAccount{}).Where("status = ?", 1).Count(&resp.ActiveProviders)
 
 	// 4. 统计今日推送
-	todayStart := time.Now().Format("2006-01-02 00:00:00")
-	todayEnd := time.Now().Format("2006-01-02 23:59:59")
+	todayStart, tomorrowStart := localDayRange(time.Now())
 
 	var todayStats struct {
 		Total   int64
@@ -139,7 +174,7 @@ func (s *AdminStatisticsService) GetDashboard() (*dto.DashboardResponse, error) 
 	}
 	s.userTaskQuery().
 		Select("COUNT(*) as total, SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success, SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed").
-		Where("created_at >= ? AND created_at <= ?", todayStart, todayEnd).
+		Where("created_at >= ? AND created_at < ?", todayStart, tomorrowStart).
 		Scan(&todayStats)
 
 	resp.TodayPushCount = todayStats.Total
