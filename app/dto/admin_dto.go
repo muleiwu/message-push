@@ -20,10 +20,10 @@ type ParamMappingItem struct {
 type CreateApplicationRequest struct {
 	Name        string `json:"name" binding:"required,min=2,max=50"`
 	Description string `json:"description" binding:"max=200"`
-	Status      int    `json:"status" binding:"omitempty,oneof=1 2"`  // 1:启用 2:禁用
-	DailyQuota  *int   `json:"daily_quota" binding:"omitempty,min=0"` // 使用指针，nil使用默认值，0表示不限制
-	RateLimit   *int   `json:"rate_limit" binding:"omitempty,min=0"`  // 使用指针，nil使用默认值，0表示不限制
-	IPWhitelist string `json:"ip_whitelist"`                          // IP白名单，换行分隔，支持IP和CIDR子网格式
+	Status      *int   `json:"status" binding:"omitempty,oneof=0 1 2"` // 1:启用 0:禁用；过渡期兼容 2=禁用
+	DailyQuota  *int   `json:"daily_quota" binding:"omitempty,min=0"`  // 使用指针，nil使用默认值，0表示不限制
+	RateLimit   *int   `json:"rate_limit" binding:"omitempty,min=0"`   // 使用指针，nil使用默认值，0表示不限制
+	IPWhitelist string `json:"ip_whitelist"`                           // IP白名单，换行分隔，支持IP和CIDR子网格式
 	WebhookURL  string `json:"webhook_url" binding:"omitempty,url"`
 }
 
@@ -31,7 +31,7 @@ type CreateApplicationRequest struct {
 type UpdateApplicationRequest struct {
 	Name        string `json:"name" binding:"omitempty,min=2,max=50"`
 	Description string `json:"description" binding:"omitempty,max=200"`
-	Status      int    `json:"status" binding:"omitempty,oneof=1 2"`
+	Status      *int   `json:"status" binding:"omitempty,oneof=0 1 2"`
 	DailyQuota  *int   `json:"daily_quota" binding:"omitempty,min=0"` // 使用指针，nil表示不更新，0表示不限制
 	RateLimit   *int   `json:"rate_limit" binding:"omitempty,min=0"`  // 使用指针，nil表示不更新，0表示不限制
 	IPWhitelist string `json:"ip_whitelist"`                          // IP白名单，换行分隔，支持IP和CIDR子网格式
@@ -43,7 +43,7 @@ type ApplicationListRequest struct {
 	Page     int    `form:"page" binding:"omitempty,min=1"`
 	PageSize int    `form:"page_size" binding:"omitempty,min=1,max=100"`
 	Name     string `form:"name" binding:"omitempty,max=50"`
-	Status   int    `form:"status" binding:"omitempty,oneof=1 2"`
+	Status   *int   `form:"status" binding:"omitempty,oneof=0 1 2"`
 }
 
 // ApplicationResponse 应用响应
@@ -87,7 +87,7 @@ type CreateProviderAccountRequest struct {
 	ProviderCode string                 `json:"provider_code" binding:"required"` // 服务商代码，如：aliyun_sms
 	Description  string                 `json:"description" binding:"max=200"`
 	Config       map[string]interface{} `json:"config" binding:"required"`
-	Status       int                    `json:"status" binding:"omitempty,oneof=1 2"`
+	Status       *int                   `json:"status" binding:"omitempty,oneof=0 1 2"`
 }
 
 // UpdateProviderAccountRequest 更新服务商账号配置请求
@@ -95,7 +95,7 @@ type UpdateProviderAccountRequest struct {
 	Name        string                 `json:"name" binding:"omitempty,min=2,max=50"`
 	Description string                 `json:"description" binding:"omitempty,max=200"`
 	Config      map[string]interface{} `json:"config" binding:"omitempty"`
-	Status      int                    `json:"status" binding:"omitempty,oneof=1 2"`
+	Status      *int                   `json:"status" binding:"omitempty,oneof=0 1 2"`
 }
 
 // ProviderAccountListRequest 服务商账号列表请求
@@ -103,23 +103,24 @@ type ProviderAccountListRequest struct {
 	Page         int    `form:"page" binding:"omitempty,min=1"`
 	PageSize     int    `form:"page_size" binding:"omitempty,min=1,max=100"`
 	ProviderType string `form:"provider_type" binding:"omitempty,oneof=sms email wechat_work dingtalk webhook push"`
-	Status       int    `form:"status" binding:"omitempty,oneof=1 2"`
+	Status       *int   `form:"status" binding:"omitempty,oneof=0 1 2"`
 }
 
 // ProviderAccountResponse 服务商账号配置响应
 type ProviderAccountResponse struct {
-	ID           uint                   `json:"id"`
-	AccountCode  string                 `json:"account_code"`
-	AccountName  string                 `json:"account_name"`
-	ProviderCode string                 `json:"provider_code"`
-	ProviderName string                 `json:"provider_name"`
-	ProviderType string                 `json:"provider_type"`
-	Description  string                 `json:"description"`
-	Config       map[string]interface{} `json:"config"`
-	Status       int                    `json:"status"`
-	CallbackURL  string                 `json:"callback_url,omitempty"` // 回调地址（仅支持回调的服务商有值）
-	CreatedAt    string                 `json:"created_at"`
-	UpdatedAt    string                 `json:"updated_at"`
+	ID                uint                   `json:"id"`
+	AccountCode       string                 `json:"account_code"`
+	AccountName       string                 `json:"account_name"`
+	ProviderCode      string                 `json:"provider_code"`
+	ProviderName      string                 `json:"provider_name"`
+	ProviderType      string                 `json:"provider_type"`
+	RequiresSignature bool                   `json:"requires_signature"`
+	Description       string                 `json:"description"`
+	Config            map[string]interface{} `json:"config"`
+	Status            int                    `json:"status"`
+	CallbackURL       string                 `json:"callback_url,omitempty"` // 回调地址（仅支持回调的服务商有值）
+	CreatedAt         string                 `json:"created_at"`
+	UpdatedAt         string                 `json:"updated_at"`
 }
 
 // ProviderAccountListResponse 服务商账号列表响应
@@ -141,6 +142,7 @@ type AvailableProviderResponse struct {
 	SupportsSend      bool `json:"supports_send"`
 	SupportsBatchSend bool `json:"supports_batch_send"`
 	SupportsCallback  bool `json:"supports_callback"`
+	RequiresSignature bool `json:"requires_signature"`
 	// 扩展信息
 	Website    string   `json:"website"`
 	Icon       string   `json:"icon"`
@@ -179,13 +181,13 @@ type CreateChannelRequest struct {
 	Name              string `json:"name" binding:"required,min=2,max=50"`
 	Type              string `json:"type" binding:"required,oneof=sms email wechat_work dingtalk webhook push"`
 	MessageTemplateID uint   `json:"message_template_id" binding:"required"`
-	Status            int    `json:"status" binding:"omitempty,oneof=1 2"`
+	Status            *int   `json:"status" binding:"omitempty,oneof=0 1 2"`
 }
 
 // UpdateChannelRequest 更新通道请求
 type UpdateChannelRequest struct {
 	Name   string `json:"name" binding:"omitempty,min=2,max=50"`
-	Status int    `json:"status" binding:"omitempty,oneof=1 2"`
+	Status *int   `json:"status" binding:"omitempty,oneof=0 1 2"`
 }
 
 // ChannelListRequest 通道列表请求
@@ -193,20 +195,22 @@ type ChannelListRequest struct {
 	Page     int    `form:"page" binding:"omitempty,min=1"`
 	PageSize int    `form:"page_size" binding:"omitempty,min=1,max=100"`
 	Type     string `form:"type" binding:"omitempty,oneof=sms email wechat_work dingtalk webhook push"`
-	Status   int    `form:"status" binding:"omitempty,oneof=1 2"`
+	Status   *int   `form:"status" binding:"omitempty,oneof=0 1 2"`
 }
 
 // ChannelResponse 通道响应
 type ChannelResponse struct {
-	ID                uint                      `json:"id"`
-	Name              string                    `json:"name"`
-	Type              string                    `json:"type"`
-	MessageTemplateID uint                      `json:"message_template_id"`
-	TemplateName      string                    `json:"template_name"`
-	Status            int                       `json:"status"`
-	CreatedAt         string                    `json:"created_at"`
-	UpdatedAt         string                    `json:"updated_at"`
-	Bindings          []*ChannelBindingResponse `json:"bindings,omitempty"`
+	ID                uint                       `json:"id"`
+	Name              string                     `json:"name"`
+	Type              string                     `json:"type"`
+	MessageTemplateID uint                       `json:"message_template_id"`
+	TemplateName      string                     `json:"template_name"`
+	Status            int                        `json:"status"`
+	CreatedAt         string                     `json:"created_at"`
+	UpdatedAt         string                     `json:"updated_at"`
+	Bindings          []*ChannelBindingResponse  `json:"bindings,omitempty"`
+	Readiness         *ChannelReadinessResponse  `json:"readiness"`
+	LatestAdminTest   *OnboardingLatestAdminTest `json:"latest_admin_test,omitempty"`
 }
 
 // ChannelListResponse 通道列表响应
@@ -240,23 +244,23 @@ type CreateChannelBindingRequest struct {
 	ProviderTemplateID   uint               `json:"provider_template_id" binding:"required"`
 	ProviderID           uint               `json:"provider_id" binding:"required"`
 	ParamMapping         []ParamMappingItem `json:"param_mapping"`
-	Weight               int                `json:"weight" binding:"omitempty,min=1,max=100"`
-	Priority             int                `json:"priority" binding:"omitempty,min=0,max=1000"`
-	Status               int8               `json:"status" binding:"omitempty,oneof=0 1"`
-	IsActive             int8               `json:"is_active" binding:"omitempty,oneof=0 1"`
-	AutoDisableOnFail    bool               `json:"auto_disable_on_fail"`
-	AutoDisableThreshold int                `json:"auto_disable_threshold" binding:"omitempty,min=1,max=100"`
+	Weight               *int               `json:"weight" binding:"omitempty,min=1,max=100"`
+	Priority             *int               `json:"priority" binding:"omitempty,min=0,max=1000"`
+	Status               *int8              `json:"status" binding:"omitempty,oneof=0 1 2"`
+	IsActive             *int8              `json:"is_active" binding:"omitempty,oneof=0 1 2"`
+	AutoDisableOnFail    *bool              `json:"auto_disable_on_fail"`
+	AutoDisableThreshold *int               `json:"auto_disable_threshold" binding:"omitempty,min=1,max=100"`
 }
 
 // UpdateChannelBindingRequest 更新通道绑定配置请求
 type UpdateChannelBindingRequest struct {
 	ParamMapping         []ParamMappingItem `json:"param_mapping"`
-	Weight               int                `json:"weight" binding:"omitempty,min=1,max=100"`
-	Priority             int                `json:"priority" binding:"omitempty,min=0,max=1000"`
-	Status               int8               `json:"status" binding:"omitempty,oneof=0 1"`
-	IsActive             int8               `json:"is_active" binding:"omitempty,oneof=0 1"`
-	AutoDisableOnFail    bool               `json:"auto_disable_on_fail"`
-	AutoDisableThreshold int                `json:"auto_disable_threshold" binding:"omitempty,min=1,max=100"`
+	Weight               *int               `json:"weight" binding:"omitempty,min=1,max=100"`
+	Priority             *int               `json:"priority" binding:"omitempty,min=0,max=1000"`
+	Status               *int8              `json:"status" binding:"omitempty,oneof=0 1 2"`
+	IsActive             *int8              `json:"is_active" binding:"omitempty,oneof=0 1 2"`
+	AutoDisableOnFail    *bool              `json:"auto_disable_on_fail"`
+	AutoDisableThreshold *int               `json:"auto_disable_threshold" binding:"omitempty,min=1,max=100"`
 }
 
 // AvailableProviderTemplateResponse 可用供应商模板响应（用于通道绑定）

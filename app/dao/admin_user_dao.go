@@ -44,9 +44,25 @@ func (d *AdminUserDAO) GetByEmail(email string) (*model.AdminUser, error) {
 	return &user, err
 }
 
-// BindOidcSub 为已有账号绑定 OIDC subject
-func (d *AdminUserDAO) BindOidcSub(id uint, sub string) error {
-	return d.db.Model(&model.AdminUser{}).Where("id = ?", id).Update("oidc_sub", sub).Error
+// BindOidcSub 仅在账号尚未绑定或已绑定相同 subject 时更新。
+// 返回 false 表示账号已被其他 subject 抢先绑定，调用方必须拒绝覆盖。
+func (d *AdminUserDAO) BindOidcSub(id uint, sub string) (bool, error) {
+	result := d.db.Model(&model.AdminUser{}).
+		Where("id = ? AND (oidc_sub IS NULL OR oidc_sub = ?)", id, sub).
+		Update("oidc_sub", sub)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	if result.RowsAffected > 0 {
+		return true, nil
+	}
+
+	// MySQL 默认可能把“值未变化”报告为 0 affected rows；相同 subject 仍视为成功。
+	var user model.AdminUser
+	if err := d.db.Select("oidc_sub").Where("id = ?", id).First(&user).Error; err != nil {
+		return false, err
+	}
+	return user.OidcSub != nil && *user.OidcSub == sub, nil
 }
 
 // Create 创建管理员
@@ -56,7 +72,13 @@ func (d *AdminUserDAO) Create(user *model.AdminUser) error {
 
 // Update 更新管理员
 func (d *AdminUserDAO) Update(user *model.AdminUser) error {
-	return d.db.Save(user).Error
+	// 仅更新 CRUD 允许修改的字段，避免与 OIDC 绑定或密码重置并发时
+	// Save 整行覆盖 oidc_sub/password 等身份字段。map 保证 status=0 也会写入。
+	return d.db.Model(&model.AdminUser{}).Where("id = ?", user.ID).Updates(map[string]any{
+		"real_name": user.RealName,
+		"email":     user.Email,
+		"status":    user.Status,
+	}).Error
 }
 
 // UsernameExists 检查用户名是否存在
@@ -64,6 +86,20 @@ func (d *AdminUserDAO) UsernameExists(username string) bool {
 	var count int64
 	d.db.Model(&model.AdminUser{}).Where("username = ?", username).Count(&count)
 	return count > 0
+}
+
+// EmailExists 检查规范化邮箱是否已被其他管理员使用。
+// 唯一索引也覆盖软删除记录，因此这里使用 Unscoped 与数据库语义保持一致。
+func (d *AdminUserDAO) EmailExists(email string, excludeID uint) (bool, error) {
+	var count int64
+	query := d.db.Unscoped().Model(&model.AdminUser{}).Where("email = ?", email)
+	if excludeID != 0 {
+		query = query.Where("id <> ?", excludeID)
+	}
+	if err := query.Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
 // CountAll 统计所有管理员用户数量

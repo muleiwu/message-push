@@ -10,6 +10,20 @@ const (
 	MessageTypePush       = "push"        // 推送通知
 )
 
+var supportedMessageTypes = []string{
+	MessageTypeSMS,
+	MessageTypeEmail,
+	MessageTypeWeChatWork,
+	MessageTypeDingTalk,
+	MessageTypeWebhook,
+	MessageTypePush,
+}
+
+// SupportedMessageTypes 返回稳定的消息类型集合。返回副本，避免调用方修改全局定义。
+func SupportedMessageTypes() []string {
+	return append([]string(nil), supportedMessageTypes...)
+}
+
 // 服务商代码常量
 const (
 	ProviderAliyunSMS  = "aliyun_sms"  // 阿里云短信
@@ -26,12 +40,12 @@ const (
 
 // IsValidMessageType 检查消息类型是否有效
 func IsValidMessageType(msgType string) bool {
-	switch msgType {
-	case MessageTypeSMS, MessageTypeEmail, MessageTypeWeChatWork, MessageTypeDingTalk, MessageTypeWebhook, MessageTypePush:
-		return true
-	default:
-		return false
+	for _, supported := range supportedMessageTypes {
+		if msgType == supported {
+			return true
+		}
 	}
+	return false
 }
 
 // IsValidProviderCode 检查服务商代码是否有效

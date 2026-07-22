@@ -7,8 +7,12 @@ import (
 	"cnb.cool/mliev/push/message-push/app/model"
 )
 
-// ErrUserDisabled 表示 OIDC 对应的本地账号已被禁用。
-var ErrUserDisabled = errors.New("账号已被禁用")
+var (
+	// ErrUserDisabled 表示 OIDC 对应的本地账号已被禁用。
+	ErrUserDisabled = errors.New("账号已被禁用")
+	// ErrOIDCIdentityConflict 表示邮箱对应账号已绑定另一个 OIDC subject。
+	ErrOIDCIdentityConflict = errors.New("邮箱已绑定其他 SSO 身份")
+)
 
 // OIDCService 管理后台 OIDC SSO 登录端口。
 //

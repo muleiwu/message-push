@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"cnb.cool/mliev/open/go-web/pkg/helper"
+	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dao"
+	"cnb.cool/mliev/push/message-push/app/readiness"
 	"cnb.cool/mliev/push/message-push/modules/channel/domain"
 	"github.com/muleiwu/gsr"
 )
@@ -36,7 +38,7 @@ const (
 type ChannelSelector struct {
 	logger                    gsr.Logger
 	channelTemplateBindingDao *dao.ChannelTemplateBindingDAO
-	providerAccountDAO        *dao.ProviderAccountDAO
+	readinessEvaluator        *readiness.ChannelEvaluator
 	cache                     gsr.Cacher    // 使用统一缓存接口
 	cacheTTL                  time.Duration // 缓存过期时间
 	weightMu                  sync.Mutex    // 保护权重修改的并发安全
@@ -47,7 +49,7 @@ func NewChannelSelector() *ChannelSelector {
 	return &ChannelSelector{
 		logger:                    helper.GetLogger(),
 		channelTemplateBindingDao: dao.NewChannelTemplateBindingDAO(),
-		providerAccountDAO:        dao.NewProviderAccountDAO(),
+		readinessEvaluator:        readiness.NewChannelEvaluator(helper.GetDatabase()),
 		cache:                     helper.GetCache(),
 		cacheTTL:                  30 * time.Second, // 默认30秒
 	}
@@ -76,6 +78,14 @@ func (s *ChannelSelector) SelectWithExcludes(ctx context.Context, channelID uint
 		return nil, fmt.Errorf("no available channel for channel_id=%d type=%s", channelID, messageType)
 	}
 
+	nodes, err = s.filterEligibleNodes(channelID, nodes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to evaluate channel eligibility: %w", err)
+	}
+	if len(nodes) == 0 {
+		return nil, fmt.Errorf("no statically eligible channel for channel_id=%d", channelID)
+	}
+
 	// 过滤排除的供应商（规则引擎切换供应商时使用）
 	if len(excludeProviderIDs) > 0 {
 		nodes = s.filterExcludedProviders(nodes, excludeProviderIDs)
@@ -100,6 +110,29 @@ func (s *ChannelSelector) SelectWithExcludes(ctx context.Context, channelID uint
 	}
 
 	return selected, nil
+}
+
+// filterEligibleNodes revalidates cached nodes against the shared readiness
+// evaluator, so a hard channel/template stop takes effect before cache expiry.
+func (s *ChannelSelector) filterEligibleNodes(channelID uint, nodes []*domain.ChannelNode) ([]*domain.ChannelNode, error) {
+	eligibility, err := s.readinessEvaluator.GetDeliveryEligibility(channelID)
+	if err != nil {
+		return nil, err
+	}
+	validBindingIDs := make(map[uint]struct{}, len(eligibility.ValidBindingIDs))
+	for _, bindingID := range eligibility.ValidBindingIDs {
+		validBindingIDs[bindingID] = struct{}{}
+	}
+	filtered := make([]*domain.ChannelNode, 0, len(nodes))
+	for _, node := range nodes {
+		if node.ChannelTemplateBinding == nil {
+			continue
+		}
+		if _, ok := validBindingIDs[node.ChannelTemplateBinding.ID]; ok {
+			filtered = append(filtered, node)
+		}
+	}
+	return filtered, nil
 }
 
 // filterExcludedProviders 过滤排除的供应商
@@ -131,7 +164,7 @@ func (s *ChannelSelector) getChannelNodes(ctx context.Context, channelID uint, m
 	var nodes []*domain.ChannelNode
 	err := s.cache.GetSet(ctx, cacheKey, s.cacheTTL, &nodes, func(key string, obj any) error {
 		// 缓存未命中，从数据库加载
-		loadedNodes, loadErr := s.loadChannelNodesFromDB(channelID)
+		loadedNodes, loadErr := s.loadChannelNodesFromDB(channelID, messageType)
 		if loadErr != nil {
 			return loadErr
 		}
@@ -151,7 +184,7 @@ func (s *ChannelSelector) getChannelNodes(ctx context.Context, channelID uint, m
 }
 
 // loadChannelNodesFromDB 从数据库加载通道节点
-func (s *ChannelSelector) loadChannelNodesFromDB(channelID uint) ([]*domain.ChannelNode, error) {
+func (s *ChannelSelector) loadChannelNodesFromDB(channelID uint, messageType string) ([]*domain.ChannelNode, error) {
 	// 获取通道的所有模板绑定配置
 	channelBindings, err := s.channelTemplateBindingDao.GetActiveByChannelID(channelID)
 	if err != nil {
@@ -165,22 +198,23 @@ func (s *ChannelSelector) loadChannelNodesFromDB(channelID uint) ([]*domain.Chan
 	// 构建节点列表
 	var nodes []*domain.ChannelNode
 	for _, ctb := range channelBindings {
-		if ctb.ProviderTemplate == nil {
-			s.logger.Warn(fmt.Sprintf("incomplete channel template binding id=%d", ctb.ID))
+		if ctb.Channel == nil || ctb.Channel.Status != 1 || ctb.Channel.Type != messageType ||
+			ctb.Channel.MessageTemplate == nil || ctb.Channel.MessageTemplate.Status != 1 {
+			s.logger.Warn(fmt.Sprintf("channel binding id=%d has unavailable channel or message template", ctb.ID))
 			continue
 		}
 
-		// 直接使用预加载的 ProviderAccount
-		providerAccount := ctb.ProviderTemplate.ProviderAccount
-		if providerAccount == nil {
-			// 如果预加载失败，尝试手动查询
-			var err error
-			providerAccount, err = s.providerAccountDAO.GetByID(ctb.ProviderID)
-			if err != nil {
-				s.logger.Warn(fmt.Sprintf("failed to get provider account id=%d: %v", ctb.ProviderID, err))
-				continue
-			}
+		systemVariables, err := ctb.Channel.MessageTemplate.GetVariables()
+		if err != nil {
+			s.logger.Warn(fmt.Sprintf("channel binding id=%d has invalid message template variables: %v", ctb.ID, err))
+			continue
 		}
+		if issues := readiness.ValidateBinding(messageType, systemVariables, ctb); len(issues) > 0 {
+			s.logger.Warn(fmt.Sprintf("excluded invalid channel binding id=%d blockers=%v", ctb.ID, issues))
+			continue
+		}
+
+		providerAccount := ctb.ProviderTemplate.ProviderAccount
 
 		node := &domain.ChannelNode{
 			ChannelTemplateBinding: ctb,
@@ -420,8 +454,8 @@ func (s *ChannelSelector) ClearCache() {
 func (s *ChannelSelector) ClearCacheByChannelID(channelID uint) {
 	ctx := context.Background()
 
-	// 清除常见的 messageType 组合
-	messageTypes := []string{"sms", "email", "push", "voice", "wechat", ""}
+	// 从共享类型定义生成 key，避免新通道类型遗漏失效。
+	messageTypes := append(constants.SupportedMessageTypes(), "")
 	for _, msgType := range messageTypes {
 		cacheKey := buildCacheKey(channelID, msgType)
 		if err := s.cache.Del(ctx, cacheKey); err != nil {

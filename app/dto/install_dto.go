@@ -35,7 +35,6 @@ type AdminAccountInfo struct {
 	Password string `json:"password"` // 密码
 	Email    string `json:"email"`    // 邮箱
 	RealName string `json:"realName"` // 真实姓名
-	Phone    string `json:"phone"`    // 手机号（可选）
 }
 
 // InstallSubmitRequest 安装提交请求

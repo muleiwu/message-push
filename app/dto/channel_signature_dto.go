@@ -33,9 +33,9 @@ type ChannelSignatureMappingResponse struct {
 
 // TestChannelRequest 测试通道发送请求
 type TestChannelRequest struct {
-	Receiver       string            `json:"receiver" binding:"required"`        // 接收者（手机号/邮箱等）
-	SignatureName  string            `json:"signature_name"`                     // 签名名称（可选）
-	TemplateParams map[string]string `json:"template_params" binding:"required"` // 模板参数
+	Receiver       string            `json:"receiver" binding:"required"`                // 接收者（手机号/邮箱等）
+	SignatureName  string            `json:"signature_name" binding:"omitempty,max=200"` // 签名别名；邮件通道复用为主题
+	TemplateParams map[string]string `json:"template_params" binding:"required"`         // 模板参数
 }
 
 // TestChannelResponse 测试通道发送响应

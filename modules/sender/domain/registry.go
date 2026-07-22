@@ -19,6 +19,7 @@ type ProviderMeta struct {
 	SupportsCallback    bool `json:"supports_callback"`     // 是否支持回调
 	SupportsStatusQuery bool `json:"supports_status_query"` // 是否支持单条状态查询（阿里云、腾讯云）
 	SupportsStatusPull  bool `json:"supports_status_pull"`  // 是否支持批量状态拉取（掌榕网）
+	RequiresSignature   bool `json:"requires_signature"`    // 是否必须配置签名后才能发送
 
 	// 扩展信息
 	Website    string   `json:"website"`     // 官网地址

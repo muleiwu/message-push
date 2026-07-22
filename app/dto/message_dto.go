@@ -8,7 +8,7 @@ type SendRequest struct {
 	ChannelID      uint              `json:"channel_id" binding:"required"`
 	Receiver       string            `json:"receiver" binding:"required"`
 	TemplateParams map[string]string `json:"template_params"`
-	SignatureName  string            `json:"signature_name"` // 用户自定义签名名称
+	SignatureName  string            `json:"signature_name" binding:"omitempty,max=200"` // 签名别名；邮件通道复用为主题
 	ScheduledAt    *time.Time        `json:"scheduled_at"`
 }
 
@@ -16,9 +16,9 @@ type SendRequest struct {
 type BatchSendRequest struct {
 	AppID          string            `json:"app_id"`
 	ChannelID      uint              `json:"channel_id" binding:"required"`
-	Receivers      []string          `json:"receivers" binding:"required"` // 手机号数组
-	TemplateParams map[string]string `json:"template_params"`              // 模板参数（所有接收者共用）
-	SignatureName  string            `json:"signature_name"`               // 用户自定义签名名称
+	Receivers      []string          `json:"receivers" binding:"required"`               // 手机号数组
+	TemplateParams map[string]string `json:"template_params"`                            // 模板参数（所有接收者共用）
+	SignatureName  string            `json:"signature_name" binding:"omitempty,max=200"` // 签名别名；邮件通道复用为主题
 	ScheduledAt    *time.Time        `json:"scheduled_at"`
 }
 

@@ -19,6 +19,17 @@ const (
 	smtpDialTimeout = 30 * time.Second
 )
 
+func normalizeEmailSubject(subject string) (string, error) {
+	if strings.ContainsAny(subject, "\r\n") {
+		return "", fmt.Errorf("subject must not contain CR or LF characters")
+	}
+	subject = strings.TrimSpace(subject)
+	if subject == "" {
+		return "通知", nil
+	}
+	return subject, nil
+}
+
 func init() {
 	// 注册SMTP邮件服务商
 	domain.Register(&domain.ProviderMeta{
@@ -350,9 +361,9 @@ func (s *SMTPSender) Send(ctx context.Context, req *domain.SendRequest) (*domain
 	}
 
 	// 构建邮件内容
-	subject := req.Task.Signature
-	if subject == "" {
-		subject = "通知"
+	subject, err := normalizeEmailSubject(req.Task.Signature)
+	if err != nil {
+		return nil, fmt.Errorf("invalid email subject: %w", err)
 	}
 
 	// 获取邮件内容类型
@@ -377,7 +388,7 @@ func (s *SMTPSender) Send(ctx context.Context, req *domain.SendRequest) (*domain
 	})
 
 	// 发送邮件
-	err := s.sendMail(&config, []string{req.Task.Receiver}, []byte(message))
+	err = s.sendMail(&config, []string{req.Task.Receiver}, []byte(message))
 
 	if err != nil {
 		return &domain.SendResponse{
@@ -425,6 +436,14 @@ func (s *SMTPSender) BatchSend(ctx context.Context, req *domain.BatchSendRequest
 	}
 
 	results := make([]*domain.SendResponse, len(req.Tasks))
+	subjects := make([]string, len(req.Tasks))
+	for i, task := range req.Tasks {
+		subject, err := normalizeEmailSubject(task.Signature)
+		if err != nil {
+			return nil, fmt.Errorf("invalid email subject for task %s: %w", task.TaskID, err)
+		}
+		subjects[i] = subject
+	}
 
 	// 获取邮件内容类型
 	contentType := "text/plain; charset=UTF-8"
@@ -440,10 +459,7 @@ func (s *SMTPSender) BatchSend(ctx context.Context, req *domain.BatchSendRequest
 
 	// 逐个发送邮件（SMTP 批量发送时每个收件人内容可能不同）
 	for i, task := range req.Tasks {
-		subject := task.Signature
-		if subject == "" {
-			subject = "通知"
-		}
+		subject := subjects[i]
 
 		message := fmt.Sprintf("From: %s\r\n", config.From)
 		message += fmt.Sprintf("To: %s\r\n", task.Receiver)

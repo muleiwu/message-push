@@ -12,6 +12,7 @@ import (
 
 	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/dao"
+	appHelper "cnb.cool/mliev/push/message-push/app/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/modules/identity/domain"
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -33,7 +34,7 @@ const oidcStateTTL = 10 * time.Minute
 type adminUserStore interface {
 	GetByOidcSub(sub string) (*model.AdminUser, error)
 	GetByEmail(email string) (*model.AdminUser, error)
-	BindOidcSub(id uint, sub string) error
+	BindOidcSub(id uint, sub string) (bool, error)
 	UsernameExists(username string) bool
 	Create(user *model.AdminUser) error
 }
@@ -200,6 +201,11 @@ func provisionOIDCUser(store adminUserStore, sub, email, name, preferredUsername
 	if sub == "" {
 		return nil, errors.New("ID Token 缺少 subject")
 	}
+	normalizedEmail, err := appHelper.NormalizeAdminEmail(email)
+	if err != nil {
+		return nil, fmt.Errorf("OIDC email claim 无效: %w", err)
+	}
+	email = normalizedEmail
 
 	// 1. 精确匹配已绑定的 oidc_sub
 	user, err := store.GetByOidcSub(sub)
@@ -217,8 +223,18 @@ func provisionOIDCUser(store adminUserStore, sub, email, name, preferredUsername
 			if _, err := checkUserEnabled(user); err != nil {
 				return nil, err
 			}
-			if err := store.BindOidcSub(user.ID, sub); err != nil {
+			if user.OidcSub != nil {
+				if *user.OidcSub != sub {
+					return nil, domain.ErrOIDCIdentityConflict
+				}
+				return user, nil
+			}
+			bound, err := store.BindOidcSub(user.ID, sub)
+			if err != nil {
 				return nil, fmt.Errorf("绑定 OIDC 账号失败: %w", err)
+			}
+			if !bound {
+				return nil, domain.ErrOIDCIdentityConflict
 			}
 			user.OidcSub = &sub
 			return user, nil

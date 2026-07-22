@@ -7,6 +7,7 @@ import (
 
 	"cnb.cool/mliev/open/go-web/pkg/helper"
 	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
+	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	appHelper "cnb.cool/mliev/push/message-push/app/helper"
@@ -84,6 +85,7 @@ func (s *AdminProviderAccountService) GetAvailableProviders(providerType string)
 			SupportsSend:      p.SupportsSend,
 			SupportsBatchSend: p.SupportsBatchSend,
 			SupportsCallback:  p.SupportsCallback,
+			RequiresSignature: p.RequiresSignature,
 			// 扩展信息
 			Website:    p.Website,
 			Icon:       p.Icon,
@@ -145,9 +147,9 @@ func (s *AdminProviderAccountService) CreateProviderAccount(c httpInterfaces.Rou
 		return nil, fmt.Errorf("invalid provider_code: %s not registered", req.ProviderCode)
 	}
 
-	status := int8(req.Status)
-	if status == 0 {
-		status = 1 // 默认启用
+	status := constants.ResourceStatusEnabled
+	if req.Status != nil {
+		status = constants.NormalizeResourceStatus(*req.Status)
 	}
 
 	// 生成account_code
@@ -182,18 +184,19 @@ func (s *AdminProviderAccountService) CreateProviderAccount(c httpInterfaces.Rou
 
 	config, _ := account.GetConfig()
 	return &dto.ProviderAccountResponse{
-		ID:           account.ID,
-		AccountCode:  account.AccountCode,
-		AccountName:  account.AccountName,
-		ProviderCode: account.ProviderCode,
-		ProviderName: meta.Name,
-		ProviderType: account.ProviderType,
-		Description:  account.Remark,
-		Config:       config,
-		Status:       int(account.Status),
-		CallbackURL:  s.generateCallbackURL(c, account.ID, account.ProviderCode),
-		CreatedAt:    account.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:    account.UpdatedAt.Format(time.RFC3339),
+		ID:                account.ID,
+		AccountCode:       account.AccountCode,
+		AccountName:       account.AccountName,
+		ProviderCode:      account.ProviderCode,
+		ProviderName:      meta.Name,
+		ProviderType:      account.ProviderType,
+		RequiresSignature: meta.RequiresSignature,
+		Description:       account.Remark,
+		Config:            config,
+		Status:            int(account.Status),
+		CallbackURL:       s.generateCallbackURL(c, account.ID, account.ProviderCode),
+		CreatedAt:         account.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:         account.UpdatedAt.Format(time.RFC3339),
 	}, nil
 }
 
@@ -209,7 +212,12 @@ func (s *AdminProviderAccountService) GetProviderAccountList(c httpInterfaces.Ro
 	}
 
 	accountDAO := dao.NewProviderAccountDAO()
-	accounts, total, err := accountDAO.List(page, pageSize, req.ProviderType, req.Status)
+	var status *int8
+	if req.Status != nil {
+		normalized := constants.NormalizeResourceStatus(*req.Status)
+		status = &normalized
+	}
+	accounts, total, err := accountDAO.List(page, pageSize, req.ProviderType, status)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query provider accounts: %w", err)
 	}
@@ -220,23 +228,26 @@ func (s *AdminProviderAccountService) GetProviderAccountList(c httpInterfaces.Ro
 
 		// 从注册中心获取服务商名称
 		providerName := account.ProviderCode
+		requiresSignature := false
 		if meta, err := registry.GetByCode(account.ProviderCode); err == nil {
 			providerName = meta.Name
+			requiresSignature = meta.RequiresSignature
 		}
 
 		items = append(items, &dto.ProviderAccountResponse{
-			ID:           account.ID,
-			AccountCode:  account.AccountCode,
-			AccountName:  account.AccountName,
-			ProviderCode: account.ProviderCode,
-			ProviderName: providerName,
-			ProviderType: account.ProviderType,
-			Description:  account.Remark,
-			Config:       config,
-			Status:       int(account.Status),
-			CallbackURL:  s.generateCallbackURL(c, account.ID, account.ProviderCode),
-			CreatedAt:    account.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:    account.UpdatedAt.Format(time.RFC3339),
+			ID:                account.ID,
+			AccountCode:       account.AccountCode,
+			AccountName:       account.AccountName,
+			ProviderCode:      account.ProviderCode,
+			ProviderName:      providerName,
+			ProviderType:      account.ProviderType,
+			RequiresSignature: requiresSignature,
+			Description:       account.Remark,
+			Config:            config,
+			Status:            int(account.Status),
+			CallbackURL:       s.generateCallbackURL(c, account.ID, account.ProviderCode),
+			CreatedAt:         account.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:         account.UpdatedAt.Format(time.RFC3339),
 		})
 	}
 
@@ -260,23 +271,26 @@ func (s *AdminProviderAccountService) GetProviderAccountByID(c httpInterfaces.Ro
 
 	// 从注册中心获取服务商名称
 	providerName := account.ProviderCode
+	requiresSignature := false
 	if meta, err := registry.GetByCode(account.ProviderCode); err == nil {
 		providerName = meta.Name
+		requiresSignature = meta.RequiresSignature
 	}
 
 	return &dto.ProviderAccountResponse{
-		ID:           account.ID,
-		AccountCode:  account.AccountCode,
-		AccountName:  account.AccountName,
-		ProviderCode: account.ProviderCode,
-		ProviderName: providerName,
-		ProviderType: account.ProviderType,
-		Description:  account.Remark,
-		Config:       config,
-		Status:       int(account.Status),
-		CallbackURL:  s.generateCallbackURL(c, account.ID, account.ProviderCode),
-		CreatedAt:    account.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:    account.UpdatedAt.Format(time.RFC3339),
+		ID:                account.ID,
+		AccountCode:       account.AccountCode,
+		AccountName:       account.AccountName,
+		ProviderCode:      account.ProviderCode,
+		ProviderName:      providerName,
+		ProviderType:      account.ProviderType,
+		RequiresSignature: requiresSignature,
+		Description:       account.Remark,
+		Config:            config,
+		Status:            int(account.Status),
+		CallbackURL:       s.generateCallbackURL(c, account.ID, account.ProviderCode),
+		CreatedAt:         account.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:         account.UpdatedAt.Format(time.RFC3339),
 	}, nil
 }
 
@@ -290,8 +304,8 @@ func (s *AdminProviderAccountService) UpdateProviderAccount(id uint, req *dto.Up
 	if req.Description != "" {
 		updates["remark"] = req.Description
 	}
-	if req.Status > 0 {
-		updates["status"] = int8(req.Status)
+	if req.Status != nil {
+		updates["status"] = constants.NormalizeResourceStatus(*req.Status)
 	}
 	if len(req.Config) > 0 {
 		// 需要先查询现有Account来处理配置

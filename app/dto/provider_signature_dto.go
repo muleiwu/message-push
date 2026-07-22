@@ -23,7 +23,17 @@ type UpdateProviderSignatureRequest struct {
 // ProviderSignatureListRequest 签名列表查询请求
 type ProviderSignatureListRequest struct {
 	ProviderAccountID uint  `form:"provider_account_id"`
-	Status            *int8 `form:"status"`
+	Status            *int8 `form:"status" binding:"omitempty,oneof=0 1"`
+	Page              int   `form:"page" binding:"omitempty,min=1"`
+	PageSize          int   `form:"page_size" binding:"omitempty,min=1,max=100"`
+}
+
+// ProviderSignatureListResponse 全局签名分页响应
+type ProviderSignatureListResponse struct {
+	Total int                          `json:"total"`
+	Page  int                          `json:"page"`
+	Size  int                          `json:"size"`
+	Items []*ProviderSignatureResponse `json:"items"`
 }
 
 // ProviderSignatureResponse 签名响应
@@ -32,6 +42,10 @@ type ProviderSignatureResponse struct {
 	ProviderAccountID   uint   `json:"provider_account_id"`
 	ProviderAccountName string `json:"provider_account_name,omitempty"`
 	ProviderCode        string `json:"provider_code,omitempty"`
+	ProviderType        string `json:"provider_type,omitempty"`
+	RequiresSignature   bool   `json:"requires_signature"`
+	HistoricalOnly      bool   `json:"historical_only"`
+	ReadOnly            bool   `json:"read_only"`
 	SignatureCode       string `json:"signature_code"`
 	SignatureName       string `json:"signature_name"`
 	Status              int8   `json:"status"`

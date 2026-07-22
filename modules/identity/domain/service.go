@@ -4,9 +4,28 @@
 package domain
 
 import (
+	"errors"
+
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
+)
+
+var (
+	// ErrAdminUserNotFound 表示管理员不存在或已被删除。
+	ErrAdminUserNotFound = errors.New("管理员账号不存在")
+	// ErrAdminUsernameConflict 表示用户名已被占用。
+	ErrAdminUsernameConflict = errors.New("用户名已存在")
+	// ErrAdminEmailConflict 表示邮箱已被其他管理员占用。
+	ErrAdminEmailConflict = errors.New("邮箱已被使用")
+	// ErrAdminEmailImmutable 表示 SSO 自动创建账号的邮箱不能在本地修改。
+	ErrAdminEmailImmutable = errors.New("SSO 账号邮箱由身份提供方管理")
+	// ErrAdminPasswordResetForbidden 表示 SSO 自动创建的账号不支持本地密码重置。
+	ErrAdminPasswordResetForbidden = errors.New("SSO 账号不支持重置本地密码")
+	// ErrInvalidAdminEmail 表示邮箱缺失或格式不合法。
+	ErrInvalidAdminEmail = errors.New("邮箱格式不正确")
+	// ErrInvalidAdminStatus 表示账号状态不在兼容范围内。
+	ErrInvalidAdminStatus = errors.New("管理员账号状态不正确")
 )
 
 // ApplicationService 应用（接入方）管理端口：应用的增删改查、密钥重置与配额查询。

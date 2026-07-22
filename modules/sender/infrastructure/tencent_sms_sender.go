@@ -17,10 +17,11 @@ import (
 func init() {
 	// 注册腾讯云短信服务商
 	domain.Register(&domain.ProviderMeta{
-		Code:        constants.ProviderTencentSMS,
-		Name:        "腾讯云短信",
-		Type:        constants.MessageTypeSMS,
-		Description: "腾讯云短信服务，支持国内短信和国际短信发送。注意：短信签名需在「签名管理」中单独配置",
+		Code:              constants.ProviderTencentSMS,
+		Name:              "腾讯云短信",
+		Type:              constants.MessageTypeSMS,
+		Description:       "腾讯云短信服务，支持国内短信和国际短信发送。注意：短信签名需在「签名管理」中单独配置",
+		RequiresSignature: true,
 		ConfigFields: []domain.ConfigField{
 			{
 				Key:            "secret_id",

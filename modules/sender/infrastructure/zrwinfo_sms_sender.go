@@ -29,10 +29,11 @@ const (
 func init() {
 	// 注册掌榕网短信服务商
 	domain.Register(&domain.ProviderMeta{
-		Code:        constants.ProviderZrwinfoSMS,
-		Name:        "掌榕网短信",
-		Type:        constants.MessageTypeSMS,
-		Description: "掌榕网融合通信产品，提供国内短信、语音、5G智慧短信等服务。注意：当前仅支持国内短信发送，接收者必须为中国大陆手机号；短信签名需在「签名管理」中单独配置",
+		Code:              constants.ProviderZrwinfoSMS,
+		Name:              "掌榕网短信",
+		Type:              constants.MessageTypeSMS,
+		Description:       "掌榕网融合通信产品，提供国内短信、语音、5G智慧短信等服务。注意：当前仅支持国内短信发送，接收者必须为中国大陆手机号；短信签名需在「签名管理」中单独配置",
+		RequiresSignature: true,
 		ConfigFields: []domain.ConfigField{
 			{
 				Key:         "accesskey",

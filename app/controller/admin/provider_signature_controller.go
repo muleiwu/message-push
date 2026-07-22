@@ -13,6 +13,25 @@ import (
 type ProviderSignatureController struct {
 }
 
+// GetGlobalSignatureList 获取全局签名分页列表
+func (c ProviderSignatureController) GetGlobalSignatureList(ctx httpInterfaces.RouterContextInterface) {
+	signatureService := service.NewAdminProviderSignatureService()
+
+	var req dto.ProviderSignatureListRequest
+	if err := ctx.ShouldBindQuery(&req); err != nil {
+		controller.ErrorResponse(ctx, 400, "invalid request: "+err.Error())
+		return
+	}
+
+	resp, err := signatureService.GetGlobalSignatureList(&req)
+	if err != nil {
+		controller.ErrorResponse(ctx, 500, "failed to get signature list: "+err.Error())
+		return
+	}
+
+	controller.SuccessResponse(ctx, resp)
+}
+
 // GetSignatureList 获取签名列表
 func (c ProviderSignatureController) GetSignatureList(ctx httpInterfaces.RouterContextInterface) {
 	signatureService := service.NewAdminProviderSignatureService()

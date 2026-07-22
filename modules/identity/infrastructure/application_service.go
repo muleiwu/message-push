@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"cnb.cool/mliev/open/go-web/pkg/helper"
+	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	apphelper "cnb.cool/mliev/push/message-push/app/helper"
@@ -49,9 +50,9 @@ func (s *AdminApplicationService) CreateApplication(req *dto.CreateApplicationRe
 		return nil, fmt.Errorf("failed to encrypt app_secret: %w", err)
 	}
 
-	status := int8(req.Status)
-	if status == 0 {
-		status = 1 // 默认启用
+	status := constants.ResourceStatusEnabled
+	if req.Status != nil {
+		status = constants.NormalizeResourceStatus(*req.Status)
 	}
 
 	// 验证IP白名单格式
@@ -126,8 +127,8 @@ func (s *AdminApplicationService) GetApplicationList(req *dto.ApplicationListReq
 	if req.Name != "" {
 		query = query.Where("app_name LIKE ?", "%"+req.Name+"%")
 	}
-	if req.Status > 0 {
-		query = query.Where("status = ?", req.Status)
+	if req.Status != nil {
+		query = query.Where("status = ?", constants.NormalizeResourceStatus(*req.Status))
 	}
 
 	// 获取总数
@@ -195,8 +196,8 @@ func (s *AdminApplicationService) UpdateApplication(id uint, req *dto.UpdateAppl
 	if req.Name != "" {
 		updates["app_name"] = req.Name
 	}
-	if req.Status > 0 {
-		updates["status"] = int8(req.Status)
+	if req.Status != nil {
+		updates["status"] = constants.NormalizeResourceStatus(*req.Status)
 	}
 	// 使用指针判断：nil 表示不更新，非 nil 表示更新（包括 0）
 	if req.DailyQuota != nil {

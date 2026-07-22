@@ -18,8 +18,18 @@ type (
 	OIDCService        = domain.OIDCService
 )
 
-// ErrUserDisabled 表示 OIDC 对应的本地账号已被禁用。
-var ErrUserDisabled = domain.ErrUserDisabled
+var (
+	// ErrUserDisabled 表示 OIDC 对应的本地账号已被禁用。
+	ErrUserDisabled = domain.ErrUserDisabled
+	// 管理员 CRUD 错误作为 identity 门面的稳定错误契约对外暴露。
+	ErrAdminUserNotFound           = domain.ErrAdminUserNotFound
+	ErrAdminUsernameConflict       = domain.ErrAdminUsernameConflict
+	ErrAdminEmailConflict          = domain.ErrAdminEmailConflict
+	ErrAdminEmailImmutable         = domain.ErrAdminEmailImmutable
+	ErrAdminPasswordResetForbidden = domain.ErrAdminPasswordResetForbidden
+	ErrInvalidAdminEmail           = domain.ErrInvalidAdminEmail
+	ErrInvalidAdminStatus          = domain.ErrInvalidAdminStatus
+)
 
 // GetApplicationService 从 DI 容器解析应用管理服务。
 func GetApplicationService() domain.ApplicationService {
