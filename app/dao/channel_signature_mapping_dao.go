@@ -1,6 +1,8 @@
 package dao
 
 import (
+	"strings"
+
 	"cnb.cool/mliev/push/message-push/app/model"
 	"gorm.io/gorm"
 )
@@ -70,11 +72,18 @@ func (dao *ChannelSignatureMappingDAO) CheckDuplicateSignatureName(channelID uin
 // GetByChannelIDAndSignatureName 根据通道ID、签名名称和供应商ID获取供应商签名
 func (dao *ChannelSignatureMappingDAO) GetByChannelIDAndSignatureName(channelID uint, signatureName string, providerID uint) (*model.ProviderSignature, error) {
 	var mapping model.ChannelSignatureMapping
-	err := dao.db.Preload("ProviderSignature").
-		Where("channel_id = ? AND signature_name = ? AND provider_id = ? AND status = 1", channelID, signatureName, providerID).
+	err := dao.db.
+		Preload("ProviderSignature").
+		Joins("JOIN provider_signatures ON provider_signatures.id = channel_signature_mappings.provider_signature_id").
+		Where("channel_signature_mappings.channel_id = ? AND channel_signature_mappings.signature_name = ? AND channel_signature_mappings.provider_id = ? AND channel_signature_mappings.status = 1", channelID, strings.TrimSpace(signatureName), providerID).
+		Where("provider_signatures.provider_account_id = channel_signature_mappings.provider_id").
+		Where("provider_signatures.status = 1 AND provider_signatures.deleted_at IS NULL").
 		First(&mapping).Error
 	if err != nil {
 		return nil, err
+	}
+	if mapping.ProviderSignature == nil || strings.TrimSpace(mapping.ProviderSignature.SignatureCode) == "" {
+		return nil, gorm.ErrRecordNotFound
 	}
 	return mapping.ProviderSignature, nil
 }

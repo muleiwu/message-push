@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -12,31 +13,42 @@ import (
 )
 
 // AdminStatisticsService 统计分析服务
-type AdminStatisticsService struct{}
+type AdminStatisticsService struct {
+	db *gorm.DB
+}
+
+func (s *AdminStatisticsService) userTaskQuery() *gorm.DB {
+	return s.db.Model(&model.PushTask{}).Where("app_id <> ?", adminTestAppID)
+}
 
 // NewAdminStatisticsService 创建统计分析服务实例
 func NewAdminStatisticsService() *AdminStatisticsService {
-	return &AdminStatisticsService{}
+	return &AdminStatisticsService{db: helper.GetDatabase()}
 }
 
 // GetStatistics 获取推送统计
 func (s *AdminStatisticsService) GetStatistics(req *dto.StatisticsRequest) (*dto.StatisticsResponse, error) {
-	db := helper.GetDatabase()
+	db := s.db
 
 	// 基本查询
-	query := db.Model(&model.PushLog{}).Where("DATE(created_at) >= ? AND DATE(created_at) <= ?", req.StartDate, req.EndDate)
+	query := s.userTaskQuery().Where("DATE(created_at) >= ? AND DATE(created_at) <= ?", req.StartDate, req.EndDate)
 
 	// 条件过滤
 	if req.AppID > 0 {
-		// PushLog 中的 AppID 是 string 类型 (app_id string)，这里 req.AppID 是 uint
+		// PushTask 中的 AppID 是 string 类型 (app_id string)，这里 req.AppID 是 uint
 		// 需要根据 uint ID 查出 string AppID
 		var app model.Application
 		if err := db.First(&app, req.AppID).Error; err == nil {
 			query = query.Where("app_id = ?", app.AppID)
+		} else if errors.Is(err, gorm.ErrRecordNotFound) {
+			// 不存在的应用筛选应返回空集，不能退化成“所有应用”。
+			query = query.Where("1 = 0")
+		} else {
+			return nil, fmt.Errorf("failed to resolve application filter: %w", err)
 		}
 	}
 	if req.ChannelID > 0 {
-		query = query.Where("provider_channel_id = ?", req.ChannelID)
+		query = query.Where("channel_id = ?", req.ChannelID)
 	}
 
 	// 汇总统计
@@ -49,23 +61,23 @@ func (s *AdminStatisticsService) GetStatistics(req *dto.StatisticsRequest) (*dto
 	// 使用 clone 避免互相影响
 	qTotal := query.Session(&gorm.Session{})
 	qSuccess := query.Session(&gorm.Session{})
+	qFailed := query.Session(&gorm.Session{})
 
 	qTotal.Count(&summary.Total)
 	qSuccess.Where("status = ?", "success").Count(&summary.Success)
-	summary.Failed = summary.Total - summary.Success
+	qFailed.Where("status = ?", "failed").Count(&summary.Failed)
 
 	// 每日统计
 	var dailyStats []struct {
 		Date    string
 		Total   int64
 		Success int64
+		Failed  int64
 	}
 
-	// 注意：这里使用 raw sql 或 gorm v2 的写法
-	// 假设 created_at 是 time 类型，MySQL 数据库
-	db.Model(&model.PushLog{}).
-		Select("DATE(created_at) as date, COUNT(*) as total, SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success").
-		Where("DATE(created_at) >= ? AND DATE(created_at) <= ?", req.StartDate, req.EndDate).
+	// 复用同一个筛选查询，确保汇总和每日趋势的应用、通道口径一致。
+	query.Session(&gorm.Session{}).
+		Select("DATE(created_at) as date, COUNT(*) as total, SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success, SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed").
 		Group("DATE(created_at)").
 		Order("date ASC").
 		Scan(&dailyStats)
@@ -83,7 +95,6 @@ func (s *AdminStatisticsService) GetStatistics(req *dto.StatisticsRequest) (*dto
 
 	response.Daily = make([]*dto.DailyStatistics, 0, len(dailyStats))
 	for _, stat := range dailyStats {
-		failed := stat.Total - stat.Success
 		successRate := "0.00%"
 		if stat.Total > 0 {
 			successRate = fmt.Sprintf("%.2f%%", float64(stat.Success)/float64(stat.Total)*100)
@@ -92,7 +103,7 @@ func (s *AdminStatisticsService) GetStatistics(req *dto.StatisticsRequest) (*dto
 			Date:         stat.Date,
 			TotalCount:   stat.Total,
 			SuccessCount: stat.Success,
-			FailureCount: failed,
+			FailureCount: stat.Failed,
 			SuccessRate:  successRate,
 		})
 	}
@@ -102,7 +113,7 @@ func (s *AdminStatisticsService) GetStatistics(req *dto.StatisticsRequest) (*dto
 
 // GetDashboard 获取仪表盘数据
 func (s *AdminStatisticsService) GetDashboard() (*dto.DashboardResponse, error) {
-	db := helper.GetDatabase()
+	db := s.db
 	resp := &dto.DashboardResponse{}
 
 	// 1. 统计 Applications
@@ -124,15 +135,16 @@ func (s *AdminStatisticsService) GetDashboard() (*dto.DashboardResponse, error) 
 	var todayStats struct {
 		Total   int64
 		Success int64
+		Failed  int64
 	}
-	db.Model(&model.PushLog{}).
-		Select("COUNT(*) as total, SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success").
+	s.userTaskQuery().
+		Select("COUNT(*) as total, SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success, SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed").
 		Where("created_at >= ? AND created_at <= ?", todayStart, todayEnd).
 		Scan(&todayStats)
 
 	resp.TodayPushCount = todayStats.Total
 	resp.TodaySuccessCount = todayStats.Success
-	resp.TodayFailedCount = todayStats.Total - todayStats.Success
+	resp.TodayFailedCount = todayStats.Failed
 	if resp.TodayPushCount > 0 {
 		resp.TodaySuccessRate = fmt.Sprintf("%.2f%%", float64(resp.TodaySuccessCount)/float64(resp.TodayPushCount)*100)
 	} else {
@@ -140,7 +152,7 @@ func (s *AdminStatisticsService) GetDashboard() (*dto.DashboardResponse, error) 
 	}
 
 	// 5. 统计总推送量
-	db.Model(&model.PushLog{}).Count(&resp.TotalPushCount)
+	s.userTaskQuery().Count(&resp.TotalPushCount)
 
 	return resp, nil
 }
@@ -150,7 +162,7 @@ func (s *AdminStatisticsService) GetTopApplications(limit int) ([]*dto.TopApplic
 	if limit <= 0 {
 		limit = 10
 	}
-	db := helper.GetDatabase()
+	db := s.db
 
 	var results []struct {
 		AppID        string
@@ -159,7 +171,7 @@ func (s *AdminStatisticsService) GetTopApplications(limit int) ([]*dto.TopApplic
 	}
 
 	// 聚合查询
-	err := db.Model(&model.PushLog{}).
+	err := s.userTaskQuery().
 		Select("app_id, COUNT(*) as push_count, SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success_count").
 		Group("app_id").
 		Order("push_count DESC").
@@ -205,36 +217,36 @@ func (s *AdminStatisticsService) GetRecentActivities(limit int) ([]*dto.RecentAc
 	if limit <= 0 {
 		limit = 10
 	}
-	db := helper.GetDatabase()
+	db := s.db
 
-	var logs []*model.PushLog
-	if err := db.Order("created_at DESC").Limit(limit).Find(&logs).Error; err != nil {
+	var tasks []*model.PushTask
+	if err := s.userTaskQuery().Order("created_at DESC").Limit(limit).Find(&tasks).Error; err != nil {
 		return nil, err
 	}
 
 	// 缓存 App Name
 	appMap := make(map[string]string)
 
-	items := make([]*dto.RecentActivityResponse, 0, len(logs))
-	for _, log := range logs {
-		appName, ok := appMap[log.AppID]
+	items := make([]*dto.RecentActivityResponse, 0, len(tasks))
+	for _, task := range tasks {
+		appName, ok := appMap[task.AppID]
 		if !ok {
 			var app model.Application
-			if err := db.Where("app_id = ?", log.AppID).First(&app).Error; err == nil {
+			if err := db.Where("app_id = ?", task.AppID).First(&app).Error; err == nil {
 				appName = app.AppName
 			} else {
 				appName = "未知应用"
 			}
-			appMap[log.AppID] = appName
+			appMap[task.AppID] = appName
 		}
 
-		desc := fmt.Sprintf("推送消息 (TaskID: %s) 状态: %s", log.TaskID, log.Status)
+		desc := fmt.Sprintf("推送消息 (TaskID: %s) 状态: %s", task.TaskID, task.Status)
 
 		items = append(items, &dto.RecentActivityResponse{
-			ID:          log.ID,
+			ID:          task.ID,
 			Description: desc,
 			AppName:     appName,
-			CreatedAt:   log.CreatedAt.Format(time.RFC3339),
+			CreatedAt:   task.CreatedAt.Format(time.RFC3339),
 		})
 	}
 

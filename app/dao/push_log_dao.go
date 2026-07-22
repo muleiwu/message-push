@@ -129,8 +129,9 @@ func (d *PushLogDAO) List(req *dto.LogListRequest) ([]*model.PushLog, int64, err
 	if req.EndDate != "" {
 		query = query.Where("created_at <= ?", req.EndDate+" 23:59:59")
 	}
-	// 注意：ProviderID 筛选需要关联查询，这里暂时只查 push_logs 表，如果需要关联查询可以扩展
-	// 如果 push_logs 表里有冗余 provider_id 更好，目前只有 provider_channel_id
+	if req.ProviderID > 0 {
+		query = query.Where("provider_account_id = ?", req.ProviderID)
+	}
 
 	// 获取总数
 	if err := query.Count(&total).Error; err != nil {

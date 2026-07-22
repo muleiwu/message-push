@@ -28,10 +28,35 @@ func (dao *ProviderSignatureDAO) GetByProviderAccountID(providerAccountID uint, 
 	return signatures, err
 }
 
+// List 全局查询签名列表（带筛选和分页）
+func (dao *ProviderSignatureDAO) List(providerAccountID *uint, status *int8, page, pageSize int) ([]*model.ProviderSignature, int64, error) {
+	var signatures []*model.ProviderSignature
+	var total int64
+
+	query := dao.db.Model(&model.ProviderSignature{}).Preload("ProviderAccount")
+	if providerAccountID != nil {
+		query = query.Where("provider_account_id = ?", *providerAccountID)
+	}
+	if status != nil {
+		query = query.Where("status = ?", *status)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * pageSize
+	if err := query.Order("id DESC").Offset(offset).Limit(pageSize).Find(&signatures).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return signatures, total, nil
+}
+
 // GetByID 根据ID获取签名
 func (dao *ProviderSignatureDAO) GetByID(id uint) (*model.ProviderSignature, error) {
 	var signature model.ProviderSignature
-	err := dao.db.First(&signature, id).Error
+	err := dao.db.Preload("ProviderAccount").First(&signature, id).Error
 	if err != nil {
 		return nil, err
 	}

@@ -18,6 +18,12 @@ func NewProviderAccountDAO() *ProviderAccountDAO {
 	}
 }
 
+// NewProviderAccountDAOWithDB creates a DAO from an explicit database handle.
+// It is useful for read-only composition and isolated tests.
+func NewProviderAccountDAOWithDB(db *gorm.DB) *ProviderAccountDAO {
+	return &ProviderAccountDAO{db: db}
+}
+
 // Create 创建服务商账号
 func (d *ProviderAccountDAO) Create(account *model.ProviderAccount) error {
 	return d.db.Create(account).Error
@@ -43,7 +49,7 @@ func (d *ProviderAccountDAO) GetByAccountCode(code string) (*model.ProviderAccou
 }
 
 // List 获取列表（带条件）
-func (d *ProviderAccountDAO) List(page, pageSize int, providerType string, status int) ([]*model.ProviderAccount, int64, error) {
+func (d *ProviderAccountDAO) List(page, pageSize int, providerType string, status *int8) ([]*model.ProviderAccount, int64, error) {
 	var accounts []*model.ProviderAccount
 	var total int64
 
@@ -53,8 +59,8 @@ func (d *ProviderAccountDAO) List(page, pageSize int, providerType string, statu
 	if providerType != "" {
 		query = query.Where("provider_type = ?", providerType)
 	}
-	if status > 0 {
-		query = query.Where("status = ?", status)
+	if status != nil {
+		query = query.Where("status = ?", *status)
 	}
 
 	// 获取总数

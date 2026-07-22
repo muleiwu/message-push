@@ -132,6 +132,11 @@ func (c ChannelController) GetChannelBindings(ctx httpInterfaces.RouterContextIn
 // GetChannelBinding 获取单个通道绑定配置
 func (c ChannelController) GetChannelBinding(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminChannelService()
+	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
+	if err != nil {
+		controller.ErrorResponse(ctx, 400, "invalid channel id")
+		return
+	}
 	bindingIDStr := ctx.Param("bindingId")
 	bindingID, err := strconv.ParseUint(bindingIDStr, 10, 32)
 	if err != nil {
@@ -139,7 +144,7 @@ func (c ChannelController) GetChannelBinding(ctx httpInterfaces.RouterContextInt
 		return
 	}
 
-	resp, err := adminService.GetChannelBinding(uint(bindingID))
+	resp, err := adminService.GetChannelBinding(uint(id), uint(bindingID))
 	if err != nil {
 		controller.ErrorResponse(ctx, 500, "failed to get channel binding: "+err.Error())
 		return
@@ -151,6 +156,11 @@ func (c ChannelController) GetChannelBinding(ctx httpInterfaces.RouterContextInt
 // UpdateChannelBinding 更新通道绑定配置
 func (c ChannelController) UpdateChannelBinding(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminChannelService()
+	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
+	if err != nil {
+		controller.ErrorResponse(ctx, 400, "invalid channel id")
+		return
+	}
 	bindingIDStr := ctx.Param("bindingId")
 	bindingID, err := strconv.ParseUint(bindingIDStr, 10, 32)
 	if err != nil {
@@ -164,7 +174,7 @@ func (c ChannelController) UpdateChannelBinding(ctx httpInterfaces.RouterContext
 		return
 	}
 
-	if err := adminService.UpdateChannelBinding(uint(bindingID), &req); err != nil {
+	if err := adminService.UpdateChannelBinding(uint(id), uint(bindingID), &req); err != nil {
 		controller.ErrorResponse(ctx, 500, "failed to update channel binding: "+err.Error())
 		return
 	}
@@ -175,6 +185,11 @@ func (c ChannelController) UpdateChannelBinding(ctx httpInterfaces.RouterContext
 // DeleteChannelBinding 删除通道绑定配置
 func (c ChannelController) DeleteChannelBinding(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminChannelService()
+	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
+	if err != nil {
+		controller.ErrorResponse(ctx, 400, "invalid channel id")
+		return
+	}
 	bindingIDStr := ctx.Param("bindingId")
 	bindingID, err := strconv.ParseUint(bindingIDStr, 10, 32)
 	if err != nil {
@@ -182,7 +197,7 @@ func (c ChannelController) DeleteChannelBinding(ctx httpInterfaces.RouterContext
 		return
 	}
 
-	if err := adminService.DeleteChannelBinding(uint(bindingID)); err != nil {
+	if err := adminService.DeleteChannelBinding(uint(id), uint(bindingID)); err != nil {
 		controller.ErrorResponse(ctx, 500, "failed to delete channel binding: "+err.Error())
 		return
 	}
@@ -268,6 +283,11 @@ func (c ChannelController) GetChannelSignatureMappings(ctx httpInterfaces.Router
 // GetChannelSignatureMapping 获取单个通道签名映射
 func (c ChannelController) GetChannelSignatureMapping(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminChannelService()
+	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
+	if err != nil {
+		controller.ErrorResponse(ctx, 400, "invalid channel id")
+		return
+	}
 	mappingIDStr := ctx.Param("mappingId")
 	mappingID, err := strconv.ParseUint(mappingIDStr, 10, 32)
 	if err != nil {
@@ -275,7 +295,7 @@ func (c ChannelController) GetChannelSignatureMapping(ctx httpInterfaces.RouterC
 		return
 	}
 
-	resp, err := adminService.GetChannelSignatureMapping(uint(mappingID))
+	resp, err := adminService.GetChannelSignatureMapping(uint(id), uint(mappingID))
 	if err != nil {
 		controller.ErrorResponse(ctx, 500, "failed to get channel signature mapping: "+err.Error())
 		return
@@ -312,6 +332,11 @@ func (c ChannelController) CreateChannelSignatureMapping(ctx httpInterfaces.Rout
 // UpdateChannelSignatureMapping 更新通道签名映射
 func (c ChannelController) UpdateChannelSignatureMapping(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminChannelService()
+	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
+	if err != nil {
+		controller.ErrorResponse(ctx, 400, "invalid channel id")
+		return
+	}
 	mappingIDStr := ctx.Param("mappingId")
 	mappingID, err := strconv.ParseUint(mappingIDStr, 10, 32)
 	if err != nil {
@@ -325,7 +350,7 @@ func (c ChannelController) UpdateChannelSignatureMapping(ctx httpInterfaces.Rout
 		return
 	}
 
-	if err := adminService.UpdateChannelSignatureMapping(uint(mappingID), &req); err != nil {
+	if err := adminService.UpdateChannelSignatureMapping(uint(id), uint(mappingID), &req); err != nil {
 		controller.ErrorResponse(ctx, 500, "failed to update channel signature mapping: "+err.Error())
 		return
 	}
@@ -336,6 +361,11 @@ func (c ChannelController) UpdateChannelSignatureMapping(ctx httpInterfaces.Rout
 // DeleteChannelSignatureMapping 删除通道签名映射
 func (c ChannelController) DeleteChannelSignatureMapping(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminChannelService()
+	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
+	if err != nil {
+		controller.ErrorResponse(ctx, 400, "invalid channel id")
+		return
+	}
 	mappingIDStr := ctx.Param("mappingId")
 	mappingID, err := strconv.ParseUint(mappingIDStr, 10, 32)
 	if err != nil {
@@ -343,7 +373,7 @@ func (c ChannelController) DeleteChannelSignatureMapping(ctx httpInterfaces.Rout
 		return
 	}
 
-	if err := adminService.DeleteChannelSignatureMapping(uint(mappingID)); err != nil {
+	if err := adminService.DeleteChannelSignatureMapping(uint(id), uint(mappingID)); err != nil {
 		controller.ErrorResponse(ctx, 500, "failed to delete channel signature mapping: "+err.Error())
 		return
 	}

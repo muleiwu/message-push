@@ -1,15 +1,19 @@
 package service
 
 import (
-	"cnb.cool/mliev/push/message-push/modules/messaging"
 	"fmt"
+	"strings"
 	"time"
 
 	"cnb.cool/mliev/open/go-web/pkg/helper"
+	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/app/readiness"
 	"cnb.cool/mliev/push/message-push/modules/channel"
+	"cnb.cool/mliev/push/message-push/modules/messaging"
+	registry "cnb.cool/mliev/push/message-push/modules/sender/domain"
 )
 
 // convertModelParamMappingToDTO 将 model.ParamMappingItem 转换为 dto.ParamMappingItem
@@ -54,6 +58,7 @@ type AdminChannelService struct {
 	signatureMappingDAO  *dao.ChannelSignatureMappingDAO
 	providerSignatureDAO *dao.ProviderSignatureDAO
 	channelSelector      channel.Selector // 用于在配置变更时重置缓存和权重
+	readinessEvaluator   *readiness.ChannelEvaluator
 }
 
 // NewAdminChannelService 创建通道管理服务实例
@@ -66,6 +71,7 @@ func NewAdminChannelService() *AdminChannelService {
 		signatureMappingDAO:  dao.NewChannelSignatureMappingDAO(db),
 		providerSignatureDAO: dao.NewProviderSignatureDAO(db),
 		channelSelector:      channel.GetSelector(),
+		readinessEvaluator:   readiness.NewChannelEvaluator(db),
 	}
 }
 
@@ -88,9 +94,9 @@ func (s *AdminChannelService) CreateChannel(req *dto.CreateChannelRequest) (*dto
 		return nil, fmt.Errorf("message template not found: %w", err)
 	}
 
-	status := int8(req.Status)
-	if status == 0 {
-		status = 1 // 默认启用
+	status := constants.ResourceStatusEnabled
+	if req.Status != nil {
+		status = constants.NormalizeResourceStatus(*req.Status)
 	}
 
 	channel := &model.Channel{
@@ -140,8 +146,8 @@ func (s *AdminChannelService) GetChannelList(req *dto.ChannelListRequest) (*dto.
 	if req.Type != "" {
 		query = query.Where("type = ?", req.Type)
 	}
-	if req.Status > 0 {
-		query = query.Where("status = ?", req.Status)
+	if req.Status != nil {
+		query = query.Where("status = ?", constants.NormalizeResourceStatus(*req.Status))
 	}
 
 	// 获取总数
@@ -155,6 +161,11 @@ func (s *AdminChannelService) GetChannelList(req *dto.ChannelListRequest) (*dto.
 		return nil, fmt.Errorf("failed to query channels: %w", err)
 	}
 
+	readinessByChannel, err := s.readinessEvaluator.EvaluateChannels(channels)
+	if err != nil {
+		return nil, fmt.Errorf("failed to evaluate channel readiness: %w", err)
+	}
+
 	items := make([]*dto.ChannelResponse, 0, len(channels))
 	for _, channel := range channels {
 		item := &dto.ChannelResponse{
@@ -165,6 +176,7 @@ func (s *AdminChannelService) GetChannelList(req *dto.ChannelListRequest) (*dto.
 			Status:            int(channel.Status),
 			CreatedAt:         channel.CreatedAt.Format(time.RFC3339),
 			UpdatedAt:         channel.UpdatedAt.Format(time.RFC3339),
+			Readiness:         readinessByChannel[channel.ID],
 		}
 		if channel.MessageTemplate != nil {
 			item.TemplateName = channel.MessageTemplate.TemplateName
@@ -204,6 +216,17 @@ func (s *AdminChannelService) GetChannelByID(id uint) (*dto.ChannelResponse, err
 		UpdatedAt:         channel.UpdatedAt.Format(time.RFC3339),
 		Bindings:          bindings,
 	}
+	response.Readiness, err = s.readinessEvaluator.EvaluateChannel(id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to evaluate channel readiness: %w", err)
+	}
+	response.LatestAdminTest, err = (&AdminOnboardingService{
+		db:                 db,
+		readinessEvaluator: s.readinessEvaluator,
+	}).latestAdminTestForChannel(id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load latest admin test: %w", err)
+	}
 	if channel.MessageTemplate != nil {
 		response.TemplateName = channel.MessageTemplate.TemplateName
 	}
@@ -218,8 +241,8 @@ func (s *AdminChannelService) UpdateChannel(id uint, req *dto.UpdateChannelReque
 	if req.Name != "" {
 		updates["name"] = req.Name
 	}
-	if req.Status > 0 {
-		updates["status"] = int8(req.Status)
+	if req.Status != nil {
+		updates["status"] = constants.NormalizeResourceStatus(*req.Status)
 	}
 
 	if len(updates) == 0 {
@@ -227,7 +250,11 @@ func (s *AdminChannelService) UpdateChannel(id uint, req *dto.UpdateChannelReque
 	}
 
 	db := helper.GetDatabase()
-	return db.Model(&model.Channel{}).Where("id = ?", id).Updates(updates).Error
+	if err := db.Model(&model.Channel{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+		return err
+	}
+	s.invalidateChannelCache(id)
+	return nil
 }
 
 // DeleteChannel 删除通道
@@ -307,36 +334,67 @@ func (s *AdminChannelService) GetChannelBindings(channelID uint) ([]*dto.Channel
 }
 
 // UpdateChannelBinding 更新通道绑定配置
-func (s *AdminChannelService) UpdateChannelBinding(bindingID uint, req *dto.UpdateChannelBindingRequest) error {
+func (s *AdminChannelService) UpdateChannelBinding(channelID, bindingID uint, req *dto.UpdateChannelBindingRequest) error {
 	// 检查绑定是否存在
 	binding, err := s.bindingDAO.GetByID(bindingID)
 	if err != nil {
 		return fmt.Errorf("binding not found: %w", err)
 	}
+	if binding.ChannelID != channelID {
+		return fmt.Errorf("binding does not belong to channel")
+	}
 
 	updates := make(map[string]interface{})
+	candidate := *binding
 
 	if req.ParamMapping != nil {
-		if err := binding.SetParamMapping(convertDTOParamMappingToModel(req.ParamMapping)); err != nil {
+		if err := candidate.SetParamMapping(convertDTOParamMappingToModel(req.ParamMapping)); err != nil {
 			return fmt.Errorf("failed to set param mapping: %w", err)
 		}
-		updates["param_mapping"] = binding.ParamMapping
+		updates["param_mapping"] = candidate.ParamMapping
 	}
-	if req.Weight > 0 {
-		updates["weight"] = req.Weight
+	if req.Weight != nil {
+		updates["weight"] = *req.Weight
+		candidate.Weight = *req.Weight
 	}
-	if req.Priority >= 0 {
-		updates["priority"] = req.Priority
+	if req.Priority != nil {
+		updates["priority"] = *req.Priority
+		candidate.Priority = *req.Priority
 	}
-	if req.Status >= 0 {
-		updates["status"] = req.Status
+	if req.Status != nil {
+		status := constants.NormalizeResourceStatus(int(*req.Status))
+		updates["status"] = status
+		candidate.Status = status
 	}
-	if req.IsActive >= 0 {
-		updates["is_active"] = req.IsActive
+	if req.IsActive != nil {
+		isActive := constants.NormalizeResourceStatus(int(*req.IsActive))
+		updates["is_active"] = isActive
+		candidate.IsActive = isActive
 	}
-	updates["auto_disable_on_fail"] = req.AutoDisableOnFail
-	if req.AutoDisableThreshold > 0 {
-		updates["auto_disable_threshold"] = req.AutoDisableThreshold
+	if req.AutoDisableOnFail != nil {
+		updates["auto_disable_on_fail"] = *req.AutoDisableOnFail
+		candidate.AutoDisableOnFail = *req.AutoDisableOnFail
+	}
+	if req.AutoDisableThreshold != nil {
+		updates["auto_disable_threshold"] = *req.AutoDisableThreshold
+		candidate.AutoDisableThreshold = *req.AutoDisableThreshold
+	}
+
+	if candidate.Channel == nil || candidate.Channel.MessageTemplate == nil {
+		return fmt.Errorf("channel message template not found")
+	}
+	systemVariables, err := candidate.Channel.MessageTemplate.GetVariables()
+	if err != nil {
+		return fmt.Errorf("invalid message template variables: %w", err)
+	}
+	var issues []string
+	if candidate.Status == 1 && candidate.IsActive == 1 {
+		issues = readiness.ValidateBinding(candidate.Channel.Type, systemVariables, &candidate)
+	} else if req.ParamMapping != nil {
+		issues = readiness.ValidateBindingParamMapping(systemVariables, &candidate)
+	}
+	if len(issues) > 0 {
+		return fmt.Errorf("invalid channel binding: %s", strings.Join(issues, ","))
 	}
 
 	if len(updates) == 0 {
@@ -354,14 +412,15 @@ func (s *AdminChannelService) UpdateChannelBinding(bindingID uint, req *dto.Upda
 }
 
 // DeleteChannelBinding 删除通道绑定配置
-func (s *AdminChannelService) DeleteChannelBinding(bindingID uint) error {
+func (s *AdminChannelService) DeleteChannelBinding(channelID, bindingID uint) error {
 	// 检查绑定是否存在
 	binding, err := s.bindingDAO.GetByID(bindingID)
 	if err != nil {
 		return fmt.Errorf("binding not found: %w", err)
 	}
-
-	channelID := binding.ChannelID
+	if binding.ChannelID != channelID {
+		return fmt.Errorf("binding does not belong to channel")
+	}
 
 	// 删除绑定
 	if err := s.bindingDAO.Delete(bindingID); err != nil {
@@ -394,10 +453,13 @@ func (s *AdminChannelService) GetActiveChannels() ([]*dto.ActiveItem, error) {
 }
 
 // GetChannelBinding 获取单个通道绑定配置
-func (s *AdminChannelService) GetChannelBinding(bindingID uint) (*dto.ChannelBindingResponse, error) {
+func (s *AdminChannelService) GetChannelBinding(channelID, bindingID uint) (*dto.ChannelBindingResponse, error) {
 	binding, err := s.bindingDAO.GetByID(bindingID)
 	if err != nil {
 		return nil, fmt.Errorf("binding not found: %w", err)
+	}
+	if binding.ChannelID != channelID {
+		return nil, fmt.Errorf("binding does not belong to channel")
 	}
 
 	// 获取参数映射
@@ -439,6 +501,9 @@ func (s *AdminChannelService) CreateChannelBinding(channelID uint, req *dto.Crea
 	if err := db.Preload("MessageTemplate").First(&channel, channelID).Error; err != nil {
 		return nil, fmt.Errorf("channel not found: %w", err)
 	}
+	if channel.MessageTemplate == nil {
+		return nil, fmt.Errorf("channel message template not found")
+	}
 
 	// 验证供应商模板是否存在
 	providerTemplate, err := s.providerTemplateDAO.GetByID(req.ProviderTemplateID)
@@ -471,25 +536,29 @@ func (s *AdminChannelService) CreateChannelBinding(channelID uint, req *dto.Crea
 	}
 
 	// 设置默认值
-	weight := req.Weight
-	if weight == 0 {
-		weight = 10
+	weight := 10
+	if req.Weight != nil {
+		weight = *req.Weight
 	}
-	priority := req.Priority
-	if priority == 0 {
-		priority = 100
+	priority := 100
+	if req.Priority != nil {
+		priority = *req.Priority
 	}
-	status := req.Status
-	if status == 0 {
-		status = 1
+	status := constants.ResourceStatusEnabled
+	if req.Status != nil {
+		status = constants.NormalizeResourceStatus(int(*req.Status))
 	}
-	isActive := req.IsActive
-	if isActive == 0 {
-		isActive = 1
+	isActive := constants.ResourceStatusEnabled
+	if req.IsActive != nil {
+		isActive = constants.NormalizeResourceStatus(int(*req.IsActive))
 	}
-	autoDisableThreshold := req.AutoDisableThreshold
-	if autoDisableThreshold == 0 {
-		autoDisableThreshold = 5
+	autoDisableOnFail := false
+	if req.AutoDisableOnFail != nil {
+		autoDisableOnFail = *req.AutoDisableOnFail
+	}
+	autoDisableThreshold := 5
+	if req.AutoDisableThreshold != nil {
+		autoDisableThreshold = *req.AutoDisableThreshold
 	}
 
 	// 创建通道绑定配置
@@ -501,9 +570,11 @@ func (s *AdminChannelService) CreateChannelBinding(channelID uint, req *dto.Crea
 		Priority:             priority,
 		Status:               status,
 		IsActive:             isActive,
-		AutoDisableOnFail:    req.AutoDisableOnFail,
+		AutoDisableOnFail:    autoDisableOnFail,
 		AutoDisableThreshold: autoDisableThreshold,
 	}
+	binding.ProviderTemplate = providerTemplate
+	binding.Channel = &channel
 
 	// 设置参数映射
 	if req.ParamMapping != nil {
@@ -511,6 +582,23 @@ func (s *AdminChannelService) CreateChannelBinding(channelID uint, req *dto.Crea
 			return nil, fmt.Errorf("failed to set param mapping: %w", err)
 		}
 	}
+
+	systemVariables, err := channel.MessageTemplate.GetVariables()
+	if err != nil {
+		return nil, fmt.Errorf("invalid message template variables: %w", err)
+	}
+	var issues []string
+	if binding.Status == 1 && binding.IsActive == 1 {
+		issues = readiness.ValidateBinding(channel.Type, systemVariables, binding)
+	} else {
+		issues = readiness.ValidateBindingParamMapping(systemVariables, binding)
+	}
+	if len(issues) > 0 {
+		return nil, fmt.Errorf("invalid channel binding: %s", strings.Join(issues, ","))
+	}
+	// Associations were attached only for validation; persist foreign keys only.
+	binding.ProviderTemplate = nil
+	binding.Channel = nil
 
 	if err := db.Create(binding).Error; err != nil {
 		logger.Error("创建通道绑定配置失败")
@@ -562,7 +650,7 @@ func (s *AdminChannelService) GetAvailableTemplateBindings(channelID uint) ([]*d
 
 	// 验证通道是否存在
 	var channel model.Channel
-	if err := db.First(&channel, channelID).Error; err != nil {
+	if err := db.Preload("MessageTemplate").First(&channel, channelID).Error; err != nil {
 		return nil, fmt.Errorf("channel not found: %w", err)
 	}
 
@@ -657,10 +745,13 @@ func (s *AdminChannelService) GetChannelSignatureMappings(channelID uint) ([]*dt
 }
 
 // GetChannelSignatureMapping 获取单个签名映射
-func (s *AdminChannelService) GetChannelSignatureMapping(mappingID uint) (*dto.ChannelSignatureMappingResponse, error) {
+func (s *AdminChannelService) GetChannelSignatureMapping(channelID, mappingID uint) (*dto.ChannelSignatureMappingResponse, error) {
 	mapping, err := s.signatureMappingDAO.GetByID(mappingID)
 	if err != nil {
 		return nil, fmt.Errorf("signature mapping not found: %w", err)
+	}
+	if mapping.ChannelID != channelID {
+		return nil, fmt.Errorf("signature mapping does not belong to channel")
 	}
 
 	item := &dto.ChannelSignatureMappingResponse{
@@ -691,10 +782,14 @@ func (s *AdminChannelService) GetChannelSignatureMapping(mappingID uint) (*dto.C
 func (s *AdminChannelService) CreateChannelSignatureMapping(channelID uint, req *dto.CreateChannelSignatureMappingRequest) (*dto.ChannelSignatureMappingResponse, error) {
 	logger := helper.GetLogger()
 	db := helper.GetDatabase()
+	signatureName := strings.TrimSpace(req.SignatureName)
+	if signatureName == "" {
+		return nil, fmt.Errorf("signature name is required")
+	}
 
 	// 验证通道是否存在
 	var channel model.Channel
-	if err := db.First(&channel, channelID).Error; err != nil {
+	if err := db.Preload("MessageTemplate").First(&channel, channelID).Error; err != nil {
 		return nil, fmt.Errorf("channel not found: %w", err)
 	}
 
@@ -708,26 +803,29 @@ func (s *AdminChannelService) CreateChannelSignatureMapping(channelID uint, req 
 	if providerSignature.ProviderAccountID != req.ProviderID {
 		return nil, fmt.Errorf("provider signature does not belong to the specified provider account")
 	}
+	if err := s.validateSignatureMappingTarget(&channel, req.ProviderID, providerSignature); err != nil {
+		return nil, err
+	}
 
 	// 检查签名名称+供应商是否已存在
-	exists, err := s.signatureMappingDAO.CheckDuplicateSignatureName(channelID, req.SignatureName, req.ProviderID, nil)
+	exists, err := s.signatureMappingDAO.CheckDuplicateSignatureName(channelID, signatureName, req.ProviderID, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check duplicate signature name: %w", err)
 	}
 	if exists {
-		return nil, fmt.Errorf("signature name '%s' with this provider already exists in this channel", req.SignatureName)
+		return nil, fmt.Errorf("signature name '%s' with this provider already exists in this channel", signatureName)
 	}
 
 	// 设置默认值
 	status := int8(1)
 	if req.Status != nil {
-		status = *req.Status
+		status = constants.NormalizeResourceStatus(int(*req.Status))
 	}
 
 	// 创建签名映射
 	mapping := &model.ChannelSignatureMapping{
 		ChannelID:           channelID,
-		SignatureName:       req.SignatureName,
+		SignatureName:       signatureName,
 		ProviderSignatureID: req.ProviderSignatureID,
 		ProviderID:          req.ProviderID,
 		Status:              status,
@@ -771,23 +869,32 @@ func (s *AdminChannelService) CreateChannelSignatureMapping(channelID uint, req 
 }
 
 // UpdateChannelSignatureMapping 更新签名映射
-func (s *AdminChannelService) UpdateChannelSignatureMapping(mappingID uint, req *dto.UpdateChannelSignatureMappingRequest) error {
+func (s *AdminChannelService) UpdateChannelSignatureMapping(channelID, mappingID uint, req *dto.UpdateChannelSignatureMappingRequest) error {
 	// 检查映射是否存在
 	mapping, err := s.signatureMappingDAO.GetByID(mappingID)
 	if err != nil {
 		return fmt.Errorf("signature mapping not found: %w", err)
 	}
+	if mapping.ChannelID != channelID {
+		return fmt.Errorf("signature mapping does not belong to channel")
+	}
 
 	// 如果更新签名名称，检查是否重复
-	if req.SignatureName != "" && req.SignatureName != mapping.SignatureName {
-		exists, err := s.signatureMappingDAO.CheckDuplicateSignatureName(mapping.ChannelID, req.SignatureName, mapping.ProviderID, &mappingID)
-		if err != nil {
-			return fmt.Errorf("failed to check duplicate signature name: %w", err)
+	if req.SignatureName != "" {
+		signatureName := strings.TrimSpace(req.SignatureName)
+		if signatureName == "" {
+			return fmt.Errorf("signature name is required")
 		}
-		if exists {
-			return fmt.Errorf("signature name '%s' with this provider already exists in this channel", req.SignatureName)
+		if signatureName != mapping.SignatureName {
+			exists, err := s.signatureMappingDAO.CheckDuplicateSignatureName(mapping.ChannelID, signatureName, mapping.ProviderID, &mappingID)
+			if err != nil {
+				return fmt.Errorf("failed to check duplicate signature name: %w", err)
+			}
+			if exists {
+				return fmt.Errorf("signature name '%s' with this provider already exists in this channel", signatureName)
+			}
+			mapping.SignatureName = signatureName
 		}
-		mapping.SignatureName = req.SignatureName
 	}
 
 	// 如果更新供应商签名，需要验证
@@ -800,22 +907,32 @@ func (s *AdminChannelService) UpdateChannelSignatureMapping(mappingID uint, req 
 		if providerSignature.ProviderAccountID != mapping.ProviderID {
 			return fmt.Errorf("provider signature does not belong to the current provider account")
 		}
+		var channel model.Channel
+		if err := helper.GetDatabase().Preload("MessageTemplate").First(&channel, mapping.ChannelID).Error; err != nil {
+			return fmt.Errorf("channel not found: %w", err)
+		}
+		if err := s.validateSignatureMappingTarget(&channel, mapping.ProviderID, providerSignature); err != nil {
+			return err
+		}
 		mapping.ProviderSignatureID = req.ProviderSignatureID
 	}
 
 	if req.Status != nil {
-		mapping.Status = *req.Status
+		mapping.Status = constants.NormalizeResourceStatus(int(*req.Status))
 	}
 
 	return s.signatureMappingDAO.Update(mapping)
 }
 
 // DeleteChannelSignatureMapping 删除签名映射
-func (s *AdminChannelService) DeleteChannelSignatureMapping(mappingID uint) error {
+func (s *AdminChannelService) DeleteChannelSignatureMapping(channelID, mappingID uint) error {
 	// 检查映射是否存在
-	_, err := s.signatureMappingDAO.GetByID(mappingID)
+	mapping, err := s.signatureMappingDAO.GetByID(mappingID)
 	if err != nil {
 		return fmt.Errorf("signature mapping not found: %w", err)
+	}
+	if mapping.ChannelID != channelID {
+		return fmt.Errorf("signature mapping does not belong to channel")
 	}
 
 	// 删除映射
@@ -828,14 +945,46 @@ func (s *AdminChannelService) GetAvailableProviderSignatures(channelID uint) ([]
 
 	// 验证通道是否存在
 	var channel model.Channel
-	if err := db.First(&channel, channelID).Error; err != nil {
+	if err := db.Preload("MessageTemplate").First(&channel, channelID).Error; err != nil {
 		return nil, fmt.Errorf("channel not found: %w", err)
 	}
+	if channel.MessageTemplate == nil {
+		return []*dto.ProviderSignatureResponse{}, nil
+	}
+	systemVariables, err := channel.MessageTemplate.GetVariables()
+	if err != nil {
+		return nil, fmt.Errorf("invalid message template variables: %w", err)
+	}
+	bindings, err := s.bindingDAO.GetActiveByChannelID(channelID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get channel bindings: %w", err)
+	}
+	accountIDs := make([]uint, 0)
+	seenAccounts := make(map[uint]struct{})
+	for _, binding := range bindings {
+		if len(readiness.ValidateBinding(channel.Type, systemVariables, binding)) > 0 || binding.ProviderTemplate == nil || binding.ProviderTemplate.ProviderAccount == nil {
+			continue
+		}
+		account := binding.ProviderTemplate.ProviderAccount
+		meta, metaErr := registry.GetByCode(account.ProviderCode)
+		if metaErr != nil || !meta.RequiresSignature {
+			continue
+		}
+		if _, seen := seenAccounts[account.ID]; seen {
+			continue
+		}
+		seenAccounts[account.ID] = struct{}{}
+		accountIDs = append(accountIDs, account.ID)
+	}
+	if len(accountIDs) == 0 {
+		return []*dto.ProviderSignatureResponse{}, nil
+	}
 
-	// 获取所有匹配通道类型的供应商签名
+	// Only signatures belonging to currently valid, signature-requiring channel
+	// bindings are eligible for mapping.
 	var signatures []*model.ProviderSignature
 	if err := db.Joins("JOIN provider_accounts ON provider_accounts.id = provider_signatures.provider_account_id").
-		Where("provider_accounts.provider_type = ? AND provider_accounts.status = 1 AND provider_signatures.status = 1", channel.Type).
+		Where("provider_signatures.provider_account_id IN ? AND provider_accounts.status = 1 AND provider_signatures.status = 1", accountIDs).
 		Preload("ProviderAccount").
 		Find(&signatures).Error; err != nil {
 		return nil, fmt.Errorf("failed to get provider signatures: %w", err)
@@ -852,15 +1001,46 @@ func (s *AdminChannelService) GetAvailableProviderSignatures(channelID uint) ([]
 		}
 
 		if sig.ProviderAccount != nil {
-			item.ProviderAccountID = sig.ProviderAccountID
-			item.ProviderAccountName = sig.ProviderAccount.AccountName
-			item.ProviderCode = sig.ProviderAccount.ProviderCode
+			applySignatureProviderPolicy(item, sig.ProviderAccount)
 		}
 
 		items = append(items, item)
 	}
 
 	return items, nil
+}
+
+func (s *AdminChannelService) validateSignatureMappingTarget(channel *model.Channel, providerID uint, providerSignature *model.ProviderSignature) error {
+	if channel == nil || channel.MessageTemplate == nil {
+		return fmt.Errorf("channel message template not found")
+	}
+	if providerSignature == nil || providerSignature.Status != 1 {
+		return fmt.Errorf("provider signature is not active")
+	}
+	if providerSignature.ProviderAccountID != providerID || providerSignature.ProviderAccount == nil {
+		return fmt.Errorf("provider signature does not belong to the specified provider account")
+	}
+	account := providerSignature.ProviderAccount
+	if account.Status != 1 || account.ProviderType != channel.Type {
+		return fmt.Errorf("provider account is not available for this channel")
+	}
+	if err := ensureSignatureWritable(account); err != nil {
+		return err
+	}
+	systemVariables, err := channel.MessageTemplate.GetVariables()
+	if err != nil {
+		return fmt.Errorf("invalid message template variables: %w", err)
+	}
+	bindings, err := s.bindingDAO.GetActiveByChannelID(channel.ID)
+	if err != nil {
+		return fmt.Errorf("failed to get channel bindings: %w", err)
+	}
+	for _, binding := range bindings {
+		if binding.ProviderID == providerID && len(readiness.ValidateBinding(channel.Type, systemVariables, binding)) == 0 {
+			return nil
+		}
+	}
+	return fmt.Errorf("provider account has no valid active binding in this channel")
 }
 
 // TestChannel 测试通道发送
@@ -953,7 +1133,7 @@ func (s *AdminChannelService) TestChannel(channelID uint, req *dto.TestChannelRe
 	logger.Info(fmt.Sprintf("test channel send success channel_id=%d task_id=%s", channelID, resp.TaskID))
 	return &dto.TestChannelResponse{
 		Success: true,
-		Message: "发送成功，任务已创建",
+		Message: "已受理，任务已创建",
 		TaskID:  resp.TaskID,
 	}, nil
 }

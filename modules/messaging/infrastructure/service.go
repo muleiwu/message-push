@@ -11,6 +11,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/app/readiness"
 	"cnb.cool/mliev/push/message-push/modules/channel"
 	"cnb.cool/mliev/push/message-push/modules/delivery"
 	"cnb.cool/mliev/push/message-push/modules/messaging/domain"
@@ -31,6 +32,7 @@ type MessageService struct {
 	appDao             *dao.ApplicationDAO
 	messageTemplateDao *dao.MessageTemplateDAO
 	templateHelper     template.Renderer
+	readinessEvaluator *readiness.ChannelEvaluator
 }
 
 // NewMessageService 创建消息服务
@@ -43,6 +45,7 @@ func NewMessageService() *MessageService {
 		appDao:             dao.NewApplicationDAO(),
 		messageTemplateDao: dao.NewMessageTemplateDAO(),
 		templateHelper:     template.GetRenderer(),
+		readinessEvaluator: readiness.NewChannelEvaluator(internalHelper.GetDatabase()),
 	}
 }
 
@@ -77,6 +80,9 @@ func (s *MessageService) Send(ctx context.Context, req *dto.SendRequest) (*dto.S
 	if len(bindings) == 0 {
 		s.logger.Error(fmt.Sprintf("no active template bindings configured channel_id=%d app_id=%s", req.ChannelID, req.AppID))
 		return nil, fmt.Errorf("no active template bindings configured for channel_id=%d", req.ChannelID)
+	}
+	if err := s.readinessEvaluator.ValidateForSend(req.ChannelID, req.SignatureName); err != nil {
+		return nil, fmt.Errorf("channel is not ready for send: %w", err)
 	}
 
 	// 2. 验证消息类型
@@ -174,6 +180,9 @@ func (s *MessageService) BatchSend(ctx context.Context, req *dto.BatchSendReques
 		s.logger.Error(fmt.Sprintf("no active template bindings configured channel_id=%d app_id=%s", req.ChannelID, req.AppID))
 		return nil, fmt.Errorf("no active template bindings configured for channel_id=%d", req.ChannelID)
 	}
+	if err := s.readinessEvaluator.ValidateForSend(req.ChannelID, req.SignatureName); err != nil {
+		return nil, fmt.Errorf("channel is not ready for send: %w", err)
+	}
 
 	// 2. 加载系统模板（使用 channel 的 MessageTemplateID）
 	messageTemplate, err := s.messageTemplateDao.GetByID(channel.MessageTemplateID)
@@ -268,17 +277,5 @@ func (s *MessageService) validateTemplateParams(templateVars []string, params ma
 
 // isValidMessageType 验证消息类型
 func (s *MessageService) isValidMessageType(messageType string) bool {
-	validTypes := []string{
-		constants.MessageTypeSMS,
-		constants.MessageTypeEmail,
-		constants.MessageTypeWeChatWork,
-		constants.MessageTypeDingTalk,
-	}
-
-	for _, t := range validTypes {
-		if t == messageType {
-			return true
-		}
-	}
-	return false
+	return constants.IsValidMessageType(messageType)
 }

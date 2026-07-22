@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	internalHelper "cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/constants"
@@ -16,6 +17,7 @@ import (
 	"cnb.cool/mliev/push/message-push/modules/delivery/infrastructure/queue"
 	"cnb.cool/mliev/push/message-push/modules/ruleengine"
 	"cnb.cool/mliev/push/message-push/modules/sender"
+	registry "cnb.cool/mliev/push/message-push/modules/sender/domain"
 	"cnb.cool/mliev/push/message-push/modules/template"
 	"github.com/muleiwu/gsr"
 )
@@ -40,6 +42,14 @@ type MessageHandler struct {
 	templateHelper      template.Renderer
 	ruleEngine          ruleengine.Engine
 	actionExecutor      *service.ActionExecutor
+}
+
+type deliverySignatureLookup interface {
+	GetByChannelIDAndSignatureName(channelID uint, signatureName string, providerID uint) (*model.ProviderSignature, error)
+}
+
+type deliverySenderLookup interface {
+	GetSender(providerCode string) (sender.Sender, error)
 }
 
 // NewMessageHandler 创建消息处理器
@@ -101,24 +111,30 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 		h.handleEarlyFailure(task, 0, err.Error())
 		return err
 	}
-
-	// 获取发送器（按服务商代码获取）
-	messageSender, err := h.senderResolver.GetSender(providerAccount.ProviderCode)
+	providerMeta, err := registry.GetByCode(providerAccount.ProviderCode)
 	if err != nil {
-		h.logger.Error(fmt.Sprintf("failed to get sender task_id=%s: %v", taskID, err))
+		err = fmt.Errorf("provider is not registered: %w", err)
+		h.logger.Error(fmt.Sprintf("failed to resolve provider metadata task_id=%s: %v", taskID, err))
 		h.handleEarlyFailure(task, providerAccount.ID, err.Error())
 		return err
 	}
 
-	// 查找签名映射，直接获取供应商签名
-	var providerSignature *model.ProviderSignature
-	if task.Signature != "" {
-		providerSignature, err = h.signatureMappingDao.GetByChannelIDAndSignatureName(task.ChannelID, task.Signature, providerAccount.ID)
-		if err != nil {
-			h.logger.Warn(fmt.Sprintf("signature mapping not found task_id=%s signature=%s: %v", taskID, task.Signature, err))
-		} else if providerSignature != nil {
-			h.logger.Info(fmt.Sprintf("signature resolved task_id=%s signature_name=%s signature_code=%s", taskID, task.Signature, providerSignature.SignatureCode))
-		}
+	// Resolve required signatures before touching the sender. This keeps queued
+	// tasks fail-closed when mappings are removed or disabled after acceptance.
+	providerSignature, messageSender, err := resolveDeliveryDependencies(
+		h.signatureMappingDao,
+		h.senderResolver,
+		task,
+		providerAccount,
+		providerMeta.RequiresSignature,
+	)
+	if err != nil {
+		h.logger.Error(fmt.Sprintf("failed to resolve delivery dependencies task_id=%s provider_id=%d: %v", taskID, providerAccount.ID, err))
+		h.handleEarlyFailure(task, providerAccount.ID, err.Error())
+		return err
+	}
+	if providerSignature != nil {
+		h.logger.Info(fmt.Sprintf("signature resolved task_id=%s signature_name=%s signature_code=%s", taskID, task.Signature, providerSignature.SignatureCode))
 	}
 
 	// 解析模板参数并进行映射转换
@@ -133,10 +149,21 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 			paramMapping, err := node.ChannelTemplateBinding.GetParamMapping()
 			if err != nil {
 				h.logger.Warn(fmt.Sprintf("failed to get param mapping task_id=%s: %v", taskID, err))
-			} else if len(paramMapping) > 0 {
-				// 执行参数映射转换
-				mappedParams = h.templateHelper.MapParams(templateParams, paramMapping)
-				h.logger.Info(fmt.Sprintf("params mapped task_id=%s original=%v mapped=%v", taskID, templateParams, mappedParams))
+			} else {
+				if len(paramMapping) > 0 {
+					// 执行参数映射转换
+					mappedParams = h.templateHelper.MapParams(templateParams, paramMapping)
+					h.logger.Info(fmt.Sprintf("params mapped task_id=%s original=%v mapped=%v", taskID, templateParams, mappedParams))
+				} else {
+					// 空映射表示“仅同名变量自动映射”。不向供应商透传
+					// 系统模板中的额外参数，与 readiness 的子集校验保持一致。
+					providerVariables, variablesErr := node.ChannelTemplateBinding.ProviderTemplate.GetVariables()
+					if variablesErr != nil {
+						h.logger.Warn(fmt.Sprintf("failed to get provider template variables task_id=%s: %v", taskID, variablesErr))
+					} else {
+						mappedParams = sameNameTemplateParams(templateParams, providerVariables)
+					}
+				}
 			}
 		}
 	}
@@ -198,6 +225,50 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 	}
 
 	return nil
+}
+
+func sameNameTemplateParams(templateParams map[string]string, providerVariables []string) map[string]string {
+	mapped := make(map[string]string, len(providerVariables))
+	for _, variable := range providerVariables {
+		if value, ok := templateParams[variable]; ok {
+			mapped[variable] = value
+		}
+	}
+	return mapped
+}
+
+func resolveDeliveryDependencies(
+	signatures deliverySignatureLookup,
+	senders deliverySenderLookup,
+	task *model.PushTask,
+	account *model.ProviderAccount,
+	requiresSignature bool,
+) (*model.ProviderSignature, sender.Sender, error) {
+	if task == nil || account == nil {
+		return nil, nil, fmt.Errorf("task or provider account is missing")
+	}
+
+	alias := strings.TrimSpace(task.Signature)
+	var providerSignature *model.ProviderSignature
+	if alias != "" {
+		resolved, err := signatures.GetByChannelIDAndSignatureName(task.ChannelID, alias, account.ID)
+		if err != nil {
+			if requiresSignature {
+				return nil, nil, fmt.Errorf("required signature alias cannot be resolved: %w", err)
+			}
+		} else {
+			providerSignature = resolved
+		}
+	}
+	if requiresSignature && providerSignature == nil {
+		return nil, nil, fmt.Errorf("required signature is missing")
+	}
+
+	messageSender, err := senders.GetSender(account.ProviderCode)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get sender: %w", err)
+	}
+	return providerSignature, messageSender, nil
 }
 
 // selectChannel 选择发送通道

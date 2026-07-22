@@ -127,6 +127,7 @@ func (receiver Router) InitConfig() map[string]any {
 				// 服务商签名管理（独立路由，用于更新/删除操作）
 				signatures := adminGroup.Group("/provider-signatures")
 				{
+					signatures.GET("", admin.ProviderSignatureController{}.GetGlobalSignatureList)
 					signatures.GET("/:id", admin.ProviderSignatureController{}.GetSignature)
 					signatures.PUT("/:id", admin.ProviderSignatureController{}.UpdateSignature)
 					signatures.DELETE("/:id", admin.ProviderSignatureController{}.DeleteSignature)
@@ -155,6 +156,11 @@ func (receiver Router) InitConfig() map[string]any {
 					channels.GET("/:id/signature-mappings/:mappingId", admin.ChannelController{}.GetChannelSignatureMapping)
 					channels.PUT("/:id/signature-mappings/:mappingId", admin.ChannelController{}.UpdateChannelSignatureMapping)
 					channels.DELETE("/:id/signature-mappings/:mappingId", admin.ChannelController{}.DeleteChannelSignatureMapping)
+				}
+
+				onboarding := adminGroup.Group("/onboarding")
+				{
+					onboarding.GET("/summary", admin.OnboardingController{}.GetSummary)
 				}
 
 				// 统计查询

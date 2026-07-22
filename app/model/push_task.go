@@ -17,7 +17,7 @@ type PushTask struct {
 	Receiver           string     `gorm:"type:varchar(100);not null;comment:接收者（手机号/邮箱/UserID等）" json:"receiver"`
 	TemplateCode       string     `gorm:"type:varchar(50);comment:模板代码" json:"template_code"`
 	TemplateParams     string     `gorm:"type:json;comment:模板参数" json:"template_params"`
-	Signature          string     `gorm:"type:varchar(50);comment:签名" json:"signature"`
+	Signature          string     `gorm:"type:varchar(200);comment:签名别名或邮件主题" json:"signature"`
 	Status             string     `gorm:"type:varchar(20);default:'pending';index:idx_app_id_status,idx_status_scheduled;comment:状态：pending, processing, success, failed" json:"status"`
 	CallbackStatus     string     `gorm:"type:varchar(20);comment:回调状态：pending, delivered, failed, rejected" json:"callback_status"`
 	CallbackTime       *time.Time `gorm:"type:timestamp;comment:回调时间" json:"callback_time"`

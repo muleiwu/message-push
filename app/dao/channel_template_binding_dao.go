@@ -65,6 +65,8 @@ func (d *ChannelTemplateBindingDAO) GetActiveByChannelID(channelID uint) ([]*mod
 	err := db.Where("channel_id = ? AND is_active = 1 AND status = 1", channelID).
 		Preload("ProviderTemplate").
 		Preload("ProviderTemplate.ProviderAccount").
+		Preload("Channel").
+		Preload("Channel.MessageTemplate").
 		Order("priority ASC, weight DESC").
 		Find(&bindings).Error
 	if err != nil {
