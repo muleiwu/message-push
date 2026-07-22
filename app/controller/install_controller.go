@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"fmt"
+	"net/http"
 	"time"
 
 	"cnb.cool/mliev/open/go-web/pkg/helper"
@@ -9,6 +11,7 @@ import (
 
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dto"
+	appHelper "cnb.cool/mliev/push/message-push/app/helper"
 	"cnb.cool/mliev/push/message-push/migration"
 	"cnb.cool/mliev/push/message-push/modules/identity"
 )
@@ -87,6 +90,12 @@ func (ic InstallController) SubmitInstall(c httpInterfaces.RouterContextInterfac
 		ic.Error(c, constants.CodeBadRequest, "请求参数错误: "+err.Error())
 		return
 	}
+	normalizedAdmin, err := normalizeInstallAdmin(req.Admin)
+	if err != nil {
+		ic.Error(c, http.StatusBadRequest, "管理员信息错误: "+err.Error())
+		return
+	}
+	req.Admin = normalizedAdmin
 
 	installService := identity.NewInstallService(helper.GetDatabase())
 
@@ -183,4 +192,21 @@ func (ic InstallController) SubmitInstall(c httpInterfaces.RouterContextInterfac
 		reload.TriggerReload()
 		helper.GetLogger().Info("安装完成，已触发配置重载")
 	}()
+}
+
+// normalizeInstallAdmin 在连接测试、配置写入和迁移前完成管理员输入校验。
+// CreateInitialData 会再次校验，防止其他调用方绕过控制器。
+func normalizeInstallAdmin(admin dto.AdminAccountInfo) (dto.AdminAccountInfo, error) {
+	if admin.Username == "" || admin.Password == "" || admin.RealName == "" {
+		return admin, fmt.Errorf("管理员信息不完整")
+	}
+	normalizedEmail, err := appHelper.NormalizeAdminEmail(admin.Email)
+	if err != nil {
+		return admin, fmt.Errorf("管理员邮箱无效: %w", err)
+	}
+	if normalizedEmail == "" {
+		return admin, fmt.Errorf("管理员邮箱不能为空")
+	}
+	admin.Email = normalizedEmail
+	return admin, nil
 }

@@ -58,6 +58,9 @@ jwt:
   secret: your-secret-key-change-in-production
   expire_hours: 24
 
+# 无人值守部署可通过 APP_INSTALLED=true、ADMIN_USERNAME、ADMIN_PASSWORD 创建初始管理员；
+# ADMIN_REAL_NAME 和 ADMIN_EMAIL 可选，其中邮箱设置后会校验并规范化为小写。
+
 # OIDC SSO 登录（管理后台，可选）
 # 环境变量：OIDC_ENABLED / OIDC_ISSUER / OIDC_CLIENT_ID / OIDC_CLIENT_SECRET /
 #          OIDC_REDIRECT_URL / OIDC_SCOPES / OIDC_DISPLAY_NAME / OIDC_FRONTEND_CALLBACK
@@ -99,4 +102,4 @@ cors:
   allow_headers:
     - "Origin"
     - "Content-Type"
-    - "Authorization" 
+    - "Authorization"

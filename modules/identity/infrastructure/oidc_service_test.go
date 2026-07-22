@@ -11,8 +11,9 @@ import (
 
 // fakeAdminUserStore 内存版 adminUserStore，用于 JIT 逻辑单测。
 type fakeAdminUserStore struct {
-	users  []*model.AdminUser
-	nextID uint
+	users      []*model.AdminUser
+	nextID     uint
+	rejectBind bool
 }
 
 func (f *fakeAdminUserStore) GetByOidcSub(sub string) (*model.AdminUser, error) {
@@ -35,14 +36,17 @@ func (f *fakeAdminUserStore) GetByEmail(email string) (*model.AdminUser, error) 
 	return nil, gorm.ErrRecordNotFound
 }
 
-func (f *fakeAdminUserStore) BindOidcSub(id uint, sub string) error {
+func (f *fakeAdminUserStore) BindOidcSub(id uint, sub string) (bool, error) {
+	if f.rejectBind {
+		return false, nil
+	}
 	for _, u := range f.users {
 		if u.ID == id {
 			u.OidcSub = &sub
-			return nil
+			return true, nil
 		}
 	}
-	return gorm.ErrRecordNotFound
+	return false, gorm.ErrRecordNotFound
 }
 
 func (f *fakeAdminUserStore) UsernameExists(username string) bool {
@@ -100,6 +104,81 @@ func TestProvisionOIDCUser_MatchByEmailBindsSub(t *testing.T) {
 	}
 	if store.users[0].OidcSub == nil || *store.users[0].OidcSub != "sub-2" {
 		t.Fatalf("expected oidc_sub bound to sub-2, got %v", store.users[0].OidcSub)
+	}
+}
+
+func TestProvisionOIDCUser_NormalizesEmailBeforeMatching(t *testing.T) {
+	store := &fakeAdminUserStore{
+		users: []*model.AdminUser{
+			{ID: 1, Username: "normalized", Email: strPtr("normalized@example.com"), Status: 1},
+		},
+		nextID: 1,
+	}
+
+	user, err := provisionOIDCUser(store, "sub-normalized", "  Normalized@Example.COM ", "", "")
+	if err != nil {
+		t.Fatalf("expected success, got error: %v", err)
+	}
+	if user.ID != 1 {
+		t.Fatalf("expected existing user 1, got %d", user.ID)
+	}
+	if store.users[0].OidcSub == nil || *store.users[0].OidcSub != "sub-normalized" {
+		t.Fatalf("expected normalized email match to bind subject, got %v", store.users[0].OidcSub)
+	}
+}
+
+func TestProvisionOIDCUser_RejectsEmailBoundToDifferentSubject(t *testing.T) {
+	store := &fakeAdminUserStore{
+		users: []*model.AdminUser{
+			{
+				ID:       1,
+				Username: "bound",
+				Email:    strPtr("bound@example.com"),
+				OidcSub:  strPtr("existing-sub"),
+				Status:   1,
+			},
+		},
+		nextID: 1,
+	}
+
+	_, err := provisionOIDCUser(store, "different-sub", "bound@example.com", "", "")
+	if !errors.Is(err, domain.ErrOIDCIdentityConflict) {
+		t.Fatalf("expected ErrOIDCIdentityConflict, got %v", err)
+	}
+	if got := *store.users[0].OidcSub; got != "existing-sub" {
+		t.Fatalf("existing subject was overwritten: got %q", got)
+	}
+	if len(store.users) != 1 {
+		t.Fatalf("conflict must not create a user, got %d users", len(store.users))
+	}
+}
+
+func TestProvisionOIDCUser_RejectsConcurrentBindingConflict(t *testing.T) {
+	store := &fakeAdminUserStore{
+		users: []*model.AdminUser{
+			{ID: 1, Username: "race", Email: strPtr("race@example.com"), Status: 1},
+		},
+		nextID:     1,
+		rejectBind: true,
+	}
+
+	_, err := provisionOIDCUser(store, "losing-sub", "race@example.com", "", "")
+	if !errors.Is(err, domain.ErrOIDCIdentityConflict) {
+		t.Fatalf("conditional bind miss must map to ErrOIDCIdentityConflict, got %v", err)
+	}
+	if store.users[0].OidcSub != nil {
+		t.Fatalf("losing callback overwrote subject: %v", store.users[0].OidcSub)
+	}
+}
+
+func TestProvisionOIDCUser_RejectsInvalidEmailClaim(t *testing.T) {
+	store := &fakeAdminUserStore{}
+
+	if _, err := provisionOIDCUser(store, "sub-invalid-email", "not-an-email", "", ""); err == nil {
+		t.Fatal("expected invalid email claim to be rejected")
+	}
+	if len(store.users) != 0 {
+		t.Fatalf("invalid claim must not create a user, got %d users", len(store.users))
 	}
 }
 

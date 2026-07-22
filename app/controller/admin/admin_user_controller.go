@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"errors"
 	"strconv"
 
 	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
@@ -24,7 +25,7 @@ func (c AdminUserController) GetUserList(ctx httpInterfaces.RouterContextInterfa
 
 	resp, err := adminUserService.GetUserList(&req)
 	if err != nil {
-		controller.ErrorResponse(ctx, 500, "failed to get user list: "+err.Error())
+		writeAdminUserServiceError(ctx, err, "failed to get user list")
 		return
 	}
 
@@ -42,7 +43,7 @@ func (c AdminUserController) CreateUser(ctx httpInterfaces.RouterContextInterfac
 
 	resp, err := adminUserService.CreateUser(&req)
 	if err != nil {
-		controller.ErrorResponse(ctx, 500, "failed to create user: "+err.Error())
+		writeAdminUserServiceError(ctx, err, "failed to create user")
 		return
 	}
 
@@ -61,7 +62,7 @@ func (c AdminUserController) GetUser(ctx httpInterfaces.RouterContextInterface) 
 
 	resp, err := adminUserService.GetUserByID(uint(id))
 	if err != nil {
-		controller.ErrorResponse(ctx, 404, "user not found")
+		writeAdminUserServiceError(ctx, err, "failed to get user")
 		return
 	}
 
@@ -85,7 +86,7 @@ func (c AdminUserController) UpdateUser(ctx httpInterfaces.RouterContextInterfac
 	}
 
 	if err := adminUserService.UpdateUser(uint(id), &req); err != nil {
-		controller.ErrorResponse(ctx, 500, "failed to update user: "+err.Error())
+		writeAdminUserServiceError(ctx, err, "failed to update user")
 		return
 	}
 
@@ -103,7 +104,7 @@ func (c AdminUserController) DeleteUser(ctx httpInterfaces.RouterContextInterfac
 	}
 
 	if err := adminUserService.DeleteUser(uint(id)); err != nil {
-		controller.ErrorResponse(ctx, 500, "failed to delete user: "+err.Error())
+		writeAdminUserServiceError(ctx, err, "failed to delete user")
 		return
 	}
 
@@ -128,9 +129,35 @@ func (c AdminUserController) ResetPassword(ctx httpInterfaces.RouterContextInter
 
 	resp, err := adminUserService.ResetPassword(uint(id), &req)
 	if err != nil {
-		controller.ErrorResponse(ctx, 500, "failed to reset password: "+err.Error())
+		writeAdminUserServiceError(ctx, err, "failed to reset password")
 		return
 	}
 
 	controller.SuccessResponse(ctx, resp)
+}
+
+func writeAdminUserServiceError(ctx httpInterfaces.RouterContextInterface, err error, fallback string) {
+	status := adminUserServiceErrorStatus(err)
+	if status == 500 {
+		controller.ErrorResponse(ctx, 500, fallback+": "+err.Error())
+		return
+	}
+	controller.ErrorResponse(ctx, status, err.Error())
+}
+
+func adminUserServiceErrorStatus(err error) int {
+	switch {
+	case errors.Is(err, identity.ErrInvalidAdminEmail), errors.Is(err, identity.ErrInvalidAdminStatus):
+		return 400
+	case errors.Is(err, identity.ErrAdminUserNotFound):
+		return 404
+	case errors.Is(err, identity.ErrAdminEmailImmutable),
+		errors.Is(err, identity.ErrAdminPasswordResetForbidden):
+		return 403
+	case errors.Is(err, identity.ErrAdminUsernameConflict),
+		errors.Is(err, identity.ErrAdminEmailConflict):
+		return 409
+	default:
+		return 500
+	}
 }

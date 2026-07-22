@@ -46,13 +46,15 @@ type CreateAdminUserRequest struct {
 	Username string `json:"username" binding:"required,min=3,max=50"`
 	Password string `json:"password" binding:"required,min=6,max=32"`
 	RealName string `json:"real_name" binding:"required,min=2,max=100"`
-	Status   int8   `json:"status" binding:"omitempty,oneof=0 1"` // 1:启用 0:禁用
+	Email    string `json:"email" binding:"required"`
+	Status   *int8  `json:"status" binding:"omitempty,oneof=0 1 2"` // 1:启用 0:禁用；过渡期兼容 2=禁用
 }
 
 // UpdateAdminUserRequest 更新管理员用户请求
 type UpdateAdminUserRequest struct {
-	RealName string `json:"real_name" binding:"omitempty,min=2,max=100"`
-	Status   int8   `json:"status" binding:"omitempty,oneof=0 1"`
+	RealName string  `json:"real_name" binding:"omitempty,min=2,max=100"`
+	Email    *string `json:"email"`
+	Status   *int8   `json:"status" binding:"omitempty,oneof=0 1 2"`
 }
 
 // AdminUserListRequest 管理员用户列表请求
@@ -60,17 +62,20 @@ type AdminUserListRequest struct {
 	Page     int    `form:"page" binding:"omitempty,min=1"`
 	PageSize int    `form:"page_size" binding:"omitempty,min=1,max=100"`
 	Username string `form:"username" binding:"omitempty,max=50"`
-	Status   *int8  `form:"status" binding:"omitempty,oneof=0 1"`
+	Status   *int8  `form:"status" binding:"omitempty,oneof=0 1 2"`
 }
 
 // AdminUserResponse 管理员用户响应
 type AdminUserResponse struct {
-	ID        uint   `json:"id"`
-	Username  string `json:"username"`
-	RealName  string `json:"real_name"`
-	Status    int8   `json:"status"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
+	ID         uint    `json:"id"`
+	Username   string  `json:"username"`
+	RealName   string  `json:"real_name"`
+	Email      *string `json:"email"`
+	AuthSource string  `json:"auth_source"`
+	OIDCBound  bool    `json:"oidc_bound"`
+	Status     int8    `json:"status"`
+	CreatedAt  string  `json:"created_at"`
+	UpdatedAt  string  `json:"updated_at"`
 }
 
 // AdminUserListResponse 管理员用户列表响应

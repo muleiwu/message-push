@@ -2,6 +2,7 @@ package migration
 
 import (
 	"database/sql"
+	"strings"
 	"testing"
 
 	migrationFS "cnb.cool/mliev/push/message-push/migrations"
@@ -33,6 +34,9 @@ func TestSQLiteMigrationsSmoke(t *testing.T) {
 		`INSERT INTO provider_accounts (account_code, account_name, provider_code, provider_type, config, status) VALUES ('legacy-provider', 'Legacy Provider', 'smtp', 'email', '{}', 2)`,
 		`INSERT INTO channels (name, type, status) VALUES ('Legacy Channel', 'email', 2)`,
 		`INSERT INTO channel_template_bindings (channel_id, provider_template_id, provider_id, status) VALUES (1, 1, 1, 2)`,
+		`INSERT INTO admin_users (username, password, real_name, email, auth_source, status) VALUES ('mixed-email', 'hash', 'Mixed Email', '  Admin@Example.COM  ', 'local', 1)`,
+		`INSERT INTO admin_users (username, password, real_name, email, auth_source, status) VALUES ('blank-email', 'hash', 'Blank Email', '   ', 'local', 1)`,
+		`INSERT INTO admin_users (username, password, real_name, email, auth_source, status) VALUES ('legacy-admin-status', 'hash', 'Legacy Admin Status', NULL, 'local', 2)`,
 	}
 	for _, statement := range legacyRows {
 		if _, err := sqlDB.Exec(statement); err != nil {
@@ -47,6 +51,12 @@ func TestSQLiteMigrationsSmoke(t *testing.T) {
 	assertStatus(t, sqlDB, "provider_accounts", 1, 0)
 	assertStatus(t, sqlDB, "channels", 1, 0)
 	assertStatus(t, sqlDB, "channel_template_bindings", 1, 0)
+	assertAdminEmail(t, sqlDB, "mixed-email", "admin@example.com", true)
+	assertAdminEmail(t, sqlDB, "blank-email", "", false)
+	assertAdminStatus(t, sqlDB, "legacy-admin-status", 0)
+	if _, err := sqlDB.Exec(`INSERT INTO admin_users (username, password, real_name, email, auth_source, status) VALUES ('duplicate-email', 'hash', 'Duplicate Email', 'admin@example.com', 'local', 1)`); err == nil {
+		t.Fatal("expected unique admin email index to reject duplicate")
+	}
 
 	// 校验最终 schema：列应处于演进后的最终状态
 	assertNoColumn(t, sqlDB, "push_tasks", "title")
@@ -65,6 +75,79 @@ func TestSQLiteMigrationsSmoke(t *testing.T) {
 	// 重复执行应为幂等（无新版本）
 	if err := RunGooseMigrations(sqlDB, "sqlite", nil); err != nil {
 		t.Fatalf("rerun migrations: %v", err)
+	}
+}
+
+func TestSQLiteAdminEmailMigrationRejectsNormalizedDuplicates(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(t.TempDir()+"/duplicate-email.db"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("get sql.DB: %v", err)
+	}
+	if err := goose.SetDialect("sqlite3"); err != nil {
+		t.Fatalf("set goose dialect: %v", err)
+	}
+	goose.SetBaseFS(migrationFS.FS())
+	if err := goose.UpTo(sqlDB, migrationFS.DialectDir("sqlite"), 20260722000002); err != nil {
+		t.Fatalf("run migrations before admin email uniqueness: %v", err)
+	}
+
+	seed := []string{
+		`INSERT INTO admin_users (username, password, real_name, email, auth_source, status) VALUES ('first', 'hash', 'First', ' Duplicate@Example.com ', 'local', 1)`,
+		`INSERT INTO admin_users (username, password, real_name, email, auth_source, status) VALUES ('second', 'hash', 'Second', 'duplicate@example.COM', 'local', 1)`,
+	}
+	for _, statement := range seed {
+		if _, err := sqlDB.Exec(statement); err != nil {
+			t.Fatalf("seed duplicate email: %v", err)
+		}
+	}
+
+	err = goose.UpTo(sqlDB, migrationFS.DialectDir("sqlite"), 20260723000001)
+	if err == nil {
+		t.Fatal("expected migration to fail on normalized duplicate emails")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "unique") {
+		t.Fatalf("migration error = %v, want unique constraint failure", err)
+	}
+
+	var nullEmails int
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM admin_users WHERE email IS NULL`).Scan(&nullEmails); err != nil {
+		t.Fatalf("count null emails after failed migration: %v", err)
+	}
+	if nullEmails != 0 {
+		t.Fatalf("failed migration cleared %d email records", nullEmails)
+	}
+	var userCount int
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM admin_users`).Scan(&userCount); err != nil {
+		t.Fatalf("count users after failed migration: %v", err)
+	}
+	if userCount != 2 {
+		t.Fatalf("failed migration changed account ownership: got %d users", userCount)
+	}
+}
+
+func assertAdminEmail(t *testing.T, db *sql.DB, username, want string, wantValid bool) {
+	t.Helper()
+	var got sql.NullString
+	if err := db.QueryRow("SELECT email FROM admin_users WHERE username = ?", username).Scan(&got); err != nil {
+		t.Fatalf("query admin email for %s: %v", username, err)
+	}
+	if got.Valid != wantValid || got.String != want {
+		t.Fatalf("admin email for %s = (%q, valid=%v), want (%q, valid=%v)", username, got.String, got.Valid, want, wantValid)
+	}
+}
+
+func assertAdminStatus(t *testing.T, db *sql.DB, username string, want int) {
+	t.Helper()
+	var got int
+	if err := db.QueryRow("SELECT status FROM admin_users WHERE username = ?", username).Scan(&got); err != nil {
+		t.Fatalf("query admin status for %s: %v", username, err)
+	}
+	if got != want {
+		t.Errorf("admin status for %s = %d, want %d", username, got, want)
 	}
 }
 

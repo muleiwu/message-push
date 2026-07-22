@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"cnb.cool/mliev/push/message-push/app/dto"
+	appHelper "cnb.cool/mliev/push/message-push/app/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/viper"
@@ -198,8 +199,15 @@ func (s *InstallService) UpdateRedisConfig(config dto.RedisConfig) error {
 
 // CreateInitialData 创建初始数据（管理员账户）
 func (s *InstallService) CreateInitialData(admin dto.AdminAccountInfo) error {
-	// 验证必填字段
-	if admin.Username == "" || admin.Password == "" || admin.Email == "" || admin.RealName == "" {
+	// 验证必填字段，并在持久化前统一规范化邮箱。
+	if admin.Username == "" || admin.Password == "" || admin.RealName == "" {
+		return fmt.Errorf("管理员信息不完整")
+	}
+	normalizedEmail, err := appHelper.NormalizeAdminEmail(admin.Email)
+	if err != nil {
+		return fmt.Errorf("管理员邮箱无效: %w", err)
+	}
+	if normalizedEmail == "" {
 		return fmt.Errorf("管理员信息不完整")
 	}
 
@@ -220,10 +228,12 @@ func (s *InstallService) CreateInitialData(admin dto.AdminAccountInfo) error {
 
 	// 创建管理员用户（使用 service 内部的数据库连接）
 	adminUser := &model.AdminUser{
-		Username: admin.Username,
-		Password: string(hashedPassword),
-		RealName: admin.RealName,
-		Status:   1, // 启用状态
+		Username:   admin.Username,
+		Password:   string(hashedPassword),
+		RealName:   admin.RealName,
+		Email:      &normalizedEmail,
+		AuthSource: "local",
+		Status:     1, // 启用状态
 	}
 
 	if err := s.db.Create(adminUser).Error; err != nil {
