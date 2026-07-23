@@ -1,17 +1,12 @@
-.PHONY: migrate-up migrate-down migrate-fresh migrate-seed dev build test fmt docker-build docker-up docker-down
+.PHONY: demo-reset demo-run dev build test fmt docker-build docker-up docker-down
 
-# 数据库迁移
-migrate-up:
-	go run cmd/migrate/main.go -action=up
+# 本地 SQLite 演示（仅供本机文档与界面体验）
+demo-reset:
+	go run ./cmd/demo reset --db .local/message-push-demo.sqlite --redis-db 15
 
-migrate-down:
-	go run cmd/migrate/main.go -action=down
-
-migrate-fresh:
-	go run cmd/migrate/main.go -action=fresh
-
-migrate-seed:
-	go run cmd/migrate/main.go -action=seed
+demo-run:
+	./scripts/ensure-demo-assets.sh
+	APP_INSTALLED=true DATABASE_DRIVER=sqlite DATABASE_HOST=.local/message-push-demo.sqlite REDIS_DB=15 HTTP_LOAD_STATIC=true HTTP_STATIC_MODE=embed go run main.go start
 
 # 开发运行
 dev:
@@ -69,10 +64,8 @@ clean:
 # 帮助
 help:
 	@echo "可用命令:"
-	@echo "  make migrate-up      - 执行数据库迁移"
-	@echo "  make migrate-down    - 回滚数据库迁移"
-	@echo "  make migrate-fresh   - 清空并重新迁移数据库"
-	@echo "  make migrate-seed    - 填充测试数据"
+	@echo "  make demo-reset      - 原子重建 SQLite 演示库并填充假数据"
+	@echo "  make demo-run        - 使用 SQLite 与 Redis DB 15 启动演示服务"
 	@echo "  make dev             - 开发模式运行"
 	@echo "  make build           - 构建二进制文件"
 	@echo "  make test            - 运行测试"

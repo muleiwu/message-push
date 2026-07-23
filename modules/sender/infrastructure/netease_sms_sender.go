@@ -83,8 +83,9 @@ func init() {
 		SupportsBatchSend: true,
 		SupportsCallback:  true,
 		// 扩展信息
-		Website:    "https://yunxin.163.com",
-		Icon:       "/image/logo/netease.png",
+		Website: "https://yunxin.163.com",
+		// 使用仓库内置的通用图标，避免服务商列表请求不存在的静态文件。
+		Icon:       "/image/logo/logo.png",
 		DocsUrl:    "https://doc.yunxin.163.com/sms/server-apis/jg2NDEyMzI?platform=server",
 		ConsoleUrl: "https://app.yunxin.163.com/",
 		SortOrder:  30,

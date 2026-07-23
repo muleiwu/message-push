@@ -4,3 +4,7 @@ config.yaml
 /static/install/
 /.claude/settings.local.json
 /bin/
+/.local/
+/.playwright-cli/
+/.pnpm-store/
+__pycache__/
