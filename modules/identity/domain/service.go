@@ -18,7 +18,8 @@ var (
 	ErrAdminUsernameConflict = errors.New("用户名已存在")
 	// ErrAdminEmailConflict 表示邮箱已被其他管理员占用。
 	ErrAdminEmailConflict = errors.New("邮箱已被使用")
-	// ErrAdminEmailImmutable 表示 SSO 自动创建账号的邮箱不能在本地修改。
+	// ErrAdminEmailImmutable 为兼容旧调用方保留；管理员资料更新已不再返回此错误。
+	// Deprecated: SSO 管理员邮箱现在允许在后台维护。
 	ErrAdminEmailImmutable = errors.New("SSO 账号邮箱由身份提供方管理")
 	// ErrAdminPasswordResetForbidden 表示 SSO 自动创建的账号不支持本地密码重置。
 	ErrAdminPasswordResetForbidden = errors.New("SSO 账号不支持重置本地密码")
