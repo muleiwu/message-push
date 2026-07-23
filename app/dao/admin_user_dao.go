@@ -75,6 +75,7 @@ func (d *AdminUserDAO) Update(user *model.AdminUser) error {
 	// 仅更新 CRUD 允许修改的字段，避免与 OIDC 绑定或密码重置并发时
 	// Save 整行覆盖 oidc_sub/password 等身份字段。map 保证 status=0 也会写入。
 	return d.db.Model(&model.AdminUser{}).Where("id = ?", user.ID).Updates(map[string]any{
+		"username":  user.Username,
 		"real_name": user.RealName,
 		"email":     user.Email,
 		"status":    user.Status,

@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>木雷消息服务 Logo 预览</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: #172033;
+        background: #eef2f8;
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+      }
+
+      main {
+        width: min(960px, calc(100% - 48px));
+        padding: 48px 0;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+      }
+
+      p {
+        margin: 0 0 28px;
+        color: #59657a;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 24px;
+      }
+
+      figure {
+        margin: 0;
+        overflow: hidden;
+        border: 1px solid #d9e0eb;
+        border-radius: 18px;
+        background: #fff;
+        box-shadow: 0 16px 40px rgb(45 57 82 / 10%);
+      }
+
+      .canvas {
+        aspect-ratio: 1;
+        display: grid;
+        place-items: center;
+        background-color: #fff;
+        background-image:
+          linear-gradient(45deg, #e8ebf1 25%, transparent 25%),
+          linear-gradient(-45deg, #e8ebf1 25%, transparent 25%),
+          linear-gradient(45deg, transparent 75%, #e8ebf1 75%),
+          linear-gradient(-45deg, transparent 75%, #e8ebf1 75%);
+        background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+        background-size: 24px 24px;
+      }
+
+      img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+
+      figcaption {
+        padding: 16px 18px;
+        font-weight: 650;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>木雷消息服务 Logo</h1>
+      <p>棋盘格区域表示透明背景；PNG 与 SVG 使用同一套矢量几何。</p>
+      <div class="grid">
+        <figure>
+          <div class="canvas"><img src="logo.png" alt="透明 PNG Logo" /></div>
+          <figcaption>透明 PNG · 1254 × 1254</figcaption>
+        </figure>
+        <figure>
+          <div class="canvas"><img src="logo.svg" alt="SVG 矢量 Logo" /></div>
+          <figcaption>原生 SVG · 无限缩放</figcaption>
+        </figure>
+      </div>
+    </main>
+  </body>
+</html>

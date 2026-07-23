@@ -18,7 +18,7 @@ func TestAdminUserServiceErrorStatus(t *testing.T) {
 		{name: "not found", err: identity.ErrAdminUserNotFound, status: 404},
 		{name: "username conflict", err: identity.ErrAdminUsernameConflict, status: 409},
 		{name: "email conflict", err: fmt.Errorf("wrapped: %w", identity.ErrAdminEmailConflict), status: 409},
-		{name: "immutable oidc email", err: identity.ErrAdminEmailImmutable, status: 403},
+		{name: "legacy immutable oidc email", err: identity.ErrAdminEmailImmutable, status: 403},
 		{name: "oidc password reset", err: identity.ErrAdminPasswordResetForbidden, status: 403},
 		{name: "internal", err: errors.New("database unavailable"), status: 500},
 	}

@@ -222,7 +222,7 @@ func TestAdminUserServiceCreateValidatesEmailAndConflicts(t *testing.T) {
 	}
 }
 
-func TestAdminUserServiceUpdateLocalEmailAndStatus(t *testing.T) {
+func TestAdminUserServiceUpdateUsernameEmailAndStatus(t *testing.T) {
 	oldEmail := "old@example.com"
 	store := newFakeAdminCRUDStore(&model.AdminUser{
 		ID: 1, Username: "local", RealName: "Local", Email: &oldEmail, AuthSource: adminAuthSourceLocal, Status: 1,
@@ -230,11 +230,18 @@ func TestAdminUserServiceUpdateLocalEmailAndStatus(t *testing.T) {
 	service := newAdminUserService(store)
 
 	newEmail := "  NEW@Example.COM "
-	if err := service.UpdateUser(1, &dto.UpdateAdminUserRequest{Email: &newEmail}); err != nil {
-		t.Fatalf("UpdateUser(email) error = %v", err)
+	if err := service.UpdateUser(1, &dto.UpdateAdminUserRequest{
+		Username: "renamed",
+		RealName: "Renamed Admin",
+		Email:    &newEmail,
+	}); err != nil {
+		t.Fatalf("UpdateUser(profile) error = %v", err)
 	}
 	if store.lastEmailExcludeID != 1 {
 		t.Fatalf("email conflict excluded id = %d, want 1", store.lastEmailExcludeID)
+	}
+	if store.users[1].Username != "renamed" || store.users[1].RealName != "Renamed Admin" {
+		t.Fatalf("updated username/real name = (%q, %q)", store.users[1].Username, store.users[1].RealName)
 	}
 	if store.users[1].Email == nil || *store.users[1].Email != "new@example.com" {
 		t.Fatalf("updated email = %v", store.users[1].Email)
@@ -256,6 +263,44 @@ func TestAdminUserServiceUpdateLocalEmailAndStatus(t *testing.T) {
 	}
 	if store.users[1].Status != 0 {
 		t.Fatalf("legacy status two persisted as %d", store.users[1].Status)
+	}
+}
+
+func TestAdminUserServiceUpdateUsernameConflicts(t *testing.T) {
+	tests := []struct {
+		name      string
+		configure func(*fakeAdminCRUDStore)
+	}{
+		{
+			name: "preflight conflict",
+			configure: func(store *fakeAdminCRUDStore) {
+				store.users[2] = &model.AdminUser{ID: 2, Username: "occupied"}
+			},
+		},
+		{
+			name: "database unique race",
+			configure: func(store *fakeAdminCRUDStore) {
+				store.updateErr = errors.New("UNIQUE constraint failed: admin_users.username")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := newFakeAdminCRUDStore(&model.AdminUser{
+				ID: 1, Username: "original", RealName: "Original", AuthSource: adminAuthSourceLocal, Status: 1,
+			})
+			tt.configure(store)
+			service := newAdminUserService(store)
+
+			err := service.UpdateUser(1, &dto.UpdateAdminUserRequest{Username: "occupied"})
+			if !errors.Is(err, domain.ErrAdminUsernameConflict) {
+				t.Fatalf("UpdateUser() error = %v, want ErrAdminUsernameConflict", err)
+			}
+			if store.users[1].Username != "original" {
+				t.Fatalf("failed update changed username to %q", store.users[1].Username)
+			}
+		})
 	}
 }
 
@@ -318,7 +363,7 @@ func TestAdminUserServiceUpdateHistoricalEmptyEmail(t *testing.T) {
 	}
 }
 
-func TestAdminUserServiceOIDCRestrictions(t *testing.T) {
+func TestAdminUserServiceOIDCProfileUpdateAndPasswordRestriction(t *testing.T) {
 	oidcEmail := "oidc@example.com"
 	oidcSub := "subject"
 	store := newFakeAdminCRUDStore(
@@ -334,8 +379,18 @@ func TestAdminUserServiceOIDCRestrictions(t *testing.T) {
 	service := newAdminUserService(store)
 
 	replacement := "replacement@example.com"
-	if err := service.UpdateUser(1, &dto.UpdateAdminUserRequest{Email: &replacement}); !errors.Is(err, domain.ErrAdminEmailImmutable) {
-		t.Fatalf("OIDC email update error = %v, want immutable", err)
+	if err := service.UpdateUser(1, &dto.UpdateAdminUserRequest{
+		Username: "renamed-oidc",
+		RealName: "Renamed OIDC",
+		Email:    &replacement,
+	}); err != nil {
+		t.Fatalf("OIDC profile update error = %v", err)
+	}
+	if store.users[1].Username != "renamed-oidc" ||
+		store.users[1].RealName != "Renamed OIDC" ||
+		store.users[1].Email == nil ||
+		*store.users[1].Email != replacement {
+		t.Fatalf("OIDC profile was not updated: %+v", store.users[1])
 	}
 	if _, err := service.ResetPassword(1, &dto.ResetPasswordRequest{Password: "newSecret"}); !errors.Is(err, domain.ErrAdminPasswordResetForbidden) {
 		t.Fatalf("OIDC reset error = %v, want forbidden", err)
@@ -367,8 +422,8 @@ func TestAdminUserServiceUnknownAuthSourceFailsClosed(t *testing.T) {
 	service := newAdminUserService(store)
 
 	replacement := "replacement@example.com"
-	if err := service.UpdateUser(1, &dto.UpdateAdminUserRequest{Email: &replacement}); !errors.Is(err, domain.ErrAdminEmailImmutable) {
-		t.Fatalf("unknown auth source email update error = %v, want immutable", err)
+	if err := service.UpdateUser(1, &dto.UpdateAdminUserRequest{Email: &replacement}); err != nil {
+		t.Fatalf("unknown auth source profile update error = %v", err)
 	}
 	if _, err := service.ResetPassword(1, &dto.ResetPasswordRequest{Password: "newSecret"}); !errors.Is(err, domain.ErrAdminPasswordResetForbidden) {
 		t.Fatalf("unknown auth source reset error = %v, want forbidden", err)

@@ -179,13 +179,17 @@ func (s *AdminUserService) UpdateUser(id uint, req *dto.UpdateAdminUserRequest) 
 		return fmt.Errorf("查询管理员账号失败: %w", err)
 	}
 
+	usernameChanged := req.Username != "" && req.Username != user.Username
+	if usernameChanged {
+		if s.store.UsernameExists(req.Username) {
+			return domain.ErrAdminUsernameConflict
+		}
+		user.Username = req.Username
+	}
 	if req.RealName != "" {
 		user.RealName = req.RealName
 	}
 	if req.Email != nil {
-		if !isLocalAdminAuthSource(user.AuthSource) {
-			return domain.ErrAdminEmailImmutable
-		}
 		normalizedEmail, normalizeErr := appHelper.NormalizeAdminEmail(*req.Email)
 		if normalizeErr != nil {
 			return domain.ErrInvalidAdminEmail
@@ -217,6 +221,25 @@ func (s *AdminUserService) UpdateUser(id uint, req *dto.UpdateAdminUserRequest) 
 	if err := s.store.Update(user); err != nil {
 		s.logError("更新用户失败: " + err.Error())
 		if isDuplicateKeyError(err) {
+			lowerMessage := strings.ToLower(err.Error())
+			if strings.Contains(lowerMessage, "username") {
+				return domain.ErrAdminUsernameConflict
+			}
+			if strings.Contains(lowerMessage, "email") {
+				return domain.ErrAdminEmailConflict
+			}
+			if usernameChanged && s.store.UsernameExists(user.Username) {
+				return domain.ErrAdminUsernameConflict
+			}
+			if req.Email != nil && user.Email != nil {
+				emailExists, existsErr := s.store.EmailExists(*user.Email, id)
+				if existsErr == nil && emailExists {
+					return domain.ErrAdminEmailConflict
+				}
+			}
+			if usernameChanged {
+				return domain.ErrAdminUsernameConflict
+			}
 			return domain.ErrAdminEmailConflict
 		}
 		return fmt.Errorf("更新用户失败: %w", err)

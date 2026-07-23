@@ -28,8 +28,11 @@ func TestAdminUserStatusRequestsPreserveOmittedAndExplicitDisabled(t *testing.T)
 
 	t.Run("update legacy two", func(t *testing.T) {
 		var req UpdateAdminUserRequest
-		if err := json.Unmarshal([]byte(`{"status":2}`), &req); err != nil {
+		if err := json.Unmarshal([]byte(`{"username":"renamed_admin","status":2}`), &req); err != nil {
 			t.Fatalf("unmarshal update request: %v", err)
+		}
+		if req.Username != "renamed_admin" {
+			t.Fatalf("update username = %q, want renamed_admin", req.Username)
 		}
 		if req.Status == nil || *req.Status != 2 {
 			t.Fatalf("legacy update status = %v, want 2 for service normalization", req.Status)

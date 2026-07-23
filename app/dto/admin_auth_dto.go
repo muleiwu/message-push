@@ -52,6 +52,7 @@ type CreateAdminUserRequest struct {
 
 // UpdateAdminUserRequest 更新管理员用户请求
 type UpdateAdminUserRequest struct {
+	Username string  `json:"username" binding:"omitempty,min=3,max=50"`
 	RealName string  `json:"real_name" binding:"omitempty,min=2,max=100"`
 	Email    *string `json:"email"`
 	Status   *int8   `json:"status" binding:"omitempty,oneof=0 1 2"`

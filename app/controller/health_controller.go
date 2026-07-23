@@ -92,10 +92,10 @@ func (receiver HealthController) checkRedis() dto.ServiceStatus {
 		}
 	}
 	ctx := context.Background()
-	if err := redisHelper.Ping(ctx); err != nil {
+	if err := redisHelper.Ping(ctx).Err(); err != nil {
 		return dto.ServiceStatus{
 			Status:  "DOWN",
-			Message: "Redis ping失败: " + err.Err().Error(),
+			Message: "Redis ping失败: " + err.Error(),
 		}
 	}
 
