@@ -85,7 +85,7 @@ func init() {
 		// 扩展信息
 		Website: "https://yunxin.163.com",
 		// 使用仓库内置的通用图标，避免服务商列表请求不存在的静态文件。
-		Icon:       "/image/logo/logo.png",
+		Icon:       "/image/logo/logo.svg",
 		DocsUrl:    "https://doc.yunxin.163.com/sms/server-apis/jg2NDEyMzI?platform=server",
 		ConsoleUrl: "https://app.yunxin.163.com/",
 		SortOrder:  30,
