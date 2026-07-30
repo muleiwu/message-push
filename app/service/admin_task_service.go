@@ -3,7 +3,6 @@ package service
 import (
 	"time"
 
-	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/model"
@@ -43,6 +42,9 @@ func (s *AdminTaskService) GetPushTaskList(req *dto.PushTaskListRequest) (*dto.P
 	if req.TaskID != "" {
 		filters["task_id"] = req.TaskID
 	}
+	if req.Receiver != "" {
+		filters["receiver"] = req.Receiver
+	}
 	if req.BatchID != "" {
 		filters["batch_id"] = req.BatchID
 	}
@@ -60,53 +62,8 @@ func (s *AdminTaskService) GetPushTaskList(req *dto.PushTaskListRequest) (*dto.P
 
 	items := make([]*dto.PushTaskItem, 0, len(tasks))
 
-	// 预加载缓存
-	db := helper.GetDatabase()
-	channelMap := make(map[uint]string)
-
 	for _, task := range tasks {
-		// 获取通道名称
-		channelName := ""
-		if task.ChannelID > 0 {
-			if name, ok := channelMap[task.ChannelID]; ok {
-				channelName = name
-			} else {
-				var channel model.Channel
-				if err := db.First(&channel, task.ChannelID).Error; err == nil {
-					channelName = channel.Name
-					channelMap[task.ChannelID] = channelName
-				}
-			}
-		}
-
-		// 从最新的 push_log 获取 ProviderMsgID
-		providerMsgID := ""
-		if logs, err := s.pushLogDAO.GetByTaskID(task.TaskID); err == nil && len(logs) > 0 {
-			providerMsgID = logs[0].ProviderMsgID // 最新的日志
-		}
-
-		items = append(items, &dto.PushTaskItem{
-			ID:             task.ID,
-			TaskID:         task.TaskID,
-			AppID:          task.AppID,
-			ChannelID:      task.ChannelID,
-			ProviderMsgID:  providerMsgID,
-			MessageType:    task.MessageType,
-			Receiver:       task.Receiver,
-			Content:        "", // Content 字段已删除，前端可根据 TemplateParams 动态渲染
-			TemplateCode:   task.TemplateCode,
-			TemplateParams: task.TemplateParams,
-			Signature:      task.Signature,
-			Status:         task.Status,
-			CallbackStatus: task.CallbackStatus,
-			CallbackTime:   task.CallbackTime,
-			RetryCount:     task.RetryCount,
-			MaxRetry:       task.MaxRetry,
-			ScheduledAt:    task.ScheduledAt,
-			CreatedAt:      task.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:      task.UpdatedAt.Format(time.RFC3339),
-			ChannelName:    channelName,
-		})
+		items = append(items, s.convertPushTaskToItem(task))
 	}
 
 	return &dto.PushTaskListResponse{
@@ -202,15 +159,14 @@ func (s *AdminTaskService) GetTasksByBatchID(batchID string, page, pageSize int)
 
 // convertPushTaskToItem 转换任务为DTO
 func (s *AdminTaskService) convertPushTaskToItem(task *model.PushTask) *dto.PushTaskItem {
-	db := helper.GetDatabase()
-
-	// 获取通道名称
 	channelName := ""
-	if task.ChannelID > 0 {
-		var channel model.Channel
-		if err := db.First(&channel, task.ChannelID).Error; err == nil {
-			channelName = channel.Name
-		}
+	if task.Channel != nil {
+		channelName = task.Channel.Name
+	}
+
+	providerAccountName := ""
+	if task.ProviderAccount != nil {
+		providerAccountName = task.ProviderAccount.AccountName
 	}
 
 	// 从最新的 push_log 获取 ProviderMsgID
@@ -220,26 +176,28 @@ func (s *AdminTaskService) convertPushTaskToItem(task *model.PushTask) *dto.Push
 	}
 
 	return &dto.PushTaskItem{
-		ID:             task.ID,
-		TaskID:         task.TaskID,
-		AppID:          task.AppID,
-		ChannelID:      task.ChannelID,
-		ProviderMsgID:  providerMsgID,
-		MessageType:    task.MessageType,
-		Receiver:       task.Receiver,
-		Content:        "", // Content 字段已删除，前端可根据 TemplateParams 动态渲染
-		TemplateCode:   task.TemplateCode,
-		TemplateParams: task.TemplateParams,
-		Signature:      task.Signature,
-		Status:         task.Status,
-		CallbackStatus: task.CallbackStatus,
-		CallbackTime:   task.CallbackTime,
-		RetryCount:     task.RetryCount,
-		MaxRetry:       task.MaxRetry,
-		ScheduledAt:    task.ScheduledAt,
-		CreatedAt:      task.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:      task.UpdatedAt.Format(time.RFC3339),
-		ChannelName:    channelName,
+		ID:                  task.ID,
+		TaskID:              task.TaskID,
+		AppID:               task.AppID,
+		ChannelID:           task.ChannelID,
+		ProviderAccountID:   task.ProviderAccountID,
+		ProviderMsgID:       providerMsgID,
+		MessageType:         task.MessageType,
+		Receiver:            task.Receiver,
+		Content:             "", // Content 字段已删除，前端可根据 TemplateParams 动态渲染
+		TemplateCode:        task.TemplateCode,
+		TemplateParams:      task.TemplateParams,
+		Signature:           task.Signature,
+		Status:              task.Status,
+		CallbackStatus:      task.CallbackStatus,
+		CallbackTime:        task.CallbackTime,
+		RetryCount:          task.RetryCount,
+		MaxRetry:            task.MaxRetry,
+		ScheduledAt:         task.ScheduledAt,
+		CreatedAt:           task.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:           task.UpdatedAt.Format(time.RFC3339),
+		ChannelName:         channelName,
+		ProviderAccountName: providerAccountName,
 	}
 }
 

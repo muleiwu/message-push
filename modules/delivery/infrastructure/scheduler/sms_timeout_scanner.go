@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"cnb.cool/mliev/open/go-web/pkg/helper"
+	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dao"
+	"cnb.cool/mliev/push/message-push/app/service"
 	"cnb.cool/mliev/push/message-push/modules/delivery/infrastructure/lock"
 	"github.com/muleiwu/gsr"
 )
@@ -26,6 +28,7 @@ type SMSTimeoutScanner struct {
 	processingTimeout time.Duration // processing 状态超时阈值（发送阻塞）
 	limit             int           // 单次处理数量
 	stopCh            chan struct{}
+	terminalService   *service.TaskTerminalService
 }
 
 // NewSMSTimeoutScanner 创建消息超时扫描器
@@ -39,6 +42,7 @@ func NewSMSTimeoutScanner() *SMSTimeoutScanner {
 		processingTimeout: 120 * time.Second,                                                           // 120秒处理中视为超时（考虑发送重试等情况）
 		limit:             100,                                                                         // 每次最多处理100个
 		stopCh:            make(chan struct{}),
+		terminalService:   service.NewTaskTerminalService(),
 	}
 }
 
@@ -93,12 +97,30 @@ func (s *SMSTimeoutScanner) scanSentTasks(ctx context.Context) {
 
 // scanProcessingTasks 扫描超时的 processing 状态任务（所有消息类型）：标记为失败
 func (s *SMSTimeoutScanner) scanProcessingTasks(ctx context.Context) {
-	affected, err := s.taskDao.MarkTimeoutProcessingTasksFailed(s.processingTimeout, s.limit)
+	tasks, err := s.taskDao.GetTimeoutProcessingTasks(s.processingTimeout, s.limit)
 	if err != nil {
-		s.logger.Error(fmt.Sprintf("failed to mark timeout processing tasks: %v", err))
+		s.logger.Error(fmt.Sprintf("failed to list timeout processing tasks: %v", err))
 		return
 	}
 
+	affected := 0
+	for _, task := range tasks {
+		result, transitionErr := s.terminalService.Transition(ctx, service.TerminalTransition{
+			TaskID:       task.TaskID,
+			Status:       constants.TaskStatusFailed,
+			Event:        constants.WebhookEventFailed,
+			ErrorCode:    "PROCESSING_TIMEOUT",
+			ErrorMessage: "message processing timed out",
+			OccurredAt:   time.Now(),
+		})
+		if transitionErr != nil {
+			s.logger.Error(fmt.Sprintf("failed to terminalize timeout task id=%s: %v", task.TaskID, transitionErr))
+			continue
+		}
+		if result.Changed {
+			affected++
+		}
+	}
 	if affected > 0 {
 		s.logger.Info(fmt.Sprintf("marked %d processing tasks as failed due to timeout", affected))
 	}

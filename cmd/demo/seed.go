@@ -330,6 +330,11 @@ func seedActivity(db *gorm.DB, apps []model.Application, accounts []model.Provid
 	// 成功的管理员测试必须晚于所有通道配置更新时间，首页才会展示已验证。
 	adminTestTime := anchor.Add(-5 * time.Minute)
 	tasks = append(tasks, model.PushTask{TaskID: "a0000000-0000-4000-8000-000000000001", AppID: "admin_test", ChannelID: channels[0].ID, MessageType: constants.MessageTypeSMS, Receiver: "+8613800000000", TemplateParams: `{"code":"123456","minutes":"5"}`, Signature: "木雷演示", Status: constants.TaskStatusSuccess, CallbackStatus: constants.CallbackStatusDelivered, MaxRetry: 3, ExcludeProviderIDs: "[]", CreatedAt: adminTestTime, UpdatedAt: adminTestTime.Add(3 * time.Second)})
+	for i := range tasks {
+		if providerID, _, ok := demoProviderForTask(tasks[i], i, accounts); ok {
+			tasks[i].ProviderAccountID = &providerID
+		}
+	}
 	if err := db.Create(&tasks).Error; err != nil {
 		return err
 	}
@@ -346,15 +351,7 @@ func seedActivity(db *gorm.DB, apps []model.Application, accounts []model.Provid
 		if task.Status == constants.TaskStatusPending || task.Status == constants.TaskStatusProcessing {
 			continue
 		}
-		providerID := accounts[0].ID
-		providerCode := constants.ProviderAliyunSMS
-		if task.MessageType == constants.MessageTypeEmail {
-			providerID = accounts[2].ID
-			providerCode = constants.ProviderSMTP
-		} else if i%3 == 0 {
-			providerID = accounts[1].ID
-			providerCode = constants.ProviderTencentSMS
-		}
+		providerID, providerCode, _ := demoProviderForTask(task, i, accounts)
 		logStatus := "success"
 		errorMessage := ""
 		response := fmt.Sprintf(`{"code":"OK","message_id":"DEMO-MSG-%04d","notice":"fake response"}`, i+1)
@@ -414,4 +411,17 @@ func seedActivity(db *gorm.DB, apps []model.Application, accounts []model.Provid
 		return err
 	}
 	return db.CreateInBatches(&providerStats, 100).Error
+}
+
+func demoProviderForTask(task model.PushTask, index int, accounts []model.ProviderAccount) (uint, string, bool) {
+	if task.Status == constants.TaskStatusPending || task.Status == constants.TaskStatusProcessing {
+		return 0, "", false
+	}
+	if task.MessageType == constants.MessageTypeEmail {
+		return accounts[2].ID, constants.ProviderSMTP, true
+	}
+	if index%3 == 0 {
+		return accounts[1].ID, constants.ProviderTencentSMS, true
+	}
+	return accounts[0].ID, constants.ProviderAliyunSMS, true
 }

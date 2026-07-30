@@ -61,6 +61,8 @@ func TestResetDemoCreatesValidDeterministicDataset(t *testing.T) {
 	assertCount(t, db, "channels", "status = 0", 1)
 	assertCount(t, db, "channel_template_bindings", "is_active = 0", 1)
 	assertCount(t, db, "failure_rules", "status = 0", 1)
+	assertCount(t, db, "push_tasks", "status NOT IN ('pending', 'processing') AND provider_account_id IS NULL", 0)
+	assertCount(t, db, "push_tasks", "status IN ('pending', 'processing') AND provider_account_id IS NOT NULL", 0)
 
 	var processing model.PushBatchTask
 	if err := db.Where("batch_id = ?", "b0000000-0000-4000-8000-000000000002").First(&processing).Error; err != nil {
@@ -73,7 +75,7 @@ func TestResetDemoCreatesValidDeterministicDataset(t *testing.T) {
 	if err := db.Table("goose_db_version").Select("MAX(version_id)").Scan(&currentVersion).Error; err != nil {
 		t.Fatal(err)
 	}
-	if currentVersion != 20260723000001 {
+	if currentVersion != 20260730000002 {
 		t.Fatalf("migration version = %d", currentVersion)
 	}
 }

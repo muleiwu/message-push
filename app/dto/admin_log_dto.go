@@ -74,7 +74,11 @@ type WebhookLogItem struct {
 	Status          string `json:"status"`
 	ErrorMessage    string `json:"error_message"`
 	RetryCount      int    `json:"retry_count"`
+	MaxRetries      int    `json:"max_retries"`
+	TimeoutSeconds  int    `json:"timeout_seconds"`
+	NextAttemptAt   string `json:"next_attempt_at,omitempty"`
 	CreatedAt       string `json:"created_at"`
+	UpdatedAt       string `json:"updated_at"`
 }
 
 // TaskWebhookLogsResponse 任务Webhook日志响应

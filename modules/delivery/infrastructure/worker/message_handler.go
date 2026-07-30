@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	internalHelper "cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/constants"
@@ -42,6 +43,7 @@ type MessageHandler struct {
 	templateHelper      template.Renderer
 	ruleEngine          ruleengine.Engine
 	actionExecutor      *service.ActionExecutor
+	terminalService     *service.TaskTerminalService
 }
 
 type deliverySignatureLookup interface {
@@ -65,6 +67,7 @@ func NewMessageHandler() *MessageHandler {
 		templateHelper:      template.GetRenderer(),
 		ruleEngine:          ruleengine.GetEngine(),
 		actionExecutor:      service.NewActionExecutor(),
+		terminalService:     service.NewTaskTerminalService(),
 	}
 }
 
@@ -111,6 +114,11 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 		h.handleEarlyFailure(task, 0, err.Error())
 		return err
 	}
+	if err := h.persistSelectedProvider(task, providerAccount.ID); err != nil {
+		h.logger.Error(fmt.Sprintf("failed to persist selected provider account task_id=%s provider_id=%d: %v", taskID, providerAccount.ID, err))
+		return err
+	}
+
 	providerMeta, err := registry.GetByCode(providerAccount.ProviderCode)
 	if err != nil {
 		err = fmt.Errorf("provider is not registered: %w", err)
@@ -210,7 +218,9 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 		h.logger.Error(fmt.Sprintf("sender error task_id=%s: %v", taskID, err))
 		// 如果 Send 返回了 resp（即使有 error），使用它来记录日志
 		if resp != nil {
-			h.handleSendError(task, providerAccount.ID, resp)
+			if terminalErr := h.handleSendError(task, providerAccount.ID, resp); terminalErr != nil {
+				h.logger.Error(fmt.Sprintf("failed to persist sender failure task_id=%s: %v", taskID, terminalErr))
+			}
 		} else {
 			h.handleEarlyFailure(task, providerAccount.ID, err.Error())
 		}
@@ -219,12 +229,9 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 
 	// 处理发送结果
 	if resp.Success {
-		h.handleSuccess(task, providerAccount.ID, resp)
-	} else {
-		h.handleSendError(task, providerAccount.ID, resp)
+		return h.handleSuccess(task, providerAccount.ID, resp)
 	}
-
-	return nil
+	return h.handleSendError(task, providerAccount.ID, resp)
 }
 
 func sameNameTemplateParams(templateParams map[string]string, providerVariables []string) map[string]string {
@@ -292,10 +299,39 @@ func (h *MessageHandler) selectChannel(ctx context.Context, task *model.PushTask
 	return node, nil
 }
 
+func (h *MessageHandler) persistSelectedProvider(task *model.PushTask, providerAccountID uint) error {
+	if task == nil {
+		return fmt.Errorf("failed to persist selected provider account: task is nil")
+	}
+	if err := h.taskDao.UpdateProviderAccountID(task.TaskID, providerAccountID); err != nil {
+		return fmt.Errorf("failed to persist selected provider account: %w", err)
+	}
+	task.ProviderAccountID = &providerAccountID
+	return nil
+}
+
 // handleSuccess 处理成功
-func (h *MessageHandler) handleSuccess(task *model.PushTask, providerAccountID uint, resp *sender.SendResponse) {
-	task.Status = resp.Status // 使用发送器返回的状态（processing=等待回调, success=直接成功）
-	h.taskDao.Update(task)
+func (h *MessageHandler) handleSuccess(task *model.PushTask, providerAccountID uint, resp *sender.SendResponse) error {
+	if resp.Status == constants.TaskStatusSuccess {
+		transitionResult, err := h.terminalService.Transition(context.Background(), service.TerminalTransition{
+			TaskID:     task.TaskID,
+			Status:     constants.TaskStatusSuccess,
+			Event:      constants.WebhookEventSuccess,
+			ProviderID: resp.ProviderID,
+			OccurredAt: time.Now(),
+		})
+		if err != nil {
+			return fmt.Errorf("persist successful terminal task: %w", err)
+		}
+		if transitionResult.Changed {
+			task.Status = constants.TaskStatusSuccess
+		}
+	} else {
+		task.Status = resp.Status // sent/processing 表示仍等待供应商回执
+		if err := h.taskDao.Update(task); err != nil {
+			return fmt.Errorf("update non-terminal task status: %w", err)
+		}
+	}
 
 	// 记录日志（每次新增，便于观测请求链路），ProviderMsgID 保存在日志中用于回调匹配
 	h.logDao.Create(&model.PushLog{
@@ -312,10 +348,11 @@ func (h *MessageHandler) handleSuccess(task *model.PushTask, providerAccountID u
 	h.selector.ReportSuccess(providerAccountID)
 
 	h.logger.Info(fmt.Sprintf("message sent successfully task_id=%s provider_id=%s status=%s", task.TaskID, resp.ProviderID, resp.Status))
+	return nil
 }
 
 // handleSendError 处理发送错误（使用规则引擎）
-func (h *MessageHandler) handleSendError(task *model.PushTask, providerAccountID uint, resp *sender.SendResponse) {
+func (h *MessageHandler) handleSendError(task *model.PushTask, providerAccountID uint, resp *sender.SendResponse) error {
 	// 通知选择器失败
 	h.selector.ReportFailure(providerAccountID)
 
@@ -346,6 +383,9 @@ func (h *MessageHandler) handleSendError(task *model.PushTask, providerAccountID
 		ErrorMessage:      resp.ErrorMessage,
 		RequestData:       resp.RequestData,
 		ResponseData:      resp.ResponseData,
+		ProviderID:        resp.ProviderID,
+		TerminalEvent:     constants.WebhookEventFailed,
+		OccurredAt:        time.Now(),
 	}
 
 	// 执行规则动作
@@ -353,13 +393,24 @@ func (h *MessageHandler) handleSendError(task *model.PushTask, providerAccountID
 
 	h.logger.Info(fmt.Sprintf("rule engine executed task_id=%s action=%s retry=%v",
 		task.TaskID, execResult.Action, execResult.ShouldRetry))
+	return execResult.Err
 }
 
 // handleEarlyFailure 处理早期失败（发送前的错误，无供应商响应数据）
 // 早期失败不使用规则引擎，直接标记失败
 func (h *MessageHandler) handleEarlyFailure(task *model.PushTask, providerAccountID uint, errorMsg string) {
-	task.Status = constants.TaskStatusFailed
-	h.taskDao.Update(task)
+	transitionResult, transitionErr := h.terminalService.Transition(context.Background(), service.TerminalTransition{
+		TaskID:       task.TaskID,
+		Status:       constants.TaskStatusFailed,
+		Event:        constants.WebhookEventFailed,
+		ErrorMessage: errorMsg,
+		OccurredAt:   time.Now(),
+	})
+	if transitionErr != nil {
+		h.logger.Error(fmt.Sprintf("failed to persist terminal task state task_id=%s: %v", task.TaskID, transitionErr))
+	} else if transitionResult.Changed {
+		task.Status = constants.TaskStatusFailed
+	}
 
 	// 记录日志（每次新增，便于观测请求链路）
 	if providerAccountID > 0 {

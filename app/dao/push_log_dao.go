@@ -15,9 +15,11 @@ type PushLogDAO struct {
 
 // NewPushLogDAO 创建DAO
 func NewPushLogDAO() *PushLogDAO {
-	return &PushLogDAO{
-		db: helper.GetDatabase(),
-	}
+	return NewPushLogDAOWithDB(helper.GetDatabase())
+}
+
+func NewPushLogDAOWithDB(db *gorm.DB) *PushLogDAO {
+	return &PushLogDAO{db: db}
 }
 
 // Create 创建日志
@@ -29,7 +31,7 @@ func (d *PushLogDAO) Create(log *model.PushLog) error {
 func (d *PushLogDAO) GetByTaskID(taskID string) ([]*model.PushLog, error) {
 	var logs []*model.PushLog
 	err := d.db.Where("task_id = ?", taskID).
-		Order("created_at DESC").
+		Order("id DESC").
 		Find(&logs).Error
 	if err != nil {
 		return nil, err

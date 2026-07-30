@@ -14,9 +14,11 @@ type CallbackLogDAO struct {
 
 // NewCallbackLogDAO 创建 CallbackLogDAO
 func NewCallbackLogDAO() *CallbackLogDAO {
-	return &CallbackLogDAO{
-		db: helper.GetDatabase(),
-	}
+	return NewCallbackLogDAOWithDB(helper.GetDatabase())
+}
+
+func NewCallbackLogDAOWithDB(db *gorm.DB) *CallbackLogDAO {
+	return &CallbackLogDAO{db: db}
 }
 
 // Create 创建回调日志

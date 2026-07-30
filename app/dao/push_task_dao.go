@@ -1,9 +1,11 @@
 package dao
 
 import (
+	"strings"
 	"time"
 
 	"cnb.cool/mliev/open/go-web/pkg/helper"
+	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"gorm.io/gorm"
 )
@@ -15,9 +17,11 @@ type PushTaskDAO struct {
 
 // NewPushTaskDAO 创建PushTaskDAO
 func NewPushTaskDAO() *PushTaskDAO {
-	return &PushTaskDAO{
-		db: helper.GetDatabase(),
-	}
+	return NewPushTaskDAOWithDB(helper.GetDatabase())
+}
+
+func NewPushTaskDAOWithDB(db *gorm.DB) *PushTaskDAO {
+	return &PushTaskDAO{db: db}
 }
 
 // Create 创建任务
@@ -28,7 +32,9 @@ func (d *PushTaskDAO) Create(task *model.PushTask) error {
 // GetByID 根据ID获取任务
 func (d *PushTaskDAO) GetByID(id uint) (*model.PushTask, error) {
 	var task model.PushTask
-	err := d.db.Where("id = ?", id).First(&task).Error
+	err := preloadPushTaskRelations(d.db).
+		Where("id = ?", id).
+		First(&task).Error
 	if err != nil {
 		return nil, err
 	}
@@ -48,6 +54,13 @@ func (d *PushTaskDAO) GetByTaskID(taskID string) (*model.PushTask, error) {
 // Update 更新任务
 func (d *PushTaskDAO) Update(task *model.PushTask) error {
 	return d.db.Save(task).Error
+}
+
+// UpdateProviderAccountID 记录任务最后一次发送尝试使用的服务商账号。
+func (d *PushTaskDAO) UpdateProviderAccountID(taskID string, providerAccountID uint) error {
+	return d.db.Model(&model.PushTask{}).
+		Where("task_id = ?", taskID).
+		Update("provider_account_id", providerAccountID).Error
 }
 
 // ClaimForProcessing 以 CAS 方式将 pending 任务抢占为 processing。
@@ -163,28 +176,17 @@ func (d *PushTaskDAO) MarkTimeoutSentTasksCallback(timeout time.Duration, limit 
 	return res.RowsAffected, res.Error
 }
 
-// MarkTimeoutProcessingTasksFailed 将超时的 processing 状态任务（所有消息类型）标记为失败。
-// 条件化更新（CAS）：worker 并发改为 success/sent 的行不会被覆盖；重复执行 RowsAffected 为 0。
-func (d *PushTaskDAO) MarkTimeoutProcessingTasksFailed(timeout time.Duration, limit int) (int64, error) {
+// GetTimeoutProcessingTasks returns candidates for transactional terminalization.
+// The terminal service performs the final CAS, so a concurrent successful worker update wins safely.
+func (d *PushTaskDAO) GetTimeoutProcessingTasks(timeout time.Duration, limit int) ([]*model.PushTask, error) {
 	cutoff := time.Now().Add(-timeout)
-
-	var ids []uint
-	err := d.db.Model(&model.PushTask{}).
-		Where("status = ? AND updated_at < ?", "processing", cutoff).
+	var tasks []*model.PushTask
+	err := d.db.
+		Where("status = ? AND updated_at < ?", constants.TaskStatusProcessing, cutoff).
+		Order("updated_at ASC").
 		Limit(limit).
-		Pluck("id", &ids).Error
-	if err != nil {
-		return 0, err
-	}
-	if len(ids) == 0 {
-		return 0, nil
-	}
-
-	res := d.db.Model(&model.PushTask{}).
-		Where("id IN ?", ids).
-		Where("status = ? AND updated_at < ?", "processing", cutoff).
-		Update("status", "failed")
-	return res.RowsAffected, res.Error
+		Find(&tasks).Error
+	return tasks, err
 }
 
 // List 获取任务列表（分页）
@@ -193,7 +195,7 @@ func (d *PushTaskDAO) List(page, pageSize int, filters map[string]interface{}) (
 	var total int64
 
 	offset := (page - 1) * pageSize
-	query := d.db.Model(&model.PushTask{})
+	query := preloadPushTaskRelations(d.db.Model(&model.PushTask{}))
 
 	// 应用过滤条件
 	if appID, ok := filters["app_id"]; ok {
@@ -207,6 +209,10 @@ func (d *PushTaskDAO) List(page, pageSize int, filters map[string]interface{}) (
 	}
 	if taskID, ok := filters["task_id"]; ok {
 		query = query.Where("task_id LIKE ?", "%"+taskID.(string)+"%")
+	}
+	if receiver, ok := filters["receiver"]; ok {
+		pattern := "%" + escapeLikeLiteral(receiver.(string)) + "%"
+		query = query.Where("receiver LIKE ? ESCAPE '!'", pattern)
 	}
 	if batchID, ok := filters["batch_id"]; ok {
 		query = query.Where("batch_id = ?", batchID)
@@ -230,4 +236,21 @@ func (d *PushTaskDAO) List(page, pageSize int, filters map[string]interface{}) (
 	}
 
 	return tasks, total, nil
+}
+
+func preloadPushTaskRelations(db *gorm.DB) *gorm.DB {
+	unscoped := func(tx *gorm.DB) *gorm.DB {
+		return tx.Unscoped()
+	}
+	return db.
+		Preload("Channel", unscoped).
+		Preload("ProviderAccount", unscoped)
+}
+
+func escapeLikeLiteral(value string) string {
+	return strings.NewReplacer(
+		"!", "!!",
+		"%", "!%",
+		"_", "!_",
+	).Replace(value)
 }

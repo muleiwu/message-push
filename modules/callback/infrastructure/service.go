@@ -20,29 +20,33 @@ import (
 // 确保 CallbackService 实现 domain.Service 端口
 var _ domain.Service = (*CallbackService)(nil)
 
+type ruleActionExecutor interface {
+	Execute(context.Context, *ruleengine.EvaluateResult, *service.ExecuteContext) *service.ExecuteResult
+}
+
 // CallbackService 回调服务
 type CallbackService struct {
-	logger         gsr.Logger
-	taskDao        *dao.PushTaskDAO
-	logDao         *dao.PushLogDAO
-	callbackLogDao *dao.CallbackLogDAO
-	senderResolver sender.Resolver
-	webhookService *WebhookService
-	ruleEngine     ruleengine.Engine
-	actionExecutor *service.ActionExecutor
+	logger          gsr.Logger
+	taskDao         *dao.PushTaskDAO
+	logDao          *dao.PushLogDAO
+	callbackLogDao  *dao.CallbackLogDAO
+	senderResolver  sender.Resolver
+	ruleEngine      ruleengine.Engine
+	actionExecutor  ruleActionExecutor
+	terminalService *service.TaskTerminalService
 }
 
 // NewCallbackService 创建回调服务
 func NewCallbackService() *CallbackService {
 	return &CallbackService{
-		logger:         internalHelper.GetLogger(),
-		taskDao:        dao.NewPushTaskDAO(),
-		logDao:         dao.NewPushLogDAO(),
-		callbackLogDao: dao.NewCallbackLogDAO(),
-		senderResolver: sender.GetResolver(),
-		webhookService: NewWebhookService(),
-		ruleEngine:     ruleengine.GetEngine(),
-		actionExecutor: service.NewActionExecutor(),
+		logger:          internalHelper.GetLogger(),
+		taskDao:         dao.NewPushTaskDAO(),
+		logDao:          dao.NewPushLogDAO(),
+		callbackLogDao:  dao.NewCallbackLogDAO(),
+		senderResolver:  sender.GetResolver(),
+		ruleEngine:      ruleengine.GetEngine(),
+		actionExecutor:  service.NewActionExecutor(),
+		terminalService: service.NewTaskTerminalService(),
 	}
 }
 
@@ -103,29 +107,19 @@ func (s *CallbackService) processUpstreamResult(ctx context.Context, providerCod
 		receiveTime = time.Now()
 	}
 
-	// 2. 落库（统一存入 callback_logs，type=upstream）
-	if err := s.callbackLogDao.Create(&model.CallbackLog{
-		Type:         constants.CallbackTypeUpstream,
+	// 2. 回调日志与业务方 Webhook Outbox 在同一事务内落库
+	if err := s.terminalService.RecordUpstream(ctx, service.UpstreamEvent{
 		AppID:        appID,
-		ProviderCode: providerCode,
 		Mobile:       result.Mobile,
 		Content:      result.Content,
+		ProviderCode: providerCode,
+		ReceiveTime:  receiveTime,
 		RawData:      rawData,
-		CreatedAt:    receiveTime,
 	}); err != nil {
-		return fmt.Errorf("failed to create upstream callback log: %w", err)
+		return fmt.Errorf("failed to persist upstream callback and webhook: %w", err)
 	}
 
 	s.logger.Info(fmt.Sprintf("upstream sms recorded provider=%s mobile=%s app_id=%s", providerCode, result.Mobile, appID))
-
-	// 3. 关联到应用则转发 Webhook
-	if appID != "" {
-		go func() {
-			if err := s.webhookService.NotifyUpstreamSMS(context.Background(), appID, result.Mobile, result.Content, providerCode, receiveTime); err != nil {
-				s.logger.Error(fmt.Sprintf("failed to notify upstream webhook mobile=%s: %v", result.Mobile, err))
-			}
-		}()
-	}
 
 	return nil
 }
@@ -206,9 +200,6 @@ func (s *CallbackService) processCallbackResult(ctx context.Context, providerCod
 		}
 	}
 
-	// 3. 更新任务状态
-	oldStatus := task.Status
-
 	// 设置回调状态和时间
 	task.CallbackStatus = result.Status
 	if !result.ReportTime.IsZero() {
@@ -220,10 +211,21 @@ func (s *CallbackService) processCallbackResult(ctx context.Context, providerCod
 
 	switch result.Status {
 	case "delivered":
-		task.Status = constants.TaskStatusSuccess
-		// 更新任务
-		if err := s.taskDao.Update(task); err != nil {
-			return fmt.Errorf("failed to update task: %w", err)
+		transitionResult, err := s.terminalService.Transition(ctx, service.TerminalTransition{
+			TaskID:         task.TaskID,
+			Status:         constants.TaskStatusSuccess,
+			Event:          constants.WebhookEventDelivered,
+			ProviderID:     result.ProviderID,
+			OccurredAt:     *task.CallbackTime,
+			CallbackStatus: result.Status,
+			CallbackTime:   task.CallbackTime,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to persist delivered task and webhook: %w", err)
+		}
+		if transitionResult.Changed {
+			task.Status = constants.TaskStatusSuccess
+			s.logger.Info(fmt.Sprintf("task status updated task_id=%s new_status=%s", task.TaskID, task.Status))
 		}
 	case "failed", "rejected":
 		// 使用规则引擎评估回调失败
@@ -246,6 +248,11 @@ func (s *CallbackService) processCallbackResult(ctx context.Context, providerCod
 			ErrorMessage:      result.ErrorMessage,
 			RequestData:       rawData,
 			ResponseData:      "",
+			ProviderID:        result.ProviderID,
+			TerminalEvent:     result.Status,
+			OccurredAt:        *task.CallbackTime,
+			CallbackStatus:    result.Status,
+			CallbackTime:      task.CallbackTime,
 		}
 
 		// 执行规则动作
@@ -257,6 +264,12 @@ func (s *CallbackService) processCallbackResult(ctx context.Context, providerCod
 		if execResult.ShouldRetry {
 			return nil
 		}
+		if execResult.Err != nil {
+			return fmt.Errorf("failed to persist callback terminal state: %w", execResult.Err)
+		}
+		if execResult.TaskUpdated {
+			s.logger.Info(fmt.Sprintf("task status updated task_id=%s new_status=%s", task.TaskID, task.Status))
+		}
 		// 规则引擎已处理任务状态更新
 	default:
 		// 未知状态，记录回调状态但不更新任务主状态
@@ -265,19 +278,6 @@ func (s *CallbackService) processCallbackResult(ctx context.Context, providerCod
 		if err := s.taskDao.Update(task); err != nil {
 			return fmt.Errorf("failed to update task: %w", err)
 		}
-	}
-
-	// 只有主状态发生变化时才触发 Webhook 通知
-	if oldStatus != task.Status {
-		s.logger.Info(fmt.Sprintf("task status updated task_id=%s old_status=%s new_status=%s",
-			task.TaskID, oldStatus, task.Status))
-
-		// 4. 触发业务方 Webhook 通知
-		go func() {
-			if err := s.webhookService.NotifyStatusChange(context.Background(), task, result); err != nil {
-				s.logger.Error(fmt.Sprintf("failed to notify webhook for task_id=%s: %v", task.TaskID, err))
-			}
-		}()
 	}
 
 	return nil

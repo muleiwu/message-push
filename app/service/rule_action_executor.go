@@ -33,6 +33,7 @@ type ActionExecutor struct {
 	producer          delivery.Producer
 	httpClient        *http.Client
 	defaultWebhookURL string // 系统默认告警 Webhook URL
+	terminalService   *TaskTerminalService
 }
 
 // NewActionExecutor 创建动作执行器
@@ -43,6 +44,7 @@ func NewActionExecutor() *ActionExecutor {
 		logDAO:            dao.NewPushLogDAO(),
 		producer:          delivery.GetProducer(),
 		defaultWebhookURL: internalHelper.GetEnv().GetString("alert.default_webhook_url", ""),
+		terminalService:   NewTaskTerminalService(),
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -58,6 +60,11 @@ type ExecuteContext struct {
 	ErrorMessage      string
 	RequestData       string
 	ResponseData      string
+	ProviderID        string
+	TerminalEvent     string
+	OccurredAt        time.Time
+	CallbackStatus    string
+	CallbackTime      *time.Time
 }
 
 // ExecuteResult 执行结果
@@ -68,6 +75,7 @@ type ExecuteResult struct {
 	TaskUpdated  bool          // 任务是否已更新
 	AlertSent    bool          // 是否已发送告警
 	ErrorMessage string        // 错误信息
+	Err          error         // 终态事务错误
 }
 
 // Execute 执行规则动作
@@ -243,11 +251,36 @@ func (e *ActionExecutor) executeSwitchProvider(ctx context.Context, result *rule
 func (e *ActionExecutor) executeFail(ctx context.Context, result *ruleengine.EvaluateResult, execCtx *ExecuteContext) *ExecuteResult {
 	task := execCtx.Task
 
-	// 更新任务状态为失败
-	task.Status = constants.TaskStatusFailed
-	if err := e.taskDAO.Update(task); err != nil {
-		e.logger.Error(fmt.Sprintf("failed to update task status to failed: %v", err))
+	event := execCtx.TerminalEvent
+	if event == "" {
+		event = constants.WebhookEventFailed
 	}
+	occurredAt := execCtx.OccurredAt
+	if occurredAt.IsZero() {
+		occurredAt = time.Now()
+	}
+	transitionResult, transitionErr := e.terminalService.Transition(ctx, TerminalTransition{
+		TaskID:         task.TaskID,
+		Status:         constants.TaskStatusFailed,
+		Event:          event,
+		ErrorCode:      execCtx.ErrorCode,
+		ErrorMessage:   execCtx.ErrorMessage,
+		ProviderID:     execCtx.ProviderID,
+		OccurredAt:     occurredAt,
+		CallbackStatus: execCtx.CallbackStatus,
+		CallbackTime:   execCtx.CallbackTime,
+	})
+	if transitionErr != nil {
+		e.logger.Error(fmt.Sprintf("failed to persist terminal task status: %v", transitionErr))
+		return &ExecuteResult{
+			Action:       model.RuleActionFail,
+			ShouldRetry:  false,
+			TaskUpdated:  false,
+			ErrorMessage: execCtx.ErrorMessage,
+			Err:          transitionErr,
+		}
+	}
+	task.Status = constants.TaskStatusFailed
 
 	// 记录失败日志
 	if execCtx.ProviderAccountID > 0 {
@@ -273,7 +306,7 @@ func (e *ActionExecutor) executeFail(ctx context.Context, result *ruleengine.Eva
 	return &ExecuteResult{
 		Action:       model.RuleActionFail,
 		ShouldRetry:  false,
-		TaskUpdated:  true,
+		TaskUpdated:  transitionResult.Changed,
 		ErrorMessage: execCtx.ErrorMessage,
 	}
 }
@@ -329,11 +362,37 @@ func (e *ActionExecutor) executeAlert(ctx context.Context, result *ruleengine.Ev
 		ErrorMessage:      fmt.Sprintf("alert sent: %v, level: %s, error: %s", alertSent, config.AlertLevel, execCtx.ErrorMessage),
 	})
 
-	// 告警后也标记任务为失败
-	task.Status = constants.TaskStatusFailed
-	if err := e.taskDAO.Update(task); err != nil {
-		e.logger.Error(fmt.Sprintf("failed to update task status after alert: %v", err))
+	event := execCtx.TerminalEvent
+	if event == "" {
+		event = constants.WebhookEventFailed
 	}
+	occurredAt := execCtx.OccurredAt
+	if occurredAt.IsZero() {
+		occurredAt = time.Now()
+	}
+	transitionResult, transitionErr := e.terminalService.Transition(ctx, TerminalTransition{
+		TaskID:         task.TaskID,
+		Status:         constants.TaskStatusFailed,
+		Event:          event,
+		ErrorCode:      execCtx.ErrorCode,
+		ErrorMessage:   execCtx.ErrorMessage,
+		ProviderID:     execCtx.ProviderID,
+		OccurredAt:     occurredAt,
+		CallbackStatus: execCtx.CallbackStatus,
+		CallbackTime:   execCtx.CallbackTime,
+	})
+	if transitionErr != nil {
+		e.logger.Error(fmt.Sprintf("failed to persist terminal task status after alert: %v", transitionErr))
+		return &ExecuteResult{
+			Action:       model.RuleActionAlert,
+			ShouldRetry:  false,
+			TaskUpdated:  false,
+			AlertSent:    alertSent,
+			ErrorMessage: execCtx.ErrorMessage,
+			Err:          transitionErr,
+		}
+	}
+	task.Status = constants.TaskStatusFailed
 
 	e.logger.Info(fmt.Sprintf("alert sent and task marked as failed task_id=%s alert_level=%s alert_sent=%v",
 		task.TaskID, config.AlertLevel, alertSent))
@@ -341,7 +400,7 @@ func (e *ActionExecutor) executeAlert(ctx context.Context, result *ruleengine.Ev
 	return &ExecuteResult{
 		Action:       model.RuleActionAlert,
 		ShouldRetry:  false,
-		TaskUpdated:  true,
+		TaskUpdated:  transitionResult.Changed,
 		AlertSent:    alertSent,
 		ErrorMessage: execCtx.ErrorMessage,
 	}
