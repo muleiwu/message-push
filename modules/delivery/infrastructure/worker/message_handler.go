@@ -114,6 +114,11 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 		h.handleEarlyFailure(task, 0, err.Error())
 		return err
 	}
+	if err := h.persistSelectedProvider(task, providerAccount.ID); err != nil {
+		h.logger.Error(fmt.Sprintf("failed to persist selected provider account task_id=%s provider_id=%d: %v", taskID, providerAccount.ID, err))
+		return err
+	}
+
 	providerMeta, err := registry.GetByCode(providerAccount.ProviderCode)
 	if err != nil {
 		err = fmt.Errorf("provider is not registered: %w", err)
@@ -292,6 +297,17 @@ func (h *MessageHandler) selectChannel(ctx context.Context, task *model.PushTask
 	}
 
 	return node, nil
+}
+
+func (h *MessageHandler) persistSelectedProvider(task *model.PushTask, providerAccountID uint) error {
+	if task == nil {
+		return fmt.Errorf("failed to persist selected provider account: task is nil")
+	}
+	if err := h.taskDao.UpdateProviderAccountID(task.TaskID, providerAccountID); err != nil {
+		return fmt.Errorf("failed to persist selected provider account: %w", err)
+	}
+	task.ProviderAccountID = &providerAccountID
+	return nil
 }
 
 // handleSuccess 处理成功

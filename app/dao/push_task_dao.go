@@ -1,6 +1,7 @@
 package dao
 
 import (
+	"strings"
 	"time"
 
 	"cnb.cool/mliev/open/go-web/pkg/helper"
@@ -31,7 +32,9 @@ func (d *PushTaskDAO) Create(task *model.PushTask) error {
 // GetByID 根据ID获取任务
 func (d *PushTaskDAO) GetByID(id uint) (*model.PushTask, error) {
 	var task model.PushTask
-	err := d.db.Where("id = ?", id).First(&task).Error
+	err := preloadPushTaskRelations(d.db).
+		Where("id = ?", id).
+		First(&task).Error
 	if err != nil {
 		return nil, err
 	}
@@ -51,6 +54,13 @@ func (d *PushTaskDAO) GetByTaskID(taskID string) (*model.PushTask, error) {
 // Update 更新任务
 func (d *PushTaskDAO) Update(task *model.PushTask) error {
 	return d.db.Save(task).Error
+}
+
+// UpdateProviderAccountID 记录任务最后一次发送尝试使用的服务商账号。
+func (d *PushTaskDAO) UpdateProviderAccountID(taskID string, providerAccountID uint) error {
+	return d.db.Model(&model.PushTask{}).
+		Where("task_id = ?", taskID).
+		Update("provider_account_id", providerAccountID).Error
 }
 
 // ClaimForProcessing 以 CAS 方式将 pending 任务抢占为 processing。
@@ -185,7 +195,7 @@ func (d *PushTaskDAO) List(page, pageSize int, filters map[string]interface{}) (
 	var total int64
 
 	offset := (page - 1) * pageSize
-	query := d.db.Model(&model.PushTask{})
+	query := preloadPushTaskRelations(d.db.Model(&model.PushTask{}))
 
 	// 应用过滤条件
 	if appID, ok := filters["app_id"]; ok {
@@ -199,6 +209,10 @@ func (d *PushTaskDAO) List(page, pageSize int, filters map[string]interface{}) (
 	}
 	if taskID, ok := filters["task_id"]; ok {
 		query = query.Where("task_id LIKE ?", "%"+taskID.(string)+"%")
+	}
+	if receiver, ok := filters["receiver"]; ok {
+		pattern := "%" + escapeLikeLiteral(receiver.(string)) + "%"
+		query = query.Where("receiver LIKE ? ESCAPE '!'", pattern)
 	}
 	if batchID, ok := filters["batch_id"]; ok {
 		query = query.Where("batch_id = ?", batchID)
@@ -222,4 +236,21 @@ func (d *PushTaskDAO) List(page, pageSize int, filters map[string]interface{}) (
 	}
 
 	return tasks, total, nil
+}
+
+func preloadPushTaskRelations(db *gorm.DB) *gorm.DB {
+	unscoped := func(tx *gorm.DB) *gorm.DB {
+		return tx.Unscoped()
+	}
+	return db.
+		Preload("Channel", unscoped).
+		Preload("ProviderAccount", unscoped)
+}
+
+func escapeLikeLiteral(value string) string {
+	return strings.NewReplacer(
+		"!", "!!",
+		"%", "!%",
+		"_", "!_",
+	).Replace(value)
 }

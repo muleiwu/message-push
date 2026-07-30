@@ -23,7 +23,7 @@ func newAdminStatisticsTestDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE applications (id INTEGER PRIMARY KEY AUTOINCREMENT, app_id TEXT NOT NULL, app_secret TEXT NOT NULL, app_name TEXT NOT NULL, status INTEGER NOT NULL, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE channels (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, type TEXT NOT NULL, message_template_id INTEGER NOT NULL DEFAULT 0, status INTEGER NOT NULL, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE provider_accounts (id INTEGER PRIMARY KEY AUTOINCREMENT, status INTEGER NOT NULL, deleted_at DATETIME)`,
-		`CREATE TABLE push_tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT NOT NULL, app_id TEXT NOT NULL, channel_id INTEGER NOT NULL, message_type TEXT NOT NULL, receiver TEXT NOT NULL, status TEXT NOT NULL, created_at DATETIME, updated_at DATETIME)`,
+		`CREATE TABLE push_tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT NOT NULL, app_id TEXT NOT NULL, channel_id INTEGER NOT NULL, provider_account_id INTEGER, message_type TEXT NOT NULL, receiver TEXT NOT NULL, status TEXT NOT NULL, created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE push_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT NOT NULL, app_id TEXT NOT NULL, provider_account_id INTEGER NOT NULL, status TEXT NOT NULL, created_at DATETIME)`,
 	} {
 		if err := db.Exec(statement).Error; err != nil {

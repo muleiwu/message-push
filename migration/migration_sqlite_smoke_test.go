@@ -32,8 +32,12 @@ func TestSQLiteMigrationsSmoke(t *testing.T) {
 	legacyRows := []string{
 		`INSERT INTO applications (app_id, app_secret, app_name, status) VALUES ('legacy-app', 'secret', 'Legacy App', 2)`,
 		`INSERT INTO provider_accounts (account_code, account_name, provider_code, provider_type, config, status) VALUES ('legacy-provider', 'Legacy Provider', 'smtp', 'email', '{}', 2)`,
+		`INSERT INTO provider_accounts (account_code, account_name, provider_code, provider_type, config, status) VALUES ('latest-provider', 'Latest Provider', 'smtp', 'email', '{}', 1)`,
 		`INSERT INTO channels (name, type, status) VALUES ('Legacy Channel', 'email', 2)`,
 		`INSERT INTO channel_template_bindings (channel_id, provider_template_id, provider_id, status) VALUES (1, 1, 1, 2)`,
+		`INSERT INTO push_tasks (task_id, app_id, channel_id, message_type, receiver, status) VALUES ('provider-backfill', 'legacy-app', 1, 'email', 'legacy@example.com', 'success')`,
+		`INSERT INTO push_logs (task_id, app_id, provider_account_id, status) VALUES ('provider-backfill', 'legacy-app', 1, 'failed')`,
+		`INSERT INTO push_logs (task_id, app_id, provider_account_id, status) VALUES ('provider-backfill', 'legacy-app', 2, 'success')`,
 		`INSERT INTO admin_users (username, password, real_name, email, auth_source, status) VALUES ('mixed-email', 'hash', 'Mixed Email', '  Admin@Example.COM  ', 'local', 1)`,
 		`INSERT INTO admin_users (username, password, real_name, email, auth_source, status) VALUES ('blank-email', 'hash', 'Blank Email', '   ', 'local', 1)`,
 		`INSERT INTO admin_users (username, password, real_name, email, auth_source, status) VALUES ('legacy-admin-status', 'hash', 'Legacy Admin Status', NULL, 'local', 2)`,
@@ -67,6 +71,9 @@ func TestSQLiteMigrationsSmoke(t *testing.T) {
 	assertHasColumn(t, sqlDB, "message_templates", "content_type")
 	assertHasColumn(t, sqlDB, "provider_templates", "content_type")
 	assertHasColumn(t, sqlDB, "push_logs", "provider_msg_id")
+	assertHasColumn(t, sqlDB, "push_tasks", "provider_account_id")
+	assertHasIndex(t, sqlDB, "push_tasks", "idx_push_tasks_provider_account")
+	assertLastProvider(t, sqlDB, "provider-backfill", 2)
 	assertHasColumn(t, sqlDB, "callback_logs", "type")
 	assertHasColumn(t, sqlDB, "callback_logs", "mobile")
 	assertHasColumn(t, sqlDB, "callback_logs", "content")
@@ -160,6 +167,32 @@ func assertAdminStatus(t *testing.T, db *sql.DB, username string, want int) {
 	}
 	if got != want {
 		t.Errorf("admin status for %s = %d, want %d", username, got, want)
+	}
+}
+
+func assertLastProvider(t *testing.T, db *sql.DB, taskID string, want int) {
+	t.Helper()
+	var got sql.NullInt64
+	if err := db.QueryRow("SELECT provider_account_id FROM push_tasks WHERE task_id = ?", taskID).Scan(&got); err != nil {
+		t.Fatalf("query last provider for %s: %v", taskID, err)
+	}
+	if !got.Valid || got.Int64 != int64(want) {
+		t.Fatalf("last provider for %s = %v, want %d", taskID, got, want)
+	}
+}
+
+func assertHasIndex(t *testing.T, db *sql.DB, table, index string) {
+	t.Helper()
+	var count int
+	if err := db.QueryRow(
+		"SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND tbl_name = ? AND name = ?",
+		table,
+		index,
+	).Scan(&count); err != nil {
+		t.Fatalf("query index %s on %s: %v", index, table, err)
+	}
+	if count != 1 {
+		t.Fatalf("index %s on %s count = %d, want 1", index, table, count)
 	}
 }
 

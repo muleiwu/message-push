@@ -78,7 +78,7 @@ func newTimeoutScannerTestDB(t *testing.T) *gorm.DB {
 		)`,
 		`CREATE TABLE push_tasks (
 			id INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT NOT NULL UNIQUE, app_id TEXT NOT NULL,
-			channel_id INTEGER NOT NULL, message_type TEXT NOT NULL, receiver TEXT NOT NULL,
+			channel_id INTEGER NOT NULL, provider_account_id INTEGER, message_type TEXT NOT NULL, receiver TEXT NOT NULL,
 			template_code TEXT, template_params TEXT, signature TEXT, status TEXT,
 			callback_status TEXT, callback_time DATETIME, retry_count INTEGER, max_retry INTEGER,
 			exclude_provider_ids TEXT, scheduled_at DATETIME, created_at DATETIME, updated_at DATETIME
