@@ -1,0 +1,50 @@
+{
+  "organization": "mliev",
+  "document": "message-push",
+  "version": "v1.0.0",
+  "version_id": 13,
+  "articles": [
+    {"key": "introduction", "title": "项目介绍", "source": "01-project-introduction.md", "sort_order": 100, "article_id": 173},
+    {"key": "quick-start", "title": "快速开始", "source": "02-quick-start/README.md", "sort_order": 200, "article_id": 174},
+    {"key": "sqlite-demo", "title": "本地 SQLite 演示", "source": "02-quick-start/sqlite-demo.md", "parent": "quick-start", "sort_order": 100, "article_id": 179},
+    {"key": "web-install", "title": "Web 安装向导", "source": "02-quick-start/web-install.md", "parent": "quick-start", "sort_order": 200, "article_id": 180},
+    {"key": "login", "title": "登录管理后台", "source": "02-quick-start/login.md", "parent": "quick-start", "sort_order": 300},
+    {"key": "onboarding", "title": "发送准备台", "source": "02-quick-start/onboarding.md", "parent": "quick-start", "sort_order": 400},
+
+    {"key": "admin", "title": "管理后台", "source": "03-admin/README.md", "sort_order": 300, "article_id": 177},
+    {"key": "applications", "title": "应用接入", "source": "03-admin/applications.md", "parent": "admin", "sort_order": 100},
+    {"key": "sending-config", "title": "发送配置", "source": "03-admin/sending-config/README.md", "parent": "admin", "sort_order": 200},
+    {"key": "system-templates", "title": "系统模板", "source": "03-admin/sending-config/system-templates.md", "parent": "sending-config", "sort_order": 100},
+    {"key": "provider-accounts", "title": "服务商账号", "source": "03-admin/sending-config/provider-accounts.md", "parent": "sending-config", "sort_order": 200},
+    {"key": "provider-list", "title": "服务商列表", "source": "03-admin/sending-config/provider-list.md", "parent": "sending-config", "sort_order": 300},
+    {"key": "channel-types", "title": "渠道类型", "source": "03-admin/sending-config/channel-types.md", "parent": "sending-config", "sort_order": 400},
+    {"key": "provider-templates", "title": "供应商模板", "source": "03-admin/sending-config/provider-templates.md", "parent": "sending-config", "sort_order": 500},
+    {"key": "provider-signatures", "title": "供应商签名", "source": "03-admin/sending-config/provider-signatures.md", "parent": "sending-config", "sort_order": 600},
+    {"key": "channels", "title": "发送通道", "source": "03-admin/sending-config/channels.md", "parent": "sending-config", "sort_order": 700},
+    {"key": "channel-create", "title": "新建发送通道", "source": "03-admin/sending-config/channel-create.md", "parent": "sending-config", "sort_order": 800},
+    {"key": "channel-detail", "title": "通道详情与发送验证", "source": "03-admin/sending-config/channel-detail.md", "parent": "sending-config", "sort_order": 900},
+    {"key": "failure-rules", "title": "失败策略", "source": "03-admin/sending-config/failure-rules.md", "parent": "sending-config", "sort_order": 1000},
+    {"key": "sending-status", "title": "发送情况", "source": "03-admin/sending-status/README.md", "parent": "admin", "sort_order": 300},
+    {"key": "push-tasks", "title": "发送记录", "source": "03-admin/sending-status/push-tasks.md", "parent": "sending-status", "sort_order": 100},
+    {"key": "batch-tasks", "title": "批量任务", "source": "03-admin/sending-status/batch-tasks.md", "parent": "sending-status", "sort_order": 200},
+    {"key": "sms-replies", "title": "上行短信", "source": "03-admin/sending-status/sms-replies.md", "parent": "sending-status", "sort_order": 300},
+    {"key": "analytics", "title": "统计看板", "source": "03-admin/sending-status/analytics.md", "parent": "sending-status", "sort_order": 400},
+    {"key": "system-settings", "title": "系统设置", "source": "03-admin/system-settings/README.md", "parent": "admin", "sort_order": 400},
+    {"key": "admin-users", "title": "管理员账号", "source": "03-admin/system-settings/admin-users.md", "parent": "system-settings", "sort_order": 100, "article_id": 184},
+
+    {"key": "api", "title": "API 接入", "source": "04-api/README.md", "sort_order": 400, "article_id": 175},
+    {"key": "authentication", "title": "请求认证与签名", "source": "04-api/authentication.md", "parent": "api", "sort_order": 100, "article_id": 181},
+    {"key": "single-message", "title": "单条消息发送", "source": "04-api/single-message.md", "parent": "api", "sort_order": 200, "article_id": 182},
+    {"key": "batch-scheduled", "title": "批量与定时消息", "source": "04-api/batch-scheduled.md", "parent": "api", "sort_order": 300},
+    {"key": "task-status", "title": "任务状态查询", "source": "04-api/task-status.md", "parent": "api", "sort_order": 400},
+    {"key": "examples-errors", "title": "多语言示例与错误码", "source": "04-api/examples-errors.md", "parent": "api", "sort_order": 500},
+
+    {"key": "operations", "title": "部署运维", "source": "05-operations/README.md", "sort_order": 500, "article_id": 176},
+    {"key": "docker-compose", "title": "Docker 与 Compose", "source": "05-operations/docker-compose.md", "parent": "operations", "sort_order": 100, "article_id": 183},
+    {"key": "kubernetes", "title": "Kubernetes", "source": "05-operations/kubernetes.md", "parent": "operations", "sort_order": 200},
+    {"key": "security-oidc", "title": "配置、安全与 OIDC", "source": "05-operations/security-oidc.md", "parent": "operations", "sort_order": 300},
+    {"key": "troubleshooting", "title": "运维与故障排查", "source": "05-operations/troubleshooting.md", "parent": "operations", "sort_order": 400},
+
+    {"key": "architecture", "title": "架构设计", "source": "06-architecture.md", "sort_order": 600, "article_id": 178}
+  ]
+}

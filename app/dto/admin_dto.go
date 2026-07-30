@@ -280,30 +280,75 @@ type AvailableProviderTemplateResponse struct {
 
 // StatisticsRequest 统计查询请求
 type StatisticsRequest struct {
-	StartDate string `form:"start_date" binding:"required"` // YYYY-MM-DD
-	EndDate   string `form:"end_date" binding:"required"`   // YYYY-MM-DD
-	AppID     uint   `form:"app_id" binding:"omitempty"`
-	ChannelID uint   `form:"channel_id" binding:"omitempty"`
+	StartDate   string `form:"start_date"` // YYYY-MM-DD；起止日期均为空时默认近 30 天
+	EndDate     string `form:"end_date"`   // YYYY-MM-DD；起止日期均为空时默认近 30 天
+	AppID       uint   `form:"app_id" binding:"omitempty"`
+	ChannelID   uint   `form:"channel_id" binding:"omitempty"`
+	MessageType string `form:"message_type"`
+}
+
+// StatisticsCounts 统计中的通用任务状态计数。
+type StatisticsCounts struct {
+	TotalCount           int64    `json:"total_count"`
+	SuccessCount         int64    `json:"success_count"`
+	FailureCount         int64    `json:"failure_count"`
+	PendingCount         int64    `json:"pending_count"`
+	ProcessingCount      int64    `json:"processing_count"`
+	SentCount            int64    `json:"sent_count"`
+	InProgressCount      int64    `json:"in_progress_count"`
+	CompletedSuccessRate *float64 `json:"completed_success_rate"`
+}
+
+// StatisticsSummary 汇总统计。SuccessRate 保留原 success / total 口径以兼容旧客户端。
+type StatisticsSummary struct {
+	StatisticsCounts
+	SuccessRate string `json:"success_rate"`
 }
 
 // DailyStatistics 每日统计
 type DailyStatistics struct {
-	Date         string `json:"date"`
-	TotalCount   int64  `json:"total_count"`
-	SuccessCount int64  `json:"success_count"`
-	FailureCount int64  `json:"failure_count"`
-	SuccessRate  string `json:"success_rate"`
+	StatisticsSummary
+	Date string `json:"date"`
+}
+
+// StatisticsPeriod 本次统计使用的时间范围和粒度。
+type StatisticsPeriod struct {
+	StartDate   string `json:"start_date"`
+	EndDate     string `json:"end_date"`
+	Timezone    string `json:"timezone"`
+	Granularity string `json:"granularity"`
+}
+
+// MessageTypeStatistics 消息类型维度统计。
+type MessageTypeStatistics struct {
+	StatisticsCounts
+	MessageType string `json:"message_type"`
+}
+
+// ApplicationStatistics 应用维度 Top 统计。
+type ApplicationStatistics struct {
+	StatisticsCounts
+	ID      uint   `json:"id"`
+	AppID   string `json:"app_id"`
+	AppName string `json:"app_name"`
+}
+
+// ChannelStatistics 通道维度 Top 统计。
+type ChannelStatistics struct {
+	StatisticsCounts
+	ChannelID   uint   `json:"channel_id"`
+	ChannelName string `json:"channel_name"`
+	ChannelType string `json:"channel_type"`
 }
 
 // StatisticsResponse 统计响应
 type StatisticsResponse struct {
-	Summary struct {
-		TotalCount   int64  `json:"total_count"`
-		SuccessCount int64  `json:"success_count"`
-		FailureCount int64  `json:"failure_count"`
-		SuccessRate  string `json:"success_rate"`
-	} `json:"summary"`
-	Daily []*DailyStatistics `json:"daily"`
+	Period                  StatisticsPeriod         `json:"period"`
+	Summary                 StatisticsSummary        `json:"summary"`
+	Daily                   []*DailyStatistics       `json:"daily"`
+	MessageTypeDistribution []*MessageTypeStatistics `json:"message_type_distribution"`
+	TopApplications         []*ApplicationStatistics `json:"top_applications"`
+	TopChannels             []*ChannelStatistics     `json:"top_channels"`
 }
 
 // ActiveItem 活跃项（用于下拉列表）
@@ -331,17 +376,19 @@ type TestProviderResponse struct {
 
 // DashboardResponse 仪表盘响应
 type DashboardResponse struct {
-	TotalApplications  int64  `json:"total_applications"`
-	ActiveApplications int64  `json:"active_applications"`
-	TotalChannels      int64  `json:"total_channels"`
-	ActiveChannels     int64  `json:"active_channels"`
-	TotalProviders     int64  `json:"total_providers"`
-	ActiveProviders    int64  `json:"active_providers"`
-	TodayPushCount     int64  `json:"today_push_count"`
-	TodaySuccessCount  int64  `json:"today_success_count"`
-	TodayFailedCount   int64  `json:"today_failed_count"`
-	TodaySuccessRate   string `json:"today_success_rate"`
-	TotalPushCount     int64  `json:"total_push_count"`
+	TotalApplications         int64    `json:"total_applications"`
+	ActiveApplications        int64    `json:"active_applications"`
+	TotalChannels             int64    `json:"total_channels"`
+	ActiveChannels            int64    `json:"active_channels"`
+	TotalProviders            int64    `json:"total_providers"`
+	ActiveProviders           int64    `json:"active_providers"`
+	TodayPushCount            int64    `json:"today_push_count"`
+	TodaySuccessCount         int64    `json:"today_success_count"`
+	TodayFailedCount          int64    `json:"today_failed_count"`
+	TodayInProgressCount      int64    `json:"today_in_progress_count"`
+	TodaySuccessRate          string   `json:"today_success_rate"`
+	TodayCompletedSuccessRate *float64 `json:"today_completed_success_rate"`
+	TotalPushCount            int64    `json:"total_push_count"`
 }
 
 // TopApplicationResponse 热门应用
