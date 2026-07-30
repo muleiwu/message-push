@@ -12,6 +12,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/app/readiness"
+	applicationService "cnb.cool/mliev/push/message-push/app/service"
 	"cnb.cool/mliev/push/message-push/modules/channel"
 	"cnb.cool/mliev/push/message-push/modules/delivery"
 	"cnb.cool/mliev/push/message-push/modules/messaging/domain"
@@ -33,6 +34,7 @@ type MessageService struct {
 	messageTemplateDao *dao.MessageTemplateDAO
 	templateHelper     template.Renderer
 	readinessEvaluator *readiness.ChannelEvaluator
+	terminalService    *applicationService.TaskTerminalService
 }
 
 // NewMessageService 创建消息服务
@@ -46,6 +48,7 @@ func NewMessageService() *MessageService {
 		messageTemplateDao: dao.NewMessageTemplateDAO(),
 		templateHelper:     template.GetRenderer(),
 		readinessEvaluator: readiness.NewChannelEvaluator(internalHelper.GetDatabase()),
+		terminalService:    applicationService.NewTaskTerminalService(),
 	}
 }
 
@@ -135,9 +138,16 @@ func (s *MessageService) Send(ctx context.Context, req *dto.SendRequest) (*dto.S
 
 	// 5. 推送到队列
 	if err := s.producer.Push(ctx, task); err != nil {
-		// 更新任务状态为失败
-		task.Status = constants.TaskStatusFailed
-		s.taskDao.Update(task)
+		if _, transitionErr := s.terminalService.Transition(ctx, applicationService.TerminalTransition{
+			TaskID:       task.TaskID,
+			Status:       constants.TaskStatusFailed,
+			Event:        constants.WebhookEventFailed,
+			ErrorCode:    "QUEUE_ERROR",
+			ErrorMessage: err.Error(),
+			OccurredAt:   time.Now(),
+		}); transitionErr != nil {
+			return nil, fmt.Errorf("failed to push to queue: %v; failed to persist terminal state: %w", err, transitionErr)
+		}
 		return nil, fmt.Errorf("failed to push to queue: %w", err)
 	}
 

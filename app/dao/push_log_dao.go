@@ -15,9 +15,11 @@ type PushLogDAO struct {
 
 // NewPushLogDAO 创建DAO
 func NewPushLogDAO() *PushLogDAO {
-	return &PushLogDAO{
-		db: helper.GetDatabase(),
-	}
+	return NewPushLogDAOWithDB(helper.GetDatabase())
+}
+
+func NewPushLogDAOWithDB(db *gorm.DB) *PushLogDAO {
+	return &PushLogDAO{db: db}
 }
 
 // Create 创建日志

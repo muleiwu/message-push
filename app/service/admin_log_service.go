@@ -217,7 +217,7 @@ func (s *AdminLogService) GetWebhookLogsByTaskID(taskID string) (*dto.TaskWebhoo
 
 	items := make([]*dto.WebhookLogItem, 0, len(logs))
 	for _, log := range logs {
-		items = append(items, &dto.WebhookLogItem{
+		item := &dto.WebhookLogItem{
 			ID:              log.ID,
 			TaskID:          log.TaskID,
 			AppID:           log.AppID,
@@ -230,8 +230,15 @@ func (s *AdminLogService) GetWebhookLogsByTaskID(taskID string) (*dto.TaskWebhoo
 			Status:          log.Status,
 			ErrorMessage:    log.ErrorMessage,
 			RetryCount:      log.RetryCount,
+			MaxRetries:      log.MaxRetries,
+			TimeoutSeconds:  log.TimeoutSeconds,
 			CreatedAt:       log.CreatedAt.Format(time.RFC3339),
-		})
+			UpdatedAt:       log.UpdatedAt.Format(time.RFC3339),
+		}
+		if log.NextAttemptAt != nil {
+			item.NextAttemptAt = log.NextAttemptAt.Format(time.RFC3339)
+		}
+		items = append(items, item)
 	}
 
 	return &dto.TaskWebhookLogsResponse{Items: items}, nil

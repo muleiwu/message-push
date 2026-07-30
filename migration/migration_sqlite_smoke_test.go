@@ -71,6 +71,18 @@ func TestSQLiteMigrationsSmoke(t *testing.T) {
 	assertHasColumn(t, sqlDB, "callback_logs", "mobile")
 	assertHasColumn(t, sqlDB, "callback_logs", "content")
 	assertNoColumn(t, sqlDB, "channel_template_bindings", "template_binding_id")
+	for _, column := range []string{
+		"dedup_key",
+		"signing_secret",
+		"max_retries",
+		"timeout_seconds",
+		"next_attempt_at",
+		"locked_until",
+		"lease_token",
+		"updated_at",
+	} {
+		assertHasColumn(t, sqlDB, "webhook_logs", column)
+	}
 
 	// 重复执行应为幂等（无新版本）
 	if err := RunGooseMigrations(sqlDB, "sqlite", nil); err != nil {

@@ -3,6 +3,7 @@ package config
 import (
 	"cnb.cool/mliev/open/go-web/pkg/interfaces"
 	callbackAssembly "cnb.cool/mliev/push/message-push/modules/callback/assembly"
+	callbackServer "cnb.cool/mliev/push/message-push/modules/callback/server"
 	channelAssembly "cnb.cool/mliev/push/message-push/modules/channel/assembly"
 	deliveryAssembly "cnb.cool/mliev/push/message-push/modules/delivery/assembly"
 	deliveryServer "cnb.cool/mliev/push/message-push/modules/delivery/server"
@@ -40,5 +41,6 @@ func pushServers() []interfaces.ServerInterface {
 	return []interfaces.ServerInterface{
 		deliveryServer.NewWorkerServer(),
 		deliveryServer.NewSchedulerServer(),
+		callbackServer.NewWebhookServer(),
 	}
 }

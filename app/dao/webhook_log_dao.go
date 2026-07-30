@@ -1,7 +1,11 @@
 package dao
 
 import (
+	"context"
+	"time"
+
 	"cnb.cool/mliev/open/go-web/pkg/helper"
+	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"gorm.io/gorm"
 )
@@ -13,9 +17,11 @@ type WebhookLogDAO struct {
 
 // NewWebhookLogDAO 创建 WebhookLogDAO
 func NewWebhookLogDAO() *WebhookLogDAO {
-	return &WebhookLogDAO{
-		db: helper.GetDatabase(),
-	}
+	return NewWebhookLogDAOWithDB(helper.GetDatabase())
+}
+
+func NewWebhookLogDAOWithDB(db *gorm.DB) *WebhookLogDAO {
+	return &WebhookLogDAO{db: db}
 }
 
 // Create 创建Webhook日志
@@ -74,4 +80,119 @@ func (dao *WebhookLogDAO) List(appID string, status string, page, pageSize int) 
 	}
 
 	return logs, total, nil
+}
+
+// ListDue returns pending deliveries and expired processing leases.
+func (dao *WebhookLogDAO) ListDue(ctx context.Context, now time.Time, limit int) ([]*model.WebhookLog, error) {
+	var logs []*model.WebhookLog
+	err := dao.db.WithContext(ctx).
+		Where(
+			"(status = ? AND next_attempt_at <= ?) OR (status = ? AND locked_until <= ?)",
+			constants.WebhookDeliveryPending,
+			now,
+			constants.WebhookDeliveryProcessing,
+			now,
+		).
+		Order("next_attempt_at ASC, id ASC").
+		Limit(limit).
+		Find(&logs).Error
+	return logs, err
+}
+
+// Claim obtains a lease using a conditional update so multiple instances can scan safely.
+func (dao *WebhookLogDAO) Claim(
+	ctx context.Context,
+	id uint,
+	token string,
+	now, lockedUntil time.Time,
+) (bool, error) {
+	result := dao.db.WithContext(ctx).
+		Model(&model.WebhookLog{}).
+		Where("id = ?", id).
+		Where(
+			"(status = ? AND next_attempt_at <= ?) OR (status = ? AND locked_until <= ?)",
+			constants.WebhookDeliveryPending,
+			now,
+			constants.WebhookDeliveryProcessing,
+			now,
+		).
+		Updates(map[string]interface{}{
+			"status":       constants.WebhookDeliveryProcessing,
+			"lease_token":  token,
+			"locked_until": lockedUntil,
+			"updated_at":   now,
+		})
+	return result.RowsAffected == 1, result.Error
+}
+
+func (dao *WebhookLogDAO) MarkSuccess(
+	ctx context.Context,
+	id uint,
+	token string,
+	responseStatus int,
+	responseData string,
+	now time.Time,
+) error {
+	return dao.db.WithContext(ctx).
+		Model(&model.WebhookLog{}).
+		Where("id = ? AND status = ? AND lease_token = ?", id, constants.WebhookDeliveryProcessing, token).
+		Updates(map[string]interface{}{
+			"status":          constants.WebhookDeliverySuccess,
+			"response_status": responseStatus,
+			"response_data":   responseData,
+			"error_message":   "",
+			"next_attempt_at": nil,
+			"locked_until":    nil,
+			"lease_token":     "",
+			"updated_at":      now,
+		}).Error
+}
+
+func (dao *WebhookLogDAO) MarkRetry(
+	ctx context.Context,
+	id uint,
+	token string,
+	retryCount int,
+	nextAttemptAt time.Time,
+	responseStatus int,
+	responseData, errorMessage string,
+	now time.Time,
+) error {
+	return dao.db.WithContext(ctx).
+		Model(&model.WebhookLog{}).
+		Where("id = ? AND status = ? AND lease_token = ?", id, constants.WebhookDeliveryProcessing, token).
+		Updates(map[string]interface{}{
+			"status":          constants.WebhookDeliveryPending,
+			"retry_count":     retryCount,
+			"next_attempt_at": nextAttemptAt,
+			"response_status": responseStatus,
+			"response_data":   responseData,
+			"error_message":   errorMessage,
+			"locked_until":    nil,
+			"lease_token":     "",
+			"updated_at":      now,
+		}).Error
+}
+
+func (dao *WebhookLogDAO) MarkFailed(
+	ctx context.Context,
+	id uint,
+	token string,
+	responseStatus int,
+	responseData, errorMessage string,
+	now time.Time,
+) error {
+	return dao.db.WithContext(ctx).
+		Model(&model.WebhookLog{}).
+		Where("id = ? AND status = ? AND lease_token = ?", id, constants.WebhookDeliveryProcessing, token).
+		Updates(map[string]interface{}{
+			"status":          constants.WebhookDeliveryFailed,
+			"response_status": responseStatus,
+			"response_data":   responseData,
+			"error_message":   errorMessage,
+			"next_attempt_at": nil,
+			"locked_until":    nil,
+			"lease_token":     "",
+			"updated_at":      now,
+		}).Error
 }
