@@ -13,11 +13,13 @@ type LoginResponse struct {
 
 // UserInfoResponse 用户信息响应
 type UserInfoResponse struct {
-	UserID   uint     `json:"userId"`
-	Username string   `json:"username"`
-	RealName string   `json:"realName"`
-	Roles    []string `json:"roles"`
-	HomePath string   `json:"homePath,omitempty"`
+	UserID     uint     `json:"userId"`
+	Username   string   `json:"username"`
+	RealName   string   `json:"realName"`
+	Email      *string  `json:"email"`
+	AuthSource string   `json:"authSource"`
+	Roles      []string `json:"roles"`
+	HomePath   string   `json:"homePath,omitempty"`
 }
 
 // AccessCodesResponse 权限码响应

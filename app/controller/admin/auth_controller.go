@@ -9,6 +9,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/helper"
+	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/modules/identity"
 )
 
@@ -72,8 +73,6 @@ func (c AuthController) GetUserInfo(ctx httpInterfaces.RouterContextInterface) {
 		return
 	}
 
-	username := ctx.Get("username")
-
 	// 查询用户详细信息
 	userDAO := dao.NewAdminUserDAO()
 	user, err := userDAO.GetByID(userID.(uint))
@@ -83,18 +82,19 @@ func (c AuthController) GetUserInfo(ctx httpInterfaces.RouterContextInterface) {
 	}
 
 	// 返回用户信息
-	resp := dto.UserInfoResponse{
-		UserID:   user.ID,
-		Username: user.Username,
-		RealName: user.RealName,
-		Roles:    []string{"admin"},
-		HomePath: "/dashboard",
+	controller.SuccessResponse(ctx, buildUserInfoResponse(user))
+}
+
+func buildUserInfoResponse(user *model.AdminUser) dto.UserInfoResponse {
+	return dto.UserInfoResponse{
+		UserID:     user.ID,
+		Username:   user.Username,
+		RealName:   user.RealName,
+		Email:      user.Email,
+		AuthSource: user.AuthSource,
+		Roles:      []string{"admin"},
+		HomePath:   "/dashboard",
 	}
-
-	// 避免未使用的变量警告
-	_ = username
-
-	controller.SuccessResponse(ctx, resp)
 }
 
 // GetAccessCodes 获取权限码
