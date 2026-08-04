@@ -7,6 +7,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/constants"
 	appHelper "cnb.cool/mliev/push/message-push/app/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -147,10 +148,10 @@ func seedTemplates(db *gorm.DB, accounts []model.ProviderAccount, anchor time.Ti
 	}
 
 	providers := []model.ProviderTemplate{
-		{ProviderID: accounts[0].ID, TemplateCode: "SMS_DEMO_100001", TemplateName: "阿里云登录验证码（演示）", ContentType: "text", TemplateContent: "您的验证码是 ${code}，${minutes} 分钟内有效。", Status: 1, Remark: "虚构模板代码", CreatedAt: anchor.AddDate(0, 0, -50), UpdatedAt: anchor.AddDate(0, 0, -4)},
+		{ProviderID: accounts[0].ID, TemplateCode: "SMS_DEMO_100001", TemplateName: "阿里云登录验证码（演示）", ContentType: "text", TemplateContent: "您的验证码是 {code}，{minutes} 分钟内有效。", Status: 1, Remark: "虚构模板代码", CreatedAt: anchor.AddDate(0, 0, -50), UpdatedAt: anchor.AddDate(0, 0, -4)},
 		{ProviderID: accounts[1].ID, TemplateCode: "200001", TemplateName: "腾讯云登录验证码（演示）", ContentType: "text", TemplateContent: "您的验证码是 {1}，{2} 分钟内有效。", Status: 1, Remark: "虚构模板代码", CreatedAt: anchor.AddDate(0, 0, -49), UpdatedAt: anchor.AddDate(0, 0, -4)},
 		{ProviderID: accounts[2].ID, TemplateCode: "SMTP_DEMO_ALERT", TemplateName: "SMTP 服务告警（演示）", ContentType: "html", TemplateContent: "<h2>{{service}} 告警</h2><p>{{level}}</p><p>{{detail}}</p>", Status: 1, Remark: "本地演示模板", CreatedAt: anchor.AddDate(0, 0, -48), UpdatedAt: anchor.AddDate(0, 0, -4)},
-		{ProviderID: accounts[0].ID, TemplateCode: "SMS_DEMO_ORDER", TemplateName: "阿里云订单通知（演示）", ContentType: "text", TemplateContent: "订单 ${order_no} 已更新为 ${status}。", Status: 1, Remark: "虚构模板代码", CreatedAt: anchor.AddDate(0, 0, -47), UpdatedAt: anchor.AddDate(0, 0, -4)},
+		{ProviderID: accounts[0].ID, TemplateCode: "SMS_DEMO_ORDER", TemplateName: "阿里云订单通知（演示）", ContentType: "text", TemplateContent: "订单 {order_no} 已更新为 {status}。", Status: 1, Remark: "虚构模板代码", CreatedAt: anchor.AddDate(0, 0, -47), UpdatedAt: anchor.AddDate(0, 0, -4)},
 		{ProviderID: accounts[3].ID, TemplateCode: "SMS_DISABLED_001", TemplateName: "历史模板（停用账号）", ContentType: "text", TemplateContent: "历史演示 {name}", Status: 0, Remark: "用于展示异常状态", CreatedAt: anchor.AddDate(0, 0, -90), UpdatedAt: anchor.AddDate(0, 0, -30)},
 	}
 	providerVars := [][]string{{"code", "minutes"}, {"code", "minutes"}, {"service", "level", "detail"}, {"order_no", "status"}, {"name"}}
@@ -395,16 +396,17 @@ func seedActivity(db *gorm.DB, apps []model.Application, accounts []model.Provid
 	appStats := make([]model.AppQuotaStat, 0, 60)
 	providerStats := make([]model.ProviderQuotaStat, 0, 60)
 	for day := 29; day >= 0; day-- {
-		date := time.Date(anchor.Year(), anchor.Month(), anchor.Day(), 0, 0, 0, 0, anchor.Location()).AddDate(0, 0, -day)
+		businessDate := timeutil.BusinessDayStart(anchor).AddDate(0, 0, -day)
+		date := time.Date(businessDate.Year(), businessDate.Month(), businessDate.Day(), 0, 0, 0, 0, time.UTC)
 		for i, app := range apps[:2] {
 			total := 80 + (29-day)*7 + i*19
 			failed := 2 + (day+i)%7
-			appStats = append(appStats, model.AppQuotaStat{AppID: app.AppID, StatDate: date, TotalCount: total, SuccessCount: total - failed, FailedCount: failed, CreatedAt: date.Add(23 * time.Hour), UpdatedAt: date.Add(23 * time.Hour)})
+			appStats = append(appStats, model.AppQuotaStat{AppID: app.AppID, StatDate: date, TotalCount: total, SuccessCount: total - failed, FailedCount: failed, CreatedAt: businessDate.Add(23 * time.Hour), UpdatedAt: businessDate.Add(23 * time.Hour)})
 		}
 		for i := 0; i < 2; i++ {
 			total := 60 + (29-day)*5 + i*13
 			failed := 1 + (day+i)%5
-			providerStats = append(providerStats, model.ProviderQuotaStat{ProviderChannelID: uint(i + 1), StatDate: date, TotalCount: total, SuccessCount: total - failed, FailedCount: failed, CreatedAt: date.Add(23 * time.Hour), UpdatedAt: date.Add(23 * time.Hour)})
+			providerStats = append(providerStats, model.ProviderQuotaStat{ProviderChannelID: uint(i + 1), StatDate: date, TotalCount: total, SuccessCount: total - failed, FailedCount: failed, CreatedAt: businessDate.Add(23 * time.Hour), UpdatedAt: businessDate.Add(23 * time.Hour)})
 		}
 	}
 	if err := db.CreateInBatches(&appStats, 100).Error; err != nil {

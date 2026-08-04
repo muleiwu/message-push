@@ -3,7 +3,6 @@ package service
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/constants"
@@ -11,6 +10,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/app/readiness"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	"cnb.cool/mliev/push/message-push/modules/channel"
 	"cnb.cool/mliev/push/message-push/modules/messaging"
 	registry "cnb.cool/mliev/push/message-push/modules/sender/domain"
@@ -121,8 +121,8 @@ func (s *AdminChannelService) CreateChannel(req *dto.CreateChannelRequest) (*dto
 		MessageTemplateID: channel.MessageTemplateID,
 		TemplateName:      messageTemplate.TemplateName,
 		Status:            int(channel.Status),
-		CreatedAt:         channel.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:         channel.UpdatedAt.Format(time.RFC3339),
+		CreatedAt:         timeutil.FormatRFC3339(channel.CreatedAt),
+		UpdatedAt:         timeutil.FormatRFC3339(channel.UpdatedAt),
 	}, nil
 }
 
@@ -174,8 +174,8 @@ func (s *AdminChannelService) GetChannelList(req *dto.ChannelListRequest) (*dto.
 			Type:              channel.Type,
 			MessageTemplateID: channel.MessageTemplateID,
 			Status:            int(channel.Status),
-			CreatedAt:         channel.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:         channel.UpdatedAt.Format(time.RFC3339),
+			CreatedAt:         timeutil.FormatRFC3339(channel.CreatedAt),
+			UpdatedAt:         timeutil.FormatRFC3339(channel.UpdatedAt),
 			Readiness:         readinessByChannel[channel.ID],
 		}
 		if channel.MessageTemplate != nil {
@@ -212,8 +212,8 @@ func (s *AdminChannelService) GetChannelByID(id uint) (*dto.ChannelResponse, err
 		Type:              channel.Type,
 		MessageTemplateID: channel.MessageTemplateID,
 		Status:            int(channel.Status),
-		CreatedAt:         channel.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:         channel.UpdatedAt.Format(time.RFC3339),
+		CreatedAt:         timeutil.FormatRFC3339(channel.CreatedAt),
+		UpdatedAt:         timeutil.FormatRFC3339(channel.UpdatedAt),
 		Bindings:          bindings,
 	}
 	response.Readiness, err = s.readinessEvaluator.EvaluateChannel(id)
@@ -315,7 +315,7 @@ func (s *AdminChannelService) GetChannelBindings(channelID uint) ([]*dto.Channel
 			IsActive:             b.IsActive,
 			AutoDisableOnFail:    b.AutoDisableOnFail,
 			AutoDisableThreshold: b.AutoDisableThreshold,
-			CreatedAt:            b.CreatedAt.Format(time.RFC3339),
+			CreatedAt:            timeutil.FormatRFC3339(b.CreatedAt),
 		}
 
 		if b.ProviderTemplate != nil {
@@ -476,7 +476,7 @@ func (s *AdminChannelService) GetChannelBinding(channelID, bindingID uint) (*dto
 		IsActive:             binding.IsActive,
 		AutoDisableOnFail:    binding.AutoDisableOnFail,
 		AutoDisableThreshold: binding.AutoDisableThreshold,
-		CreatedAt:            binding.CreatedAt.Format(time.RFC3339),
+		CreatedAt:            timeutil.FormatRFC3339(binding.CreatedAt),
 	}
 
 	if binding.ProviderTemplate != nil {
@@ -625,7 +625,7 @@ func (s *AdminChannelService) CreateChannelBinding(channelID uint, req *dto.Crea
 		IsActive:             binding.IsActive,
 		AutoDisableOnFail:    binding.AutoDisableOnFail,
 		AutoDisableThreshold: binding.AutoDisableThreshold,
-		CreatedAt:            binding.CreatedAt.Format(time.RFC3339),
+		CreatedAt:            timeutil.FormatRFC3339(binding.CreatedAt),
 	}
 
 	if binding.ProviderTemplate != nil {
@@ -724,8 +724,8 @@ func (s *AdminChannelService) GetChannelSignatureMappings(channelID uint) ([]*dt
 			ProviderSignatureID: m.ProviderSignatureID,
 			ProviderID:          m.ProviderID,
 			Status:              m.Status,
-			CreatedAt:           m.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:           m.UpdatedAt.Format(time.RFC3339),
+			CreatedAt:           timeutil.FormatRFC3339(m.CreatedAt),
+			UpdatedAt:           timeutil.FormatRFC3339(m.UpdatedAt),
 		}
 
 		if m.ProviderSignature != nil {
@@ -761,8 +761,8 @@ func (s *AdminChannelService) GetChannelSignatureMapping(channelID, mappingID ui
 		ProviderSignatureID: mapping.ProviderSignatureID,
 		ProviderID:          mapping.ProviderID,
 		Status:              mapping.Status,
-		CreatedAt:           mapping.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:           mapping.UpdatedAt.Format(time.RFC3339),
+		CreatedAt:           timeutil.FormatRFC3339(mapping.CreatedAt),
+		UpdatedAt:           timeutil.FormatRFC3339(mapping.UpdatedAt),
 	}
 
 	if mapping.ProviderSignature != nil {
@@ -850,8 +850,8 @@ func (s *AdminChannelService) CreateChannelSignatureMapping(channelID uint, req 
 		ProviderSignatureID: mapping.ProviderSignatureID,
 		ProviderID:          mapping.ProviderID,
 		Status:              mapping.Status,
-		CreatedAt:           mapping.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:           mapping.UpdatedAt.Format(time.RFC3339),
+		CreatedAt:           timeutil.FormatRFC3339(mapping.CreatedAt),
+		UpdatedAt:           timeutil.FormatRFC3339(mapping.UpdatedAt),
 	}
 
 	if mapping.ProviderSignature != nil {
@@ -997,7 +997,7 @@ func (s *AdminChannelService) GetAvailableProviderSignatures(channelID uint) ([]
 			SignatureCode: sig.SignatureCode,
 			SignatureName: sig.SignatureName,
 			Status:        sig.Status,
-			CreatedAt:     sig.CreatedAt.Format(time.RFC3339),
+			CreatedAt:     timeutil.FormatRFC3339(sig.CreatedAt),
 		}
 
 		if sig.ProviderAccount != nil {

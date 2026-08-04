@@ -2,13 +2,13 @@ package service
 
 import (
 	"fmt"
-	"time"
 
 	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	registry "cnb.cool/mliev/push/message-push/modules/sender/domain"
 )
 
@@ -49,8 +49,8 @@ func (s *AdminProviderSignatureService) GetSignatureList(providerAccountID uint,
 			SignatureName:     sig.SignatureName,
 			Status:            sig.Status,
 			Remark:            sig.Remark,
-			CreatedAt:         sig.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:         sig.UpdatedAt.Format(time.RFC3339),
+			CreatedAt:         timeutil.FormatRFC3339(sig.CreatedAt),
+			UpdatedAt:         timeutil.FormatRFC3339(sig.UpdatedAt),
 		}
 		applySignatureProviderPolicy(&item, account)
 		responses = append(responses, item)
@@ -90,8 +90,8 @@ func (s *AdminProviderSignatureService) GetGlobalSignatureList(req *dto.Provider
 			SignatureName:     sig.SignatureName,
 			Status:            sig.Status,
 			Remark:            sig.Remark,
-			CreatedAt:         sig.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:         sig.UpdatedAt.Format(time.RFC3339),
+			CreatedAt:         timeutil.FormatRFC3339(sig.CreatedAt),
+			UpdatedAt:         timeutil.FormatRFC3339(sig.UpdatedAt),
 		}
 		if sig.ProviderAccount != nil {
 			applySignatureProviderPolicy(item, sig.ProviderAccount)
@@ -147,8 +147,8 @@ func (s *AdminProviderSignatureService) CreateSignature(providerAccountID uint, 
 		SignatureName:     signature.SignatureName,
 		Status:            signature.Status,
 		Remark:            signature.Remark,
-		CreatedAt:         signature.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:         signature.UpdatedAt.Format(time.RFC3339),
+		CreatedAt:         timeutil.FormatRFC3339(signature.CreatedAt),
+		UpdatedAt:         timeutil.FormatRFC3339(signature.UpdatedAt),
 	}
 	applySignatureProviderPolicy(response, account)
 	return response, nil
@@ -211,8 +211,8 @@ func (s *AdminProviderSignatureService) GetSignatureByID(id uint) (*dto.Provider
 		SignatureName:     signature.SignatureName,
 		Status:            signature.Status,
 		Remark:            signature.Remark,
-		CreatedAt:         signature.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:         signature.UpdatedAt.Format(time.RFC3339),
+		CreatedAt:         timeutil.FormatRFC3339(signature.CreatedAt),
+		UpdatedAt:         timeutil.FormatRFC3339(signature.UpdatedAt),
 	}
 	applySignatureProviderPolicy(response, signature.ProviderAccount)
 	return response, nil

@@ -8,6 +8,7 @@ import (
 	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	"cnb.cool/mliev/push/message-push/modules/delivery/infrastructure/lock"
 	"cnb.cool/mliev/push/message-push/modules/quota"
 	"github.com/muleiwu/gsr"
@@ -97,8 +98,7 @@ func (s *QuotaSyncer) sync(ctx context.Context) {
 		return
 	}
 
-	todayStr := time.Now().Format("2006-01-02")
-	today, _ := time.Parse("2006-01-02", todayStr)
+	today := timeutil.BusinessDayStart(timeutil.Now())
 
 	for _, app := range apps {
 		// 2. 从 Redis 获取今日使用量

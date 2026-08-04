@@ -13,6 +13,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	"cnb.cool/mliev/push/message-push/modules/delivery"
 	"github.com/muleiwu/gsr"
 )
@@ -160,7 +161,7 @@ func (e *ActionExecutor) executeRetry(ctx context.Context, result *ruleengine.Ev
 	})
 
 	// 延迟投递走定时有序集合（崩溃安全）；goroutine 内 sleep 后 Push 会在进程退出时丢失重试
-	if err := e.producer.PushDelayed(ctx, task, time.Now().Add(delay)); err != nil {
+	if err := e.producer.PushDelayed(ctx, task, timeutil.Now().Add(delay)); err != nil {
 		e.logger.Error(fmt.Sprintf("failed to push task to queue for retry task_id=%s: %v", task.TaskID, err))
 	}
 
@@ -257,7 +258,7 @@ func (e *ActionExecutor) executeFail(ctx context.Context, result *ruleengine.Eva
 	}
 	occurredAt := execCtx.OccurredAt
 	if occurredAt.IsZero() {
-		occurredAt = time.Now()
+		occurredAt = timeutil.Now()
 	}
 	transitionResult, transitionErr := e.terminalService.Transition(ctx, TerminalTransition{
 		TaskID:         task.TaskID,
@@ -368,7 +369,7 @@ func (e *ActionExecutor) executeAlert(ctx context.Context, result *ruleengine.Ev
 	}
 	occurredAt := execCtx.OccurredAt
 	if occurredAt.IsZero() {
-		occurredAt = time.Now()
+		occurredAt = timeutil.Now()
 	}
 	transitionResult, transitionErr := e.terminalService.Transition(ctx, TerminalTransition{
 		TaskID:         task.TaskID,
@@ -422,7 +423,7 @@ func (e *ActionExecutor) sendAlertWebhook(ctx context.Context, config *model.Ale
 		"provider":     execCtx.ProviderCode,
 		"error_code":   execCtx.ErrorCode,
 		"error_msg":    execCtx.ErrorMessage,
-		"timestamp":    time.Now().Unix(),
+		"timestamp":    timeutil.Now().Unix(),
 	}
 
 	body, err := json.Marshal(payload)

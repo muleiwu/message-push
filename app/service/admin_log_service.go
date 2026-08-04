@@ -1,10 +1,9 @@
 package service
 
 import (
-	"time"
-
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 )
 
 // AdminLogService 管理后台日志服务
@@ -77,7 +76,7 @@ func (s *AdminLogService) GetLogList(req *dto.LogListRequest) (*dto.LogListRespo
 			Status:            log.Status,
 			ErrorMessage:      log.ErrorMessage,
 			CostTime:          log.CostTime,
-			CreatedAt:         log.CreatedAt.Format(time.RFC3339),
+			CreatedAt:         timeutil.FormatRFC3339(log.CreatedAt),
 		})
 	}
 
@@ -121,7 +120,7 @@ func (s *AdminLogService) GetLog(id uint) (*dto.LogItem, error) {
 		Status:            log.Status,
 		ErrorMessage:      log.ErrorMessage,
 		CostTime:          log.CostTime,
-		CreatedAt:         log.CreatedAt.Format(time.RFC3339),
+		CreatedAt:         timeutil.FormatRFC3339(log.CreatedAt),
 	}, nil
 }
 
@@ -175,7 +174,7 @@ func (s *AdminLogService) GetLogsByTaskID(taskID string) (*dto.TaskLogsResponse,
 			Status:            log.Status,
 			ErrorMessage:      log.ErrorMessage,
 			CostTime:          log.CostTime,
-			CreatedAt:         log.CreatedAt.Format(time.RFC3339),
+			CreatedAt:         timeutil.FormatRFC3339(log.CreatedAt),
 		})
 	}
 
@@ -201,7 +200,7 @@ func (s *AdminLogService) GetCallbackLogsByTaskID(taskID string) (*dto.TaskCallb
 			ErrorCode:      log.ErrorCode,
 			ErrorMessage:   log.ErrorMessage,
 			RawData:        log.RawData,
-			CreatedAt:      log.CreatedAt.Format(time.RFC3339),
+			CreatedAt:      timeutil.FormatRFC3339(log.CreatedAt),
 		})
 	}
 
@@ -232,11 +231,11 @@ func (s *AdminLogService) GetWebhookLogsByTaskID(taskID string) (*dto.TaskWebhoo
 			RetryCount:      log.RetryCount,
 			MaxRetries:      log.MaxRetries,
 			TimeoutSeconds:  log.TimeoutSeconds,
-			CreatedAt:       log.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:       log.UpdatedAt.Format(time.RFC3339),
+			CreatedAt:       timeutil.FormatRFC3339(log.CreatedAt),
+			UpdatedAt:       timeutil.FormatRFC3339(log.UpdatedAt),
 		}
 		if log.NextAttemptAt != nil {
-			item.NextAttemptAt = log.NextAttemptAt.Format(time.RFC3339)
+			item.NextAttemptAt = timeutil.FormatRFC3339(*log.NextAttemptAt)
 		}
 		items = append(items, item)
 	}

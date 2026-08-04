@@ -1,10 +1,9 @@
 package service
 
 import (
-	"time"
-
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 )
 
 // AdminCallbackService 管理后台服务商回调记录服务（统一下行回执与上行短信）
@@ -63,7 +62,7 @@ func (s *AdminCallbackService) GetCallbackList(req *dto.CallbackListRequest) (*d
 			ErrorCode:      log.ErrorCode,
 			ErrorMessage:   log.ErrorMessage,
 			RawData:        log.RawData,
-			CreatedAt:      log.CreatedAt.Format(time.RFC3339),
+			CreatedAt:      timeutil.FormatRFC3339(log.CreatedAt),
 		})
 	}
 

@@ -14,6 +14,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	"cnb.cool/mliev/push/message-push/modules/sender/domain"
 
 	"github.com/nyaruka/phonenumbers"
@@ -609,7 +610,7 @@ func (s *ZrwinfoSMSSender) PullStatus(ctx context.Context, req *domain.StatusPul
 			status = constants.CallbackStatusFailed
 		}
 
-		reportTime, _ := time.ParseInLocation("2006-01-02 15:04:05", item.DeliverTime, time.Local)
+		reportTime, _ := timeutil.ParseBusinessTime("2006-01-02 15:04:05", item.DeliverTime)
 
 		results = append(results, &domain.StatusQueryResult{
 			ProviderMsgID: item.SmUuid,
@@ -663,7 +664,7 @@ func (s *ZrwinfoSMSSender) HandleCallback(ctx context.Context, req *domain.Callb
 	}
 
 	// 解析时间
-	reportTime, _ := time.ParseInLocation("2006-01-02 15:04:05", deliverTime, time.Local)
+	reportTime, _ := timeutil.ParseBusinessTime("2006-01-02 15:04:05", deliverTime)
 
 	return resp, []*domain.CallbackResult{
 		{

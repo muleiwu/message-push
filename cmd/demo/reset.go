@@ -10,8 +10,9 @@ import (
 	"time"
 
 	"cnb.cool/mliev/push/message-push/app/model"
+	appDatabase "cnb.cool/mliev/push/message-push/internal/database"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	"cnb.cool/mliev/push/message-push/migration"
-	"github.com/glebarez/sqlite"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -70,10 +71,11 @@ func resetDemo(ctx context.Context, opts resetOptions) (*resetSummary, error) {
 		_ = os.Remove(tempPath + "-shm")
 	}()
 
-	db, err := gorm.Open(sqlite.Open(tempPath), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	db, err := appDatabase.Open(appDatabase.Config{Driver: "sqlite", Host: tempPath})
 	if err != nil {
 		return nil, fmt.Errorf("打开临时 SQLite 失败: %w", err)
 	}
+	db.Logger = logger.Default.LogMode(logger.Silent)
 	sqlDB, err := db.DB()
 	if err != nil {
 		return nil, fmt.Errorf("获取 SQLite 连接失败: %w", err)
@@ -139,8 +141,8 @@ func validateDBPath(path string) (string, error) {
 }
 
 func demoAnchor(now time.Time) time.Time {
-	local := now.In(time.Local)
-	return time.Date(local.Year(), local.Month(), local.Day(), 12, 0, 0, 0, time.Local)
+	local := now.In(timeutil.BusinessLocation())
+	return time.Date(local.Year(), local.Month(), local.Day(), 12, 0, 0, 0, timeutil.BusinessLocation())
 }
 
 func cleanOwnedRedisKeys(ctx context.Context, addr string, db int) error {

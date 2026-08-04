@@ -22,11 +22,11 @@ type WebhookLog struct {
 	SigningSecret   string     `gorm:"type:varchar(64);comment:签名密钥快照" json:"-"`
 	MaxRetries      int        `gorm:"type:int;default:3;comment:最大重试次数" json:"max_retries"`
 	TimeoutSeconds  int        `gorm:"type:int;default:5;comment:单次请求超时秒数" json:"timeout_seconds"`
-	NextAttemptAt   *time.Time `gorm:"type:timestamp;index:idx_webhook_logs_dispatch,priority:2;comment:下次尝试时间" json:"next_attempt_at"`
-	LockedUntil     *time.Time `gorm:"type:timestamp;comment:投递租约到期时间" json:"locked_until"`
+	NextAttemptAt   *time.Time `gorm:"index:idx_webhook_logs_dispatch,priority:2;comment:下次尝试时间" json:"next_attempt_at"`
+	LockedUntil     *time.Time `gorm:"comment:投递租约到期时间" json:"locked_until"`
 	LeaseToken      string     `gorm:"type:varchar(64);comment:投递租约令牌" json:"-"`
-	CreatedAt       time.Time  `gorm:"type:timestamp;default:CURRENT_TIMESTAMP;index:idx_created_at" json:"created_at"`
-	UpdatedAt       time.Time  `gorm:"type:timestamp;default:CURRENT_TIMESTAMP" json:"updated_at"`
+	CreatedAt       time.Time  `gorm:"default:CURRENT_TIMESTAMP;index:idx_created_at" json:"created_at"`
+	UpdatedAt       time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
 }
 
 // TableName 指定表名

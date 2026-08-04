@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"cnb.cool/mliev/open/go-web/pkg/helper"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	"cnb.cool/mliev/push/message-push/modules/quota/domain"
 	"github.com/redis/go-redis/v9"
 )
@@ -28,7 +29,11 @@ func New() *QuotaService {
 }
 
 func quotaKey(appID uint) string {
-	return fmt.Sprintf("quota:%d:%s", appID, time.Now().Format("20060102"))
+	return quotaKeyAt(appID, timeutil.Now())
+}
+
+func quotaKeyAt(appID uint, now time.Time) string {
+	return fmt.Sprintf("quota:%d:%s", appID, now.In(timeutil.BusinessLocation()).Format("20060102"))
 }
 
 // Check 使用 Lua 脚本原子校验并计数。

@@ -12,6 +12,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 )
 
 // AdminStatisticsService 统计分析服务
@@ -59,22 +60,14 @@ const statisticsAggregateSelect = `
 	COALESCE(SUM(CASE WHEN status = 'processing' THEN 1 ELSE 0 END), 0) AS processing_count,
 	COALESCE(SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END), 0) AS sent_count`
 
-// statisticsDateRange converts inclusive local calendar dates into a half-open
-// timestamp range. Comparing timestamps keeps the created_at index usable and
-// avoids database-specific DATE() timezone conversion at local midnight.
+// statisticsDateRange converts inclusive Shanghai business dates into a
+// half-open UTC range. Comparing instants keeps the created_at index usable.
 func statisticsDateRange(startDate, endDate string) (time.Time, time.Time, error) {
-	start, err := time.ParseInLocation(statisticsDateLayout, startDate, time.Local)
+	start, end, err := timeutil.BusinessDateRangeUTC(startDate, endDate)
 	if err != nil {
-		return time.Time{}, time.Time{}, fmt.Errorf("invalid start date %q: %w", startDate, err)
+		return time.Time{}, time.Time{}, err
 	}
-	end, err := time.ParseInLocation(statisticsDateLayout, endDate, time.Local)
-	if err != nil {
-		return time.Time{}, time.Time{}, fmt.Errorf("invalid end date %q: %w", endDate, err)
-	}
-	if end.Before(start) {
-		return time.Time{}, time.Time{}, fmt.Errorf("end date %q is before start date %q", endDate, startDate)
-	}
-	return start, end.AddDate(0, 0, 1), nil
+	return start, end, nil
 }
 
 func resolveStatisticsRange(req *dto.StatisticsRequest, now time.Time) (statisticsRange, error) {
@@ -85,7 +78,7 @@ func resolveStatisticsRange(req *dto.StatisticsRequest, now time.Time) (statisti
 	startDate, endDate := req.StartDate, req.EndDate
 	switch {
 	case startDate == "" && endDate == "":
-		today, _ := localDayRange(now)
+		today := timeutil.BusinessDayStart(now)
 		startDate = today.AddDate(0, 0, -(statisticsDefaultRangeDays - 1)).Format(statisticsDateLayout)
 		endDate = today.Format(statisticsDateLayout)
 	case startDate == "" || endDate == "":
@@ -114,9 +107,8 @@ func resolveStatisticsRange(req *dto.StatisticsRequest, now time.Time) (statisti
 }
 
 func localDayRange(now time.Time) (time.Time, time.Time) {
-	localNow := now.In(time.Local)
-	start := time.Date(localNow.Year(), localNow.Month(), localNow.Day(), 0, 0, 0, 0, time.Local)
-	return start, start.AddDate(0, 0, 1)
+	start := timeutil.BusinessDayStart(now)
+	return start.UTC(), start.AddDate(0, 0, 1).UTC()
 }
 
 func completedSuccessRate(success, failure int64) *float64 {
@@ -148,42 +140,23 @@ func statisticsCounts(row statisticsAggregateRow) dto.StatisticsCounts {
 	}
 }
 
-// statisticsDateBucketExpression always returns YYYY-MM-DD text, avoiding a
-// PostgreSQL DATE value being scanned into a Go string. SQLite localtime follows
-// the process timezone, PostgreSQL's connection pins its session to
-// Asia/Shanghai, and MySQL deliberately keeps the wall-clock semantics used by
-// go-sql-driver/mysql with loc=Local for both writes and range parameters.
+// statisticsDateBucketExpression groups UTC instants by the fixed Shanghai
+// business day without depending on the database session timezone.
 func statisticsDateBucketExpression(dialect string) string {
 	switch dialect {
 	case "sqlite":
-		return "strftime('%Y-%m-%d', created_at, 'localtime')"
+		return "strftime('%Y-%m-%d', created_at, '+8 hours')"
 	case "mysql":
-		return "DATE_FORMAT(created_at, '%Y-%m-%d')"
+		return "DATE_FORMAT(CONVERT_TZ(created_at, '+00:00', '+08:00'), '%Y-%m-%d')"
 	case "postgres":
-		return "TO_CHAR(created_at, 'YYYY-MM-DD')"
+		return "TO_CHAR(created_at AT TIME ZONE 'Asia/Shanghai', 'YYYY-MM-DD')"
 	default:
 		return "CAST(DATE(created_at) AS CHAR)"
 	}
 }
 
-func statisticsTimezoneLabel(now time.Time) string {
-	localNow := now.In(time.Local)
-	locationName := localNow.Location().String()
-	if locationName != "" && locationName != "Local" {
-		return locationName
-	}
-
-	zoneName, offsetSeconds := localNow.Zone()
-	sign := "+"
-	if offsetSeconds < 0 {
-		sign = "-"
-		offsetSeconds = -offsetSeconds
-	}
-	offset := fmt.Sprintf("UTC%s%02d:%02d", sign, offsetSeconds/3600, offsetSeconds%3600/60)
-	if zoneName == "" {
-		return offset
-	}
-	return fmt.Sprintf("%s (%s)", zoneName, offset)
+func statisticsTimezoneLabel(_ time.Time) string {
+	return timeutil.BusinessTimeZone
 }
 
 // NewAdminStatisticsService 创建统计分析服务实例
@@ -194,7 +167,7 @@ func NewAdminStatisticsService() *AdminStatisticsService {
 // GetStatistics 获取推送统计
 func (s *AdminStatisticsService) GetStatistics(req *dto.StatisticsRequest) (*dto.StatisticsResponse, error) {
 	db := s.db
-	dateRange, err := resolveStatisticsRange(req, time.Now())
+	dateRange, err := resolveStatisticsRange(req, timeutil.Now())
 	if err != nil {
 		return nil, err
 	}
@@ -331,7 +304,9 @@ func (s *AdminStatisticsService) GetStatistics(req *dto.StatisticsRequest) (*dto
 	for _, row := range dailyRows {
 		dailyByDate[row.Date] = row.Aggregate
 	}
-	for day := dateRange.start; day.Before(dateRange.end); day = day.AddDate(0, 0, 1) {
+	startBusinessDay := dateRange.start.In(timeutil.BusinessLocation())
+	endBusinessDay := dateRange.end.In(timeutil.BusinessLocation())
+	for day := startBusinessDay; day.Before(endBusinessDay); day = day.AddDate(0, 0, 1) {
 		date := day.Format(statisticsDateLayout)
 		row := dailyByDate[date]
 		response.Daily = append(response.Daily, &dto.DailyStatistics{
@@ -411,7 +386,7 @@ func (s *AdminStatisticsService) GetDashboard() (*dto.DashboardResponse, error) 
 	}
 
 	// 4. 统计今日推送
-	todayStart, tomorrowStart := localDayRange(time.Now())
+	todayStart, tomorrowStart := localDayRange(timeutil.Now())
 
 	var todayStats statisticsAggregateRow
 	if err := s.userTaskQuery().
@@ -531,7 +506,7 @@ func (s *AdminStatisticsService) GetRecentActivities(limit int) ([]*dto.RecentAc
 			ID:          task.ID,
 			Description: desc,
 			AppName:     appName,
-			CreatedAt:   task.CreatedAt.Format(time.RFC3339),
+			CreatedAt:   timeutil.FormatRFC3339(task.CreatedAt),
 		})
 	}
 

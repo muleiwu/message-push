@@ -18,7 +18,7 @@ type CallbackLog struct {
 	ErrorCode      string    `gorm:"type:varchar(32);comment:错误码" json:"error_code"`
 	ErrorMessage   string    `gorm:"type:text;comment:错误信息" json:"error_message"`
 	RawData        string    `gorm:"type:json;comment:原始回调数据" json:"raw_data"`
-	CreatedAt      time.Time `gorm:"type:timestamp;default:CURRENT_TIMESTAMP;index:idx_created_at" json:"created_at"`
+	CreatedAt      time.Time `gorm:"default:CURRENT_TIMESTAMP;index:idx_created_at" json:"created_at"`
 }
 
 // TableName 指定表名

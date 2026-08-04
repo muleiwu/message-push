@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	"cnb.cool/mliev/push/message-push/modules/delivery/domain"
 	"github.com/redis/go-redis/v9"
 )
@@ -29,7 +30,7 @@ func NewProducer(redisClient *redis.Client) *Producer {
 // Push 推送任务到队列
 func (p *Producer) Push(ctx context.Context, task *model.PushTask) error {
 	// 检查是否是定时任务
-	if task.ScheduledAt != nil && task.ScheduledAt.After(time.Now()) {
+	if task.ScheduledAt != nil && isFutureInstant(*task.ScheduledAt, timeutil.Now()) {
 		return p.pushScheduled(ctx, task)
 	}
 
@@ -61,17 +62,30 @@ func (p *Producer) pushScheduled(ctx context.Context, task *model.PushTask) erro
 
 // PushDelayed 延迟投递：写入定时有序集合，到期由调度器扫描入队（崩溃安全）
 func (p *Producer) PushDelayed(ctx context.Context, task *model.PushTask, at time.Time) error {
+	at = timeutil.Normalize(at)
 	return p.redis.ZAdd(ctx, "push:scheduled:tasks", redis.Z{
 		Score:  float64(at.Unix()),
 		Member: task.TaskID,
 	}).Err()
 }
 
+func isFutureInstant(scheduledAt, now time.Time) bool {
+	return timeutil.Normalize(scheduledAt).After(timeutil.Normalize(now))
+}
+
 // PushBatch 批量推送任务
 func (p *Producer) PushBatch(ctx context.Context, tasks []*model.PushTask) error {
 	pipe := p.redis.Pipeline()
+	now := timeutil.Now()
 
 	for _, task := range tasks {
+		if task.ScheduledAt != nil && isFutureInstant(*task.ScheduledAt, now) {
+			pipe.ZAdd(ctx, "push:scheduled:tasks", redis.Z{
+				Score:  float64(timeutil.Normalize(*task.ScheduledAt).Unix()),
+				Member: task.TaskID,
+			})
+			continue
+		}
 		data := map[string]interface{}{
 			"task_id":         task.TaskID,
 			"app_id":          task.AppID,

@@ -1,8 +1,11 @@
 package service
 
 import (
+	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
@@ -61,6 +64,50 @@ func TestAdminTaskServiceReturnsChannelAndLastProvider(t *testing.T) {
 	}
 	if len(pending.Items) != 1 || pending.Items[0].ProviderAccountID != nil || pending.Items[0].ProviderAccountName != "" {
 		t.Fatalf("pending task unexpectedly has a provider: %+v", pending.Items)
+	}
+}
+
+func TestAdminTaskServiceReturnsUTCWireTimes(t *testing.T) {
+	db := newAdminTaskTestDB(t)
+	if err := db.Exec(`
+		INSERT INTO push_tasks (
+			task_id, app_id, channel_id, message_type, receiver, status,
+			callback_time, scheduled_at, created_at, updated_at
+		) VALUES (
+			'utc-wire-task', 'app', 1, 'sms', '+8613800138000', 'success',
+			'2026-08-04 18:00:00+08:00', '2026-08-04 19:00:00+08:00',
+			'2026-08-04 18:00:00+08:00', '2026-08-04 18:05:00+08:00'
+		)
+	`).Error; err != nil {
+		t.Fatalf("seed UTC wire task: %v", err)
+	}
+
+	service := &AdminTaskService{
+		pushTaskDAO: dao.NewPushTaskDAOWithDB(db),
+		pushLogDAO:  dao.NewPushLogDAOWithDB(db),
+	}
+	response, err := service.GetPushTaskList(&dto.PushTaskListRequest{Page: 1, PageSize: 20})
+	if err != nil {
+		t.Fatalf("get task list: %v", err)
+	}
+	if len(response.Items) != 1 {
+		t.Fatalf("task count = %d, want 1", len(response.Items))
+	}
+	item := response.Items[0]
+	if item.CreatedAt != "2026-08-04T10:00:00Z" || item.UpdatedAt != "2026-08-04T10:05:00Z" {
+		t.Fatalf("wire timestamps = created %q updated %q", item.CreatedAt, item.UpdatedAt)
+	}
+	if item.CallbackTime == nil || item.CallbackTime.Location() != time.UTC ||
+		item.ScheduledAt == nil || item.ScheduledAt.Location() != time.UTC {
+		t.Fatalf("pointer timestamps are not UTC: callback=%v scheduled=%v", item.CallbackTime, item.ScheduledAt)
+	}
+
+	payload, err := json.Marshal(response)
+	if err != nil {
+		t.Fatalf("marshal response: %v", err)
+	}
+	if strings.Contains(string(payload), "+08:00") {
+		t.Fatalf("response contains non-UTC offset: %s", payload)
 	}
 }
 

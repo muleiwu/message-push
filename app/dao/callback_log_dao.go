@@ -4,6 +4,7 @@ import (
 	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	"gorm.io/gorm"
 )
 
@@ -23,6 +24,7 @@ func NewCallbackLogDAOWithDB(db *gorm.DB) *CallbackLogDAO {
 
 // Create 创建回调日志
 func (dao *CallbackLogDAO) Create(log *model.CallbackLog) error {
+	log.CreatedAt = timeutil.Normalize(log.CreatedAt)
 	return dao.db.Create(log).Error
 }
 
@@ -65,11 +67,9 @@ func (dao *CallbackLogDAO) List(req *dto.CallbackListRequest) ([]*model.Callback
 	if req.Mobile != "" {
 		query = query.Where("mobile = ?", req.Mobile)
 	}
-	if req.StartDate != "" {
-		query = query.Where("created_at >= ?", req.StartDate+" 00:00:00")
-	}
-	if req.EndDate != "" {
-		query = query.Where("created_at <= ?", req.EndDate+" 23:59:59")
+	query, err := applyBusinessDateFilter(query, "created_at", req.StartDate, req.EndDate)
+	if err != nil {
+		return nil, 0, err
 	}
 
 	if err := query.Count(&total).Error; err != nil {
@@ -77,7 +77,7 @@ func (dao *CallbackLogDAO) List(req *dto.CallbackListRequest) ([]*model.Callback
 	}
 
 	offset := (req.Page - 1) * req.PageSize
-	err := query.Offset(offset).Limit(req.PageSize).
+	err = query.Offset(offset).Limit(req.PageSize).
 		Order("created_at DESC").
 		Find(&logs).Error
 

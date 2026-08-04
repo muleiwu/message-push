@@ -14,6 +14,7 @@ import (
 
 	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/constants"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	domain "cnb.cool/mliev/push/message-push/modules/sender/domain"
 )
 
@@ -417,7 +418,7 @@ func (s *WeChatWorkSender) HandleCallback(ctx context.Context, req *domain.Callb
 
 	reportTime := time.Unix(callbackData.CreateTime, 0)
 	if callbackData.CreateTime == 0 {
-		reportTime = time.Now()
+		reportTime = timeutil.Now()
 	}
 
 	return resp, []*domain.CallbackResult{{

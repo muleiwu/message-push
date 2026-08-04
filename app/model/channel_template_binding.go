@@ -36,8 +36,8 @@ type ChannelTemplateBinding struct {
 	IsActive             int8              `gorm:"default:1;comment:是否激活：1=是 0=否" json:"is_active"`
 	AutoDisableOnFail    bool              `gorm:"default:false;comment:失败时自动禁用" json:"auto_disable_on_fail"`
 	AutoDisableThreshold int               `gorm:"type:int;default:5;comment:自动禁用阈值（连续失败次数）" json:"auto_disable_threshold"`
-	CreatedAt            time.Time         `gorm:"type:timestamp;default:CURRENT_TIMESTAMP" json:"created_at"`
-	UpdatedAt            time.Time         `gorm:"type:timestamp;default:CURRENT_TIMESTAMP" json:"updated_at"`
+	CreatedAt            time.Time         `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt            time.Time         `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
 	DeletedAt            gorm.DeletedAt    `gorm:"index" json:"deleted_at"`
 	Channel              *Channel          `gorm:"foreignKey:ChannelID;references:ID" json:"channel,omitempty"`
 	ProviderTemplate     *ProviderTemplate `gorm:"foreignKey:ProviderTemplateID;references:ID" json:"provider_template,omitempty"`

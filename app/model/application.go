@@ -17,8 +17,8 @@ type Application struct {
 	WebhookURL  string         `gorm:"type:varchar(255);comment:异步回调通知地址" json:"webhook_url"`
 	DailyQuota  int            `gorm:"type:int;default:10000;comment:每日发送配额" json:"daily_quota"`
 	RateLimit   int            `gorm:"type:int;default:100;comment:每秒速率限制（QPS）" json:"rate_limit"`
-	CreatedAt   time.Time      `gorm:"type:timestamp;default:CURRENT_TIMESTAMP" json:"created_at"`
-	UpdatedAt   time.Time      `gorm:"type:timestamp;default:CURRENT_TIMESTAMP" json:"updated_at"`
+	CreatedAt   time.Time      `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt   time.Time      `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"deleted_at"`
 }
 

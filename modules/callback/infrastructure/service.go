@@ -1,18 +1,18 @@
 package infrastructure
 
 import (
-	"cnb.cool/mliev/push/message-push/modules/ruleengine"
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	internalHelper "cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/app/service"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	"cnb.cool/mliev/push/message-push/modules/callback/domain"
+	"cnb.cool/mliev/push/message-push/modules/ruleengine"
 	"cnb.cool/mliev/push/message-push/modules/sender"
 	"github.com/muleiwu/gsr"
 )
@@ -104,8 +104,9 @@ func (s *CallbackService) processUpstreamResult(ctx context.Context, providerCod
 
 	receiveTime := result.ReceiveTime
 	if receiveTime.IsZero() {
-		receiveTime = time.Now()
+		receiveTime = timeutil.Now()
 	}
+	receiveTime = timeutil.Normalize(receiveTime)
 
 	// 2. 回调日志与业务方 Webhook Outbox 在同一事务内落库
 	if err := s.terminalService.RecordUpstream(ctx, service.UpstreamEvent{
@@ -203,9 +204,10 @@ func (s *CallbackService) processCallbackResult(ctx context.Context, providerCod
 	// 设置回调状态和时间
 	task.CallbackStatus = result.Status
 	if !result.ReportTime.IsZero() {
-		task.CallbackTime = &result.ReportTime
+		normalizedReportTime := timeutil.Normalize(result.ReportTime)
+		task.CallbackTime = &normalizedReportTime
 	} else {
-		now := time.Now()
+		now := timeutil.Now()
 		task.CallbackTime = &now
 	}
 

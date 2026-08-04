@@ -8,6 +8,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	"cnb.cool/mliev/push/message-push/modules/ruleengine"
 )
 
@@ -262,8 +263,8 @@ func toFailureRuleResponse(rule *model.FailureRule) *dto.FailureRuleResponse {
 		Priority:     rule.Priority,
 		Status:       rule.Status,
 		Remark:       rule.Remark,
-		CreatedAt:    rule.CreatedAt.Format("2006-01-02 15:04:05"),
-		UpdatedAt:    rule.UpdatedAt.Format("2006-01-02 15:04:05"),
+		CreatedAt:    timeutil.FormatRFC3339(rule.CreatedAt),
+		UpdatedAt:    timeutil.FormatRFC3339(rule.UpdatedAt),
 	}
 }
 

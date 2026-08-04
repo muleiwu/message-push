@@ -3,7 +3,9 @@ package dao
 import (
 	"path/filepath"
 	"testing"
+	"time"
 
+	"cnb.cool/mliev/push/message-push/app/model"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 )
@@ -52,6 +54,70 @@ func TestPushTaskListFiltersReceiverAndPreloadsHistoricalRelations(t *testing.T)
 			t.Fatalf("receiver pagination total=%d len=%d, want 2/1", total, len(items))
 		}
 	})
+}
+
+func TestPushTaskListDateFilterUsesShanghaiBusinessDay(t *testing.T) {
+	db := newPushTaskListTestDB(t)
+	for _, statement := range []string{
+		`INSERT INTO push_tasks (task_id, app_id, channel_id, message_type, receiver, status, created_at) VALUES ('before', 'app', 1, 'sms', '1', 'success', '2026-08-03 15:59:59+00:00')`,
+		`INSERT INTO push_tasks (task_id, app_id, channel_id, message_type, receiver, status, created_at) VALUES ('start', 'app', 1, 'sms', '2', 'success', '2026-08-03 16:00:00+00:00')`,
+		`INSERT INTO push_tasks (task_id, app_id, channel_id, message_type, receiver, status, created_at) VALUES ('end', 'app', 1, 'sms', '3', 'success', '2026-08-04 15:59:59+00:00')`,
+		`INSERT INTO push_tasks (task_id, app_id, channel_id, message_type, receiver, status, created_at) VALUES ('after', 'app', 1, 'sms', '4', 'success', '2026-08-04 16:00:00+00:00')`,
+	} {
+		if err := db.Exec(statement).Error; err != nil {
+			t.Fatalf("seed dated task: %v", err)
+		}
+	}
+
+	items, total, err := NewPushTaskDAOWithDB(db).List(1, 20, map[string]interface{}{
+		"start_date": "2026-08-04",
+		"end_date":   "2026-08-04",
+	})
+	if err != nil {
+		t.Fatalf("list tasks: %v", err)
+	}
+	if total != 2 || len(items) != 2 {
+		t.Fatalf("business-day filter returned total=%d items=%+v", total, items)
+	}
+	for _, item := range items {
+		if item.TaskID != "start" && item.TaskID != "end" {
+			t.Fatalf("business-day filter included %q", item.TaskID)
+		}
+	}
+}
+
+func TestGetScheduledTasksComparesAbsoluteInstants(t *testing.T) {
+	db := newPushTaskListTestDB(t)
+	shanghaiOffset := time.FixedZone("UTC+8", 8*60*60)
+	now := time.Now().UTC()
+	dao := NewPushTaskDAOWithDB(db)
+	for _, task := range []struct {
+		id          string
+		scheduledAt time.Time
+	}{
+		{id: "due", scheduledAt: now.Add(-time.Minute).In(shanghaiOffset)},
+		{id: "future", scheduledAt: now.Add(time.Minute).In(shanghaiOffset)},
+	} {
+		if err := dao.Create(&model.PushTask{
+			TaskID:      task.id,
+			AppID:       "app",
+			ChannelID:   1,
+			MessageType: "sms",
+			Receiver:    "1",
+			Status:      "pending",
+			ScheduledAt: &task.scheduledAt,
+		}); err != nil {
+			t.Fatalf("seed scheduled task %q: %v", task.id, err)
+		}
+	}
+
+	tasks, err := dao.GetScheduledTasks(10)
+	if err != nil {
+		t.Fatalf("get scheduled tasks: %v", err)
+	}
+	if len(tasks) != 1 || tasks[0].TaskID != "due" {
+		t.Fatalf("scheduled tasks = %+v, want only due task", tasks)
+	}
 }
 
 func newPushTaskListTestDB(t *testing.T) *gorm.DB {

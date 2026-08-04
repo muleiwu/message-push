@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"cnb.cool/mliev/push/message-push/app/constants"
+	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"github.com/glebarez/sqlite"
 	"github.com/muleiwu/gsr"
@@ -31,7 +32,7 @@ func TestWebhookDispatcherDeliversSignedOutbox(t *testing.T) {
 	defer server.Close()
 
 	db := newWebhookDispatcherTestDB(t)
-	now := time.Date(2026, 7, 30, 13, 0, 0, 0, time.UTC)
+	now := time.Date(2026, 7, 30, 21, 0, 0, 0, time.FixedZone("UTC+8", 8*60*60))
 	outbox := createDispatcherTestOutbox(t, db, server.URL, now)
 	dispatcher := NewWebhookDispatcherWithDB(db, dispatcherNoopLogger{})
 	dispatcher.now = func() time.Time { return now }
@@ -210,7 +211,7 @@ func createDispatcherTestOutbox(
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}
-	if err := db.Create(outbox).Error; err != nil {
+	if err := dao.NewWebhookLogDAOWithDB(db).Create(outbox); err != nil {
 		t.Fatalf("create outbox: %v", err)
 	}
 	return outbox

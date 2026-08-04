@@ -7,6 +7,7 @@ import (
 	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	"gorm.io/gorm"
 )
 
@@ -26,6 +27,10 @@ func NewPushTaskDAOWithDB(db *gorm.DB) *PushTaskDAO {
 
 // Create 创建任务
 func (d *PushTaskDAO) Create(task *model.PushTask) error {
+	task.CallbackTime = timeutil.NormalizePtr(task.CallbackTime)
+	task.ScheduledAt = timeutil.NormalizePtr(task.ScheduledAt)
+	task.CreatedAt = timeutil.Normalize(task.CreatedAt)
+	task.UpdatedAt = timeutil.Normalize(task.UpdatedAt)
 	return d.db.Create(task).Error
 }
 
@@ -53,6 +58,10 @@ func (d *PushTaskDAO) GetByTaskID(taskID string) (*model.PushTask, error) {
 
 // Update 更新任务
 func (d *PushTaskDAO) Update(task *model.PushTask) error {
+	task.CallbackTime = timeutil.NormalizePtr(task.CallbackTime)
+	task.ScheduledAt = timeutil.NormalizePtr(task.ScheduledAt)
+	task.CreatedAt = timeutil.Normalize(task.CreatedAt)
+	task.UpdatedAt = timeutil.Normalize(task.UpdatedAt)
 	return d.db.Save(task).Error
 }
 
@@ -108,7 +117,7 @@ func (d *PushTaskDAO) GetPendingTasks(limit int) ([]*model.PushTask, error) {
 // GetScheduledTasks 获取到期的定时任务
 func (d *PushTaskDAO) GetScheduledTasks(limit int) ([]*model.PushTask, error) {
 	var tasks []*model.PushTask
-	err := d.db.Where("status = ? AND scheduled_at <= NOW()", "pending").
+	err := d.db.Where("status = ? AND scheduled_at <= ?", "pending", timeutil.Now()).
 		Order("scheduled_at ASC").
 		Limit(limit).
 		Find(&tasks).Error
@@ -149,7 +158,7 @@ func (d *PushTaskDAO) IncrementRetryCount(taskID string) error {
 // 多实例重复执行时 RowsAffected 为 0，天然幂等。
 // 分两步（先限量查 ID 再条件更新）是因为 UPDATE ... LIMIT 仅 MySQL 方言支持。
 func (d *PushTaskDAO) MarkTimeoutSentTasksCallback(timeout time.Duration, limit int) (int64, error) {
-	cutoff := time.Now().Add(-timeout)
+	cutoff := timeutil.Now().Add(-timeout)
 	pendingCallback := []string{"", "pending"}
 
 	var ids []uint
@@ -171,7 +180,7 @@ func (d *PushTaskDAO) MarkTimeoutSentTasksCallback(timeout time.Duration, limit 
 		Where("(callback_status IS NULL OR callback_status IN ?)", pendingCallback).
 		Updates(map[string]interface{}{
 			"callback_status": "timeout",
-			"callback_time":   time.Now(),
+			"callback_time":   timeutil.Now(),
 		})
 	return res.RowsAffected, res.Error
 }
@@ -179,7 +188,7 @@ func (d *PushTaskDAO) MarkTimeoutSentTasksCallback(timeout time.Duration, limit 
 // GetTimeoutProcessingTasks returns candidates for transactional terminalization.
 // The terminal service performs the final CAS, so a concurrent successful worker update wins safely.
 func (d *PushTaskDAO) GetTimeoutProcessingTasks(timeout time.Duration, limit int) ([]*model.PushTask, error) {
-	cutoff := time.Now().Add(-timeout)
+	cutoff := timeutil.Now().Add(-timeout)
 	var tasks []*model.PushTask
 	err := d.db.
 		Where("status = ? AND updated_at < ?", constants.TaskStatusProcessing, cutoff).
@@ -217,11 +226,11 @@ func (d *PushTaskDAO) List(page, pageSize int, filters map[string]interface{}) (
 	if batchID, ok := filters["batch_id"]; ok {
 		query = query.Where("batch_id = ?", batchID)
 	}
-	if startDate, ok := filters["start_date"]; ok {
-		query = query.Where("DATE(created_at) >= ?", startDate)
-	}
-	if endDate, ok := filters["end_date"]; ok {
-		query = query.Where("DATE(created_at) <= ?", endDate)
+	startDate, _ := filters["start_date"].(string)
+	endDate, _ := filters["end_date"].(string)
+	query, err := applyBusinessDateFilter(query, "created_at", startDate, endDate)
+	if err != nil {
+		return nil, 0, err
 	}
 
 	// 计算总数
@@ -230,7 +239,7 @@ func (d *PushTaskDAO) List(page, pageSize int, filters map[string]interface{}) (
 	}
 
 	// 查询列表
-	err := query.Offset(offset).Limit(pageSize).Order("id DESC").Find(&tasks).Error
+	err = query.Offset(offset).Limit(pageSize).Order("id DESC").Find(&tasks).Error
 	if err != nil {
 		return nil, 0, err
 	}

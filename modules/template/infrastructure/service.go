@@ -7,6 +7,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	"cnb.cool/mliev/push/message-push/modules/template/domain"
 	"gorm.io/gorm"
 )
@@ -315,8 +316,8 @@ func (s *TemplateService) buildMessageTemplateResponse(template *model.MessageTe
 		Variables:    variables,
 		Description:  template.Description,
 		Status:       template.Status,
-		CreatedAt:    template.CreatedAt,
-		UpdatedAt:    template.UpdatedAt,
+		CreatedAt:    timeutil.Normalize(template.CreatedAt),
+		UpdatedAt:    timeutil.Normalize(template.UpdatedAt),
 	}, nil
 }
 
@@ -343,8 +344,8 @@ func (s *TemplateService) buildProviderTemplateResponse(template *model.Provider
 		Variables:       variables,
 		Status:          template.Status,
 		Remark:          template.Remark,
-		CreatedAt:       template.CreatedAt,
-		UpdatedAt:       template.UpdatedAt,
+		CreatedAt:       timeutil.Normalize(template.CreatedAt),
+		UpdatedAt:       timeutil.Normalize(template.UpdatedAt),
 	}
 
 	if template.ProviderAccount != nil {

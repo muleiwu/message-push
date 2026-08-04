@@ -12,6 +12,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/dto"
 	appHelper "cnb.cool/mliev/push/message-push/app/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	"cnb.cool/mliev/push/message-push/modules/sender"
 	registry "cnb.cool/mliev/push/message-push/modules/sender/domain"
 )
@@ -195,8 +196,8 @@ func (s *AdminProviderAccountService) CreateProviderAccount(c httpInterfaces.Rou
 		Config:            config,
 		Status:            int(account.Status),
 		CallbackURL:       s.generateCallbackURL(c, account.ID, account.ProviderCode),
-		CreatedAt:         account.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:         account.UpdatedAt.Format(time.RFC3339),
+		CreatedAt:         timeutil.FormatRFC3339(account.CreatedAt),
+		UpdatedAt:         timeutil.FormatRFC3339(account.UpdatedAt),
 	}, nil
 }
 
@@ -246,8 +247,8 @@ func (s *AdminProviderAccountService) GetProviderAccountList(c httpInterfaces.Ro
 			Config:            config,
 			Status:            int(account.Status),
 			CallbackURL:       s.generateCallbackURL(c, account.ID, account.ProviderCode),
-			CreatedAt:         account.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:         account.UpdatedAt.Format(time.RFC3339),
+			CreatedAt:         timeutil.FormatRFC3339(account.CreatedAt),
+			UpdatedAt:         timeutil.FormatRFC3339(account.UpdatedAt),
 		})
 	}
 
@@ -289,8 +290,8 @@ func (s *AdminProviderAccountService) GetProviderAccountByID(c httpInterfaces.Ro
 		Config:            config,
 		Status:            int(account.Status),
 		CallbackURL:       s.generateCallbackURL(c, account.ID, account.ProviderCode),
-		CreatedAt:         account.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:         account.UpdatedAt.Format(time.RFC3339),
+		CreatedAt:         timeutil.FormatRFC3339(account.CreatedAt),
+		UpdatedAt:         timeutil.FormatRFC3339(account.UpdatedAt),
 	}, nil
 }
 

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	internalHelper "cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/constants"
@@ -14,6 +13,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/app/service"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	"cnb.cool/mliev/push/message-push/modules/channel"
 	"cnb.cool/mliev/push/message-push/modules/delivery/infrastructure/queue"
 	"cnb.cool/mliev/push/message-push/modules/ruleengine"
@@ -318,7 +318,7 @@ func (h *MessageHandler) handleSuccess(task *model.PushTask, providerAccountID u
 			Status:     constants.TaskStatusSuccess,
 			Event:      constants.WebhookEventSuccess,
 			ProviderID: resp.ProviderID,
-			OccurredAt: time.Now(),
+			OccurredAt: timeutil.Now(),
 		})
 		if err != nil {
 			return fmt.Errorf("persist successful terminal task: %w", err)
@@ -385,7 +385,7 @@ func (h *MessageHandler) handleSendError(task *model.PushTask, providerAccountID
 		ResponseData:      resp.ResponseData,
 		ProviderID:        resp.ProviderID,
 		TerminalEvent:     constants.WebhookEventFailed,
-		OccurredAt:        time.Now(),
+		OccurredAt:        timeutil.Now(),
 	}
 
 	// 执行规则动作
@@ -404,7 +404,7 @@ func (h *MessageHandler) handleEarlyFailure(task *model.PushTask, providerAccoun
 		Status:       constants.TaskStatusFailed,
 		Event:        constants.WebhookEventFailed,
 		ErrorMessage: errorMsg,
-		OccurredAt:   time.Now(),
+		OccurredAt:   timeutil.Now(),
 	})
 	if transitionErr != nil {
 		h.logger.Error(fmt.Sprintf("failed to persist terminal task state task_id=%s: %v", task.TaskID, transitionErr))
