@@ -75,7 +75,7 @@ func TestResetDemoCreatesValidDeterministicDataset(t *testing.T) {
 	if err := db.Table("goose_db_version").Select("MAX(version_id)").Scan(&currentVersion).Error; err != nil {
 		t.Fatal(err)
 	}
-	if currentVersion != 20260730000002 {
+	if currentVersion != 20260804000001 {
 		t.Fatalf("migration version = %d", currentVersion)
 	}
 }

@@ -3,7 +3,6 @@ package infrastructure
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/constants"
@@ -11,6 +10,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/dto"
 	apphelper "cnb.cool/mliev/push/message-push/app/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	"cnb.cool/mliev/push/message-push/modules/identity/domain"
 	"cnb.cool/mliev/push/message-push/modules/quota"
 )
@@ -102,8 +102,8 @@ func (s *AdminApplicationService) CreateApplication(req *dto.CreateApplicationRe
 		RateLimit:   app.RateLimit,
 		IPWhitelist: app.IPWhitelist,
 		WebhookURL:  app.WebhookURL,
-		CreatedAt:   app.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:   app.UpdatedAt.Format(time.RFC3339),
+		CreatedAt:   timeutil.FormatRFC3339(app.CreatedAt),
+		UpdatedAt:   timeutil.FormatRFC3339(app.UpdatedAt),
 	}, nil
 }
 
@@ -154,8 +154,8 @@ func (s *AdminApplicationService) GetApplicationList(req *dto.ApplicationListReq
 			RateLimit:   app.RateLimit,
 			IPWhitelist: app.IPWhitelist,
 			WebhookURL:  app.WebhookURL,
-			CreatedAt:   app.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:   app.UpdatedAt.Format(time.RFC3339),
+			CreatedAt:   timeutil.FormatRFC3339(app.CreatedAt),
+			UpdatedAt:   timeutil.FormatRFC3339(app.UpdatedAt),
 		})
 	}
 
@@ -184,8 +184,8 @@ func (s *AdminApplicationService) GetApplicationByID(id uint) (*dto.ApplicationR
 		RateLimit:   app.RateLimit,
 		IPWhitelist: app.IPWhitelist,
 		WebhookURL:  app.WebhookURL,
-		CreatedAt:   app.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:   app.UpdatedAt.Format(time.RFC3339),
+		CreatedAt:   timeutil.FormatRFC3339(app.CreatedAt),
+		UpdatedAt:   timeutil.FormatRFC3339(app.UpdatedAt),
 	}, nil
 }
 

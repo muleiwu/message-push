@@ -9,11 +9,10 @@ import (
 	"cnb.cool/mliev/push/message-push/app/dto"
 	appHelper "cnb.cool/mliev/push/message-push/app/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
+	appDatabase "cnb.cool/mliev/push/message-push/internal/database"
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/viper"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/driver/mysql"
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
@@ -74,40 +73,24 @@ func (s *InstallService) CheckInstallStatus() dto.InstallCheckResponse {
 
 // TestDatabaseConnection 测试数据库连接
 func (s *InstallService) TestDatabaseConnection(config dto.DatabaseConfig) (*gorm.DB, error) {
-	var dialector gorm.Dialector
-	var dsn string
-
 	driver := config.Driver
 	if driver == "" {
 		driver = "mysql" // 默认使用 MySQL
 	}
-
-	switch driver {
-	case "mysql":
-		dsn = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=%s&parseTime=True&loc=Local",
-			config.Username,
-			config.Password,
-			config.Host,
-			config.Port,
-			config.Database,
-			getCharset(config.Charset))
-		dialector = mysql.Open(dsn)
-
-	case "postgresql", "postgres":
-		dsn = fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable TimeZone=Asia/Shanghai",
-			config.Host,
-			config.Port,
-			config.Username,
-			config.Password,
-			config.Database)
-		dialector = postgres.Open(dsn)
-
-	default:
+	if driver != "mysql" && driver != "postgresql" && driver != "postgres" {
 		return nil, fmt.Errorf("不支持的数据库类型: %s (仅支持 mysql 和 postgresql)", driver)
 	}
 
 	// 尝试连接数据库
-	db, err := gorm.Open(dialector, &gorm.Config{})
+	db, err := appDatabase.Open(appDatabase.Config{
+		Driver:   driver,
+		Host:     config.Host,
+		Port:     config.Port,
+		DBName:   config.Database,
+		Username: config.Username,
+		Password: config.Password,
+		Charset:  config.Charset,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("数据库连接失败: %w", err)
 	}
@@ -259,12 +242,4 @@ func (s *InstallService) MarkAsInstalled() error {
 	}
 
 	return nil
-}
-
-// getCharset 获取字符集，如果为空则返回默认值
-func getCharset(charset string) string {
-	if charset == "" {
-		return "utf8mb4"
-	}
-	return charset
 }

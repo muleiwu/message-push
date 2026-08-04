@@ -1,11 +1,10 @@
 package service
 
 import (
-	"time"
-
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 )
 
 // AdminTaskService 管理后台任务服务
@@ -190,12 +189,12 @@ func (s *AdminTaskService) convertPushTaskToItem(task *model.PushTask) *dto.Push
 		Signature:           task.Signature,
 		Status:              task.Status,
 		CallbackStatus:      task.CallbackStatus,
-		CallbackTime:        task.CallbackTime,
+		CallbackTime:        timeutil.NormalizePtr(task.CallbackTime),
 		RetryCount:          task.RetryCount,
 		MaxRetry:            task.MaxRetry,
-		ScheduledAt:         task.ScheduledAt,
-		CreatedAt:           task.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:           task.UpdatedAt.Format(time.RFC3339),
+		ScheduledAt:         timeutil.NormalizePtr(task.ScheduledAt),
+		CreatedAt:           timeutil.FormatRFC3339(task.CreatedAt),
+		UpdatedAt:           timeutil.FormatRFC3339(task.UpdatedAt),
 		ChannelName:         channelName,
 		ProviderAccountName: providerAccountName,
 	}
@@ -218,8 +217,8 @@ func (s *AdminTaskService) convertBatchTaskToItem(batch *model.PushBatchTask) *d
 		FailedCount:    batch.FailedCount,
 		PendingCount:   batch.PendingCount,
 		Status:         batch.Status,
-		CreatedAt:      batch.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:      batch.UpdatedAt.Format(time.RFC3339),
+		CreatedAt:      timeutil.FormatRFC3339(batch.CreatedAt),
+		UpdatedAt:      timeutil.FormatRFC3339(batch.UpdatedAt),
 		CompletionRate: completionRate,
 	}
 }

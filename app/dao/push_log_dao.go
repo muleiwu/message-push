@@ -5,6 +5,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/dto"
 	apphelper "cnb.cool/mliev/push/message-push/app/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	"gorm.io/gorm"
 )
 
@@ -24,6 +25,7 @@ func NewPushLogDAOWithDB(db *gorm.DB) *PushLogDAO {
 
 // Create 创建日志
 func (d *PushLogDAO) Create(log *model.PushLog) error {
+	log.CreatedAt = timeutil.Normalize(log.CreatedAt)
 	return d.db.Create(log).Error
 }
 
@@ -125,11 +127,9 @@ func (d *PushLogDAO) List(req *dto.LogListRequest) ([]*model.PushLog, int64, err
 	if req.Status != "" {
 		query = query.Where("status = ?", req.Status)
 	}
-	if req.StartDate != "" {
-		query = query.Where("created_at >= ?", req.StartDate+" 00:00:00")
-	}
-	if req.EndDate != "" {
-		query = query.Where("created_at <= ?", req.EndDate+" 23:59:59")
+	query, err := applyBusinessDateFilter(query, "created_at", req.StartDate, req.EndDate)
+	if err != nil {
+		return nil, 0, err
 	}
 	if req.ProviderID > 0 {
 		query = query.Where("provider_account_id = ?", req.ProviderID)
@@ -142,7 +142,7 @@ func (d *PushLogDAO) List(req *dto.LogListRequest) ([]*model.PushLog, int64, err
 
 	// 分页查询
 	offset := (req.Page - 1) * req.PageSize
-	err := query.Offset(offset).Limit(req.PageSize).
+	err = query.Offset(offset).Limit(req.PageSize).
 		Order("created_at DESC").
 		Find(&logs).Error
 

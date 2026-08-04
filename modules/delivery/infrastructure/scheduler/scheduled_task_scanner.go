@@ -8,6 +8,7 @@ import (
 
 	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/dao"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	"cnb.cool/mliev/push/message-push/modules/delivery/infrastructure/queue"
 	"github.com/muleiwu/gsr"
 	"github.com/redis/go-redis/v9"
@@ -81,7 +82,7 @@ func (s *ScheduledTaskScanner) Stop() {
 
 // scan 扫描到期任务
 func (s *ScheduledTaskScanner) scan(ctx context.Context) {
-	now := time.Now().Unix()
+	now := timeutil.Now().Unix()
 	sortedSetKey := "push:scheduled:tasks"
 
 	// 获取到期的任务（score <= now）
@@ -142,7 +143,7 @@ func (s *ScheduledTaskScanner) scan(ctx context.Context) {
 		}
 
 		// 从sorted set中删除；若任务已被改期到未来，Push 内部会写入新 score，此时不能误删
-		if task.ScheduledAt == nil || !task.ScheduledAt.After(time.Now()) {
+		if task.ScheduledAt == nil || !task.ScheduledAt.After(timeutil.Now()) {
 			s.redis.ZRem(ctx, sortedSetKey, taskID)
 		}
 

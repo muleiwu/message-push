@@ -1,10 +1,13 @@
 package migration
 
 import (
+	"context"
 	"database/sql"
 	"strings"
 	"testing"
+	"time"
 
+	"cnb.cool/mliev/push/message-push/app/dao"
 	migrationFS "cnb.cool/mliev/push/message-push/migrations"
 	"github.com/glebarez/sqlite"
 	"github.com/pressly/goose/v3"
@@ -13,7 +16,7 @@ import (
 
 // TestSQLiteMigrationsSmoke 在临时 SQLite 上跑完整迁移，校验 SQL 文件与 goose 接线。
 func TestSQLiteMigrationsSmoke(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open(t.TempDir()+"/smoke.db"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(t.TempDir()+"/smoke.db?_time_format=sqlite&_timezone=UTC"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
@@ -38,6 +41,7 @@ func TestSQLiteMigrationsSmoke(t *testing.T) {
 		`INSERT INTO push_tasks (task_id, app_id, channel_id, message_type, receiver, status) VALUES ('provider-backfill', 'legacy-app', 1, 'email', 'legacy@example.com', 'success')`,
 		`INSERT INTO push_logs (task_id, app_id, provider_account_id, status) VALUES ('provider-backfill', 'legacy-app', 1, 'failed')`,
 		`INSERT INTO push_logs (task_id, app_id, provider_account_id, status) VALUES ('provider-backfill', 'legacy-app', 2, 'success')`,
+		`INSERT INTO app_quota_stats (app_id, stat_date, total_count) VALUES ('legacy-app', '2026-08-04', 1)`,
 		`INSERT INTO admin_users (username, password, real_name, email, auth_source, status) VALUES ('mixed-email', 'hash', 'Mixed Email', '  Admin@Example.COM  ', 'local', 1)`,
 		`INSERT INTO admin_users (username, password, real_name, email, auth_source, status) VALUES ('blank-email', 'hash', 'Blank Email', '   ', 'local', 1)`,
 		`INSERT INTO admin_users (username, password, real_name, email, auth_source, status) VALUES ('legacy-admin-status', 'hash', 'Legacy Admin Status', NULL, 'local', 2)`,
@@ -46,6 +50,28 @@ func TestSQLiteMigrationsSmoke(t *testing.T) {
 		if _, err := sqlDB.Exec(statement); err != nil {
 			t.Fatalf("seed legacy status: %v", err)
 		}
+	}
+	if _, err := sqlDB.Exec(`
+		UPDATE applications
+		SET created_at = '2026-08-04 10:00:00',
+			updated_at = '2026-08-04 18:00:00+08:00'
+		WHERE app_id = 'legacy-app'
+	`); err != nil {
+		t.Fatalf("seed legacy timestamps: %v", err)
+	}
+	if err := goose.UpTo(sqlDB, migrationFS.DialectDir("sqlite"), preUTCMigrationVersion); err != nil {
+		t.Fatalf("run migrations before UTC normalization: %v", err)
+	}
+	if _, err := sqlDB.Exec(`
+		INSERT INTO webhook_logs (
+			task_id, app_id, webhook_url, event, status, dedup_key,
+			next_attempt_at, locked_until, created_at, updated_at
+		) VALUES (
+			'offset-webhook', 'legacy-app', 'https://example.test/webhook', 'failed', 'pending', 'offset-webhook',
+			'2026-08-04 18:00:00+08:00', NULL, '2026-08-04 10:00:00', '2026-08-04 18:00:00+08:00'
+		)
+	`); err != nil {
+		t.Fatalf("seed legacy webhook timestamps: %v", err)
 	}
 
 	if err := RunGooseMigrations(sqlDB, "sqlite", nil); err != nil {
@@ -78,6 +104,20 @@ func TestSQLiteMigrationsSmoke(t *testing.T) {
 	assertHasColumn(t, sqlDB, "callback_logs", "mobile")
 	assertHasColumn(t, sqlDB, "callback_logs", "content")
 	assertNoColumn(t, sqlDB, "channel_template_bindings", "template_binding_id")
+	assertCanonicalUTCTime(t, sqlDB, "applications", "created_at", "app_id", "legacy-app", "2026-08-04 10:00:00+00:00")
+	assertCanonicalUTCTime(t, sqlDB, "applications", "updated_at", "app_id", "legacy-app", "2026-08-04 10:00:00+00:00")
+	assertCanonicalUTCTime(t, sqlDB, "webhook_logs", "next_attempt_at", "task_id", "offset-webhook", "2026-08-04 10:00:00+00:00")
+	assertCanonicalUTCTime(t, sqlDB, "app_quota_stats", "stat_date", "app_id", "legacy-app", "2026-08-04")
+	due, err := dao.NewWebhookLogDAOWithDB(db).ListDue(context.Background(), time.Date(2026, 8, 4, 10, 0, 0, 0, time.UTC), 10)
+	if err != nil {
+		t.Fatalf("list due webhook after UTC migration: %v", err)
+	}
+	if len(due) != 1 || due[0].TaskID != "offset-webhook" {
+		t.Fatalf("due webhooks = %+v, want offset-webhook", due)
+	}
+	for _, item := range append(append([]schemaColumn{}, utcInstantColumns...), businessDateColumns...) {
+		assertHasColumn(t, sqlDB, item.table, item.column)
+	}
 	for _, column := range []string{
 		"dedup_key",
 		"signing_secret",
@@ -97,8 +137,20 @@ func TestSQLiteMigrationsSmoke(t *testing.T) {
 	}
 }
 
+func assertCanonicalUTCTime(t *testing.T, db *sql.DB, table, column, keyColumn, keyValue, want string) {
+	t.Helper()
+	var got string
+	query := "SELECT CAST(" + column + " AS TEXT) FROM " + table + " WHERE " + keyColumn + " = ?"
+	if err := db.QueryRow(query, keyValue).Scan(&got); err != nil {
+		t.Fatalf("query %s.%s: %v", table, column, err)
+	}
+	if got != want {
+		t.Fatalf("%s.%s = %q, want %q", table, column, got, want)
+	}
+}
+
 func TestSQLiteAdminEmailMigrationRejectsNormalizedDuplicates(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open(t.TempDir()+"/duplicate-email.db"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(t.TempDir()+"/duplicate-email.db?_time_format=sqlite&_timezone=UTC"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}

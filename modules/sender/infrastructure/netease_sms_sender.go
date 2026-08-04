@@ -19,6 +19,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	domain "cnb.cool/mliev/push/message-push/modules/sender/domain"
 )
 
@@ -563,7 +564,7 @@ func (s *NeteaseSMSSender) HandleCallback(ctx context.Context, req *domain.Callb
 			if obj.Result != "DELIVRD" {
 				status = constants.CallbackStatusFailed
 			}
-			reportTime, _ := time.ParseInLocation("2006-01-02 15:04:05", obj.ReportTime, time.Local)
+			reportTime, _ := timeutil.ParseBusinessTime("2006-01-02 15:04:05", obj.ReportTime)
 
 			results = append(results, &domain.CallbackResult{
 				Type:         constants.CallbackTypeReport,
@@ -584,7 +585,7 @@ func (s *NeteaseSMSSender) HandleCallback(ctx context.Context, req *domain.Callb
 			if obj.Mobile == "" {
 				continue
 			}
-			receiveTime, _ := time.ParseInLocation("2006-01-02 15:04:05", obj.ReceiveTime, time.Local)
+			receiveTime, _ := timeutil.ParseBusinessTime("2006-01-02 15:04:05", obj.ReceiveTime)
 			results = append(results, &domain.CallbackResult{
 				Type:        constants.CallbackTypeUpstream,
 				Mobile:      string(obj.Mobile),

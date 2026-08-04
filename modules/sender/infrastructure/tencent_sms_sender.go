@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"cnb.cool/mliev/push/message-push/app/constants"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	domain "cnb.cool/mliev/push/message-push/modules/sender/domain"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
@@ -591,7 +592,7 @@ func (s *TencentSMSSender) HandleCallback(ctx context.Context, req *domain.Callb
 			status = constants.CallbackStatusFailed
 		}
 
-		reportTime, _ := time.ParseInLocation("2006-01-02 15:04:05", report.UserReceiveTime, time.Local)
+		reportTime, _ := timeutil.ParseBusinessTime("2006-01-02 15:04:05", report.UserReceiveTime)
 
 		results = append(results, &domain.CallbackResult{
 			ProviderID:   report.Sid,

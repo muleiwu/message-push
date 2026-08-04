@@ -17,6 +17,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	"github.com/google/uuid"
 	"github.com/muleiwu/gsr"
 	"gorm.io/gorm"
@@ -54,7 +55,7 @@ func NewWebhookDispatcherWithDB(db *gorm.DB, logger gsr.Logger) *WebhookDispatch
 		httpDoer: func(timeout time.Duration) webhookHTTPDoer {
 			return &http.Client{Timeout: timeout}
 		},
-		now:       time.Now,
+		now:       timeutil.Now,
 		newToken:  func() string { return uuid.NewString() },
 		semaphore: make(chan struct{}, webhookDispatchWorkers),
 	}
@@ -87,7 +88,7 @@ func (d *WebhookDispatcher) Stop() {
 
 // DispatchOnce scans and claims due rows. It is public to provide a deterministic test seam.
 func (d *WebhookDispatcher) DispatchOnce(ctx context.Context) {
-	now := d.now()
+	now := timeutil.Normalize(d.now())
 	logs, err := d.logDAO.ListDue(ctx, now, webhookDispatchBatch)
 	if err != nil {
 		if ctx.Err() == nil {
@@ -129,7 +130,7 @@ func (d *WebhookDispatcher) DispatchOnce(ctx context.Context) {
 
 func (d *WebhookDispatcher) dispatch(ctx context.Context, webhookLog *model.WebhookLog, token string) {
 	responseStatus, responseData, sendErr := d.send(ctx, webhookLog)
-	now := d.now()
+	now := timeutil.Normalize(d.now())
 	dbCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -183,7 +184,7 @@ func (d *WebhookDispatcher) dispatch(ctx context.Context, webhookLog *model.Webh
 		return
 	}
 	d.logger.Warn(fmt.Sprintf("webhook delivery scheduled for retry id=%d retry=%d next=%s error=%v",
-		webhookLog.ID, retryCount, nextAttemptAt.Format(time.RFC3339), sendErr))
+		webhookLog.ID, retryCount, timeutil.FormatRFC3339(nextAttemptAt), sendErr))
 }
 
 func (d *WebhookDispatcher) send(ctx context.Context, webhookLog *model.WebhookLog) (int, string, error) {
@@ -201,7 +202,7 @@ func (d *WebhookDispatcher) send(ctx context.Context, webhookLog *model.WebhookL
 		return 0, "", fmt.Errorf("create webhook request: %w", err)
 	}
 
-	attemptTimestamp := d.now().Unix()
+	attemptTimestamp := timeutil.Normalize(d.now()).Unix()
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "MessagePush-Webhook/1.0")
 	req.Header.Set("X-Webhook-Event", webhookLog.Event)
@@ -232,7 +233,7 @@ func (d *WebhookDispatcher) send(ctx context.Context, webhookLog *model.WebhookL
 }
 
 func (d *WebhookDispatcher) releaseClaim(webhookLog *model.WebhookLog, token string, cause error) {
-	now := d.now()
+	now := timeutil.Normalize(d.now())
 	dbCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := d.logDAO.MarkRetry(

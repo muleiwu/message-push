@@ -6,13 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	appHelper "cnb.cool/mliev/push/message-push/app/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	"cnb.cool/mliev/push/message-push/modules/identity/domain"
 	"github.com/muleiwu/gsr"
 	"golang.org/x/crypto/bcrypt"
@@ -313,8 +313,8 @@ func toAdminUserResponse(user *model.AdminUser) *dto.AdminUserResponse {
 		AuthSource: normalizedAuthSource(user.AuthSource),
 		OIDCBound:  user.OidcSub != nil && strings.TrimSpace(*user.OidcSub) != "",
 		Status:     normalizeStoredAdminStatus(user.Status),
-		CreatedAt:  user.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:  user.UpdatedAt.Format(time.RFC3339),
+		CreatedAt:  timeutil.FormatRFC3339(user.CreatedAt),
+		UpdatedAt:  timeutil.FormatRFC3339(user.UpdatedAt),
 	}
 }
 

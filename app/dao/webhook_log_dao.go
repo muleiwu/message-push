@@ -7,6 +7,7 @@ import (
 	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	"gorm.io/gorm"
 )
 
@@ -26,6 +27,10 @@ func NewWebhookLogDAOWithDB(db *gorm.DB) *WebhookLogDAO {
 
 // Create 创建Webhook日志
 func (dao *WebhookLogDAO) Create(log *model.WebhookLog) error {
+	log.NextAttemptAt = timeutil.NormalizePtr(log.NextAttemptAt)
+	log.LockedUntil = timeutil.NormalizePtr(log.LockedUntil)
+	log.CreatedAt = timeutil.Normalize(log.CreatedAt)
+	log.UpdatedAt = timeutil.Normalize(log.UpdatedAt)
 	return dao.db.Create(log).Error
 }
 
@@ -84,6 +89,7 @@ func (dao *WebhookLogDAO) List(appID string, status string, page, pageSize int) 
 
 // ListDue returns pending deliveries and expired processing leases.
 func (dao *WebhookLogDAO) ListDue(ctx context.Context, now time.Time, limit int) ([]*model.WebhookLog, error) {
+	now = timeutil.Normalize(now)
 	var logs []*model.WebhookLog
 	err := dao.db.WithContext(ctx).
 		Where(
@@ -106,6 +112,8 @@ func (dao *WebhookLogDAO) Claim(
 	token string,
 	now, lockedUntil time.Time,
 ) (bool, error) {
+	now = timeutil.Normalize(now)
+	lockedUntil = timeutil.Normalize(lockedUntil)
 	result := dao.db.WithContext(ctx).
 		Model(&model.WebhookLog{}).
 		Where("id = ?", id).
@@ -133,6 +141,7 @@ func (dao *WebhookLogDAO) MarkSuccess(
 	responseData string,
 	now time.Time,
 ) error {
+	now = timeutil.Normalize(now)
 	return dao.db.WithContext(ctx).
 		Model(&model.WebhookLog{}).
 		Where("id = ? AND status = ? AND lease_token = ?", id, constants.WebhookDeliveryProcessing, token).
@@ -158,6 +167,8 @@ func (dao *WebhookLogDAO) MarkRetry(
 	responseData, errorMessage string,
 	now time.Time,
 ) error {
+	nextAttemptAt = timeutil.Normalize(nextAttemptAt)
+	now = timeutil.Normalize(now)
 	return dao.db.WithContext(ctx).
 		Model(&model.WebhookLog{}).
 		Where("id = ? AND status = ? AND lease_token = ?", id, constants.WebhookDeliveryProcessing, token).
@@ -182,6 +193,7 @@ func (dao *WebhookLogDAO) MarkFailed(
 	responseData, errorMessage string,
 	now time.Time,
 ) error {
+	now = timeutil.Normalize(now)
 	return dao.db.WithContext(ctx).
 		Model(&model.WebhookLog{}).
 		Where("id = ? AND status = ? AND lease_token = ?", id, constants.WebhookDeliveryProcessing, token).

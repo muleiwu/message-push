@@ -11,6 +11,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	"gorm.io/gorm"
 )
 
@@ -55,7 +56,7 @@ func NewTaskTerminalService() *TaskTerminalService {
 func NewTaskTerminalServiceWithDB(db *gorm.DB) *TaskTerminalService {
 	return &TaskTerminalService{
 		db:  db,
-		now: time.Now,
+		now: timeutil.Now,
 	}
 }
 
@@ -66,7 +67,9 @@ func (s *TaskTerminalService) Transition(ctx context.Context, transition Termina
 	if transition.OccurredAt.IsZero() {
 		transition.OccurredAt = s.now()
 	}
-	persistedAt := s.now()
+	transition.OccurredAt = timeutil.Normalize(transition.OccurredAt)
+	transition.CallbackTime = timeutil.NormalizePtr(transition.CallbackTime)
+	persistedAt := timeutil.Normalize(s.now())
 
 	result := &TerminalTransitionResult{}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -118,7 +121,8 @@ func (s *TaskTerminalService) RecordUpstream(ctx context.Context, event Upstream
 	if event.ReceiveTime.IsZero() {
 		event.ReceiveTime = s.now()
 	}
-	persistedAt := s.now()
+	event.ReceiveTime = timeutil.Normalize(event.ReceiveTime)
+	persistedAt := timeutil.Normalize(s.now())
 
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		callbackLog := &model.CallbackLog{
@@ -151,7 +155,7 @@ func (s *TaskTerminalService) RecordUpstream(ctx context.Context, event Upstream
 				"mobile":        event.Mobile,
 				"content":       event.Content,
 				"provider_code": event.ProviderCode,
-				"receive_time":  event.ReceiveTime.Format(time.RFC3339),
+				"receive_time":  timeutil.FormatRFC3339(event.ReceiveTime),
 			},
 		}
 		return createWebhookOutboxTx(
@@ -188,7 +192,7 @@ func (s *TaskTerminalService) createOutboxTx(
 		Timestamp: transition.OccurredAt.Unix(),
 		Extra: map[string]interface{}{
 			"provider_id": transition.ProviderID,
-			"report_time": transition.OccurredAt.Format(time.RFC3339),
+			"report_time": timeutil.FormatRFC3339(transition.OccurredAt),
 		},
 	}
 
@@ -273,6 +277,7 @@ func createWebhookOutboxTx(
 	persistedAt time.Time,
 	destinations ...*model.WebhookLog,
 ) error {
+	persistedAt = timeutil.Normalize(persistedAt)
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("marshal webhook payload: %w", err)

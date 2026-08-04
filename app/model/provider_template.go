@@ -18,8 +18,8 @@ type ProviderTemplate struct {
 	Variables       string           `gorm:"type:json;comment:供应商模板变量列表，JSON数组格式" json:"variables"`
 	Status          int8             `gorm:"default:1;index:idx_provider_status;comment:状态：1=启用 0=禁用" json:"status"`
 	Remark          string           `gorm:"type:text;comment:备注说明" json:"remark"`
-	CreatedAt       time.Time        `gorm:"type:timestamp;default:CURRENT_TIMESTAMP" json:"created_at"`
-	UpdatedAt       time.Time        `gorm:"type:timestamp;default:CURRENT_TIMESTAMP" json:"updated_at"`
+	CreatedAt       time.Time        `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt       time.Time        `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
 	DeletedAt       gorm.DeletedAt   `gorm:"index" json:"deleted_at"`
 	ProviderAccount *ProviderAccount `gorm:"foreignKey:ProviderID;references:ID" json:"provider_account,omitempty"`
 }

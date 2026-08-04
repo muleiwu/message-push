@@ -12,6 +12,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/app/readiness"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	registry "cnb.cool/mliev/push/message-push/modules/sender/domain"
 	"gorm.io/gorm"
 )
@@ -294,7 +295,7 @@ func (s *AdminOnboardingService) latestAdminTestForChannel(channelID uint) (*dto
 		TaskID:        task.TaskID,
 		ChannelID:     task.ChannelID,
 		Status:        task.Status,
-		CreatedAt:     task.CreatedAt.Format(time.RFC3339),
+		CreatedAt:     timeutil.FormatRFC3339(task.CreatedAt),
 		ConfigChanged: changed,
 	}, nil
 }

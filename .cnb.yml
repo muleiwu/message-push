@@ -17,6 +17,10 @@
       script: echo ${CNB_REPO_NAME}
     - name: echo Image Name
       script: echo ${CNB_DOCKER_REGISTRY}/${CNB_REPO_SLUG_LOWERCASE}
+    - name: go test
+      script: go test ./...
+    - name: timezone database integration tests
+      script: make test-timezone-integration
     - name: docker login
       script: docker login -u ${CNB_TOKEN_USER_NAME} -p "${CNB_TOKEN}" ${CNB_DOCKER_REGISTRY}
     - name: docker build Private

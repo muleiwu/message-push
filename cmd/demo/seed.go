@@ -7,6 +7,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/constants"
 	appHelper "cnb.cool/mliev/push/message-push/app/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -395,16 +396,17 @@ func seedActivity(db *gorm.DB, apps []model.Application, accounts []model.Provid
 	appStats := make([]model.AppQuotaStat, 0, 60)
 	providerStats := make([]model.ProviderQuotaStat, 0, 60)
 	for day := 29; day >= 0; day-- {
-		date := time.Date(anchor.Year(), anchor.Month(), anchor.Day(), 0, 0, 0, 0, anchor.Location()).AddDate(0, 0, -day)
+		businessDate := timeutil.BusinessDayStart(anchor).AddDate(0, 0, -day)
+		date := time.Date(businessDate.Year(), businessDate.Month(), businessDate.Day(), 0, 0, 0, 0, time.UTC)
 		for i, app := range apps[:2] {
 			total := 80 + (29-day)*7 + i*19
 			failed := 2 + (day+i)%7
-			appStats = append(appStats, model.AppQuotaStat{AppID: app.AppID, StatDate: date, TotalCount: total, SuccessCount: total - failed, FailedCount: failed, CreatedAt: date.Add(23 * time.Hour), UpdatedAt: date.Add(23 * time.Hour)})
+			appStats = append(appStats, model.AppQuotaStat{AppID: app.AppID, StatDate: date, TotalCount: total, SuccessCount: total - failed, FailedCount: failed, CreatedAt: businessDate.Add(23 * time.Hour), UpdatedAt: businessDate.Add(23 * time.Hour)})
 		}
 		for i := 0; i < 2; i++ {
 			total := 60 + (29-day)*5 + i*13
 			failed := 1 + (day+i)%5
-			providerStats = append(providerStats, model.ProviderQuotaStat{ProviderChannelID: uint(i + 1), StatDate: date, TotalCount: total, SuccessCount: total - failed, FailedCount: failed, CreatedAt: date.Add(23 * time.Hour), UpdatedAt: date.Add(23 * time.Hour)})
+			providerStats = append(providerStats, model.ProviderQuotaStat{ProviderChannelID: uint(i + 1), StatDate: date, TotalCount: total, SuccessCount: total - failed, FailedCount: failed, CreatedAt: businessDate.Add(23 * time.Hour), UpdatedAt: businessDate.Add(23 * time.Hour)})
 		}
 	}
 	if err := db.CreateInBatches(&appStats, 100).Error; err != nil {

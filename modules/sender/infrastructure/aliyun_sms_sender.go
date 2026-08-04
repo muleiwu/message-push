@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"cnb.cool/mliev/push/message-push/app/constants"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	domain "cnb.cool/mliev/push/message-push/modules/sender/domain"
 
 	openapi "github.com/alibabacloud-go/darabonba-openapi/v2/client"
@@ -447,7 +447,7 @@ func (s *AliyunSMSSender) QueryStatus(ctx context.Context, req *domain.StatusQue
 				status = constants.CallbackStatusDelivered
 			}
 
-			reportTime, _ := time.ParseInLocation("2006-01-02 15:04:05", tea.StringValue(detail.ReceiveDate), time.Local)
+			reportTime, _ := timeutil.ParseBusinessTime("2006-01-02 15:04:05", tea.StringValue(detail.ReceiveDate))
 
 			results = append(results, &domain.StatusQueryResult{
 				ProviderMsgID: req.ProviderMsgID,
@@ -498,7 +498,7 @@ func (s *AliyunSMSSender) HandleCallback(ctx context.Context, req *domain.Callba
 			status = constants.CallbackStatusFailed
 		}
 
-		reportTime, _ := time.ParseInLocation("2006-01-02 15:04:05", report.ReportTime, time.Local)
+		reportTime, _ := timeutil.ParseBusinessTime("2006-01-02 15:04:05", report.ReportTime)
 
 		// BizId 格式可能是 "bizId^taskId" 或纯 bizId
 		providerID := report.BizId

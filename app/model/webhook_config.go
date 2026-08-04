@@ -15,8 +15,8 @@ type WebhookConfig struct {
 	RetryCount  int       `gorm:"type:int;default:3;comment:最大重试次数" json:"retry_count"`
 	Timeout     int       `gorm:"type:int;default:5;comment:超时时间（秒）" json:"timeout"`
 	Description string    `gorm:"type:varchar(200);comment:描述" json:"description"`
-	CreatedAt   time.Time `gorm:"type:timestamp;default:CURRENT_TIMESTAMP" json:"created_at"`
-	UpdatedAt   time.Time `gorm:"type:timestamp;default:CURRENT_TIMESTAMP" json:"updated_at"`
+	CreatedAt   time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt   time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
 }
 
 // TableName 指定表名

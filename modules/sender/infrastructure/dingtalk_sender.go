@@ -18,6 +18,7 @@ import (
 
 	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/constants"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	domain "cnb.cool/mliev/push/message-push/modules/sender/domain"
 )
 
@@ -506,7 +507,7 @@ func (s *DingTalkSender) handlePlainCallback(rawBody []byte) (domain.CallbackRes
 
 	reportTime := time.Unix(callbackData.Timestamp/1000, 0)
 	if callbackData.Timestamp == 0 {
-		reportTime = time.Now()
+		reportTime = timeutil.Now()
 	}
 
 	return resp, []*domain.CallbackResult{{
@@ -547,7 +548,7 @@ func (s *DingTalkSender) parseCallbackData(plaintext []byte) ([]*domain.Callback
 
 	reportTime := time.Unix(callbackData.Timestamp/1000, 0)
 	if callbackData.Timestamp == 0 {
-		reportTime = time.Now()
+		reportTime = timeutil.Now()
 	}
 
 	return []*domain.CallbackResult{{

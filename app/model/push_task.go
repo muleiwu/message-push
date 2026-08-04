@@ -21,13 +21,13 @@ type PushTask struct {
 	Signature          string           `gorm:"type:varchar(200);comment:签名别名或邮件主题" json:"signature"`
 	Status             string           `gorm:"type:varchar(20);default:'pending';index:idx_app_id_status,idx_status_scheduled;comment:状态：pending, processing, success, failed" json:"status"`
 	CallbackStatus     string           `gorm:"type:varchar(20);comment:回调状态：pending, delivered, failed, rejected" json:"callback_status"`
-	CallbackTime       *time.Time       `gorm:"type:timestamp;comment:回调时间" json:"callback_time"`
+	CallbackTime       *time.Time       `gorm:"comment:回调时间" json:"callback_time"`
 	RetryCount         int              `gorm:"type:int;default:0;comment:已重试次数" json:"retry_count"`
 	MaxRetry           int              `gorm:"type:int;default:3;comment:最大重试次数" json:"max_retry"`
 	ExcludeProviderIDs string           `gorm:"type:json;comment:排除的供应商账号ID列表（规则引擎切换供应商使用）" json:"exclude_provider_ids"`
-	ScheduledAt        *time.Time       `gorm:"type:timestamp;index:idx_status_scheduled;comment:定时发送时间" json:"scheduled_at"`
-	CreatedAt          time.Time        `gorm:"type:timestamp;default:CURRENT_TIMESTAMP;index:idx_created_at" json:"created_at"`
-	UpdatedAt          time.Time        `gorm:"type:timestamp;default:CURRENT_TIMESTAMP" json:"updated_at"`
+	ScheduledAt        *time.Time       `gorm:"index:idx_status_scheduled;comment:定时发送时间" json:"scheduled_at"`
+	CreatedAt          time.Time        `gorm:"default:CURRENT_TIMESTAMP;index:idx_created_at" json:"created_at"`
+	UpdatedAt          time.Time        `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
 	Channel            *Channel         `gorm:"foreignKey:ChannelID;references:ID" json:"channel,omitempty"`
 	ProviderAccount    *ProviderAccount `gorm:"foreignKey:ProviderAccountID;references:ID" json:"provider_account,omitempty"`
 }

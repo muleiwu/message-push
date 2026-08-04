@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"cnb.cool/mliev/push/message-push/app/constants"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	domain "cnb.cool/mliev/push/message-push/modules/sender/domain"
 )
 
@@ -547,7 +548,7 @@ func (s *SMTPSender) HandleCallback(ctx context.Context, req *domain.CallbackReq
 			return resp, []*domain.CallbackResult{{
 				Status:       constants.CallbackStatusFailed,
 				ErrorMessage: "Email delivery failed (bounce detected)",
-				ReportTime:   time.Now(),
+				ReportTime:   timeutil.Now(),
 			}}, nil
 		}
 		// 即使解析失败也返回成功响应，避免服务商重复推送
@@ -563,7 +564,7 @@ func (s *SMTPSender) HandleCallback(ctx context.Context, req *domain.CallbackReq
 
 	reportTime, _ := time.Parse(time.RFC3339, bounceReport.Timestamp)
 	if reportTime.IsZero() {
-		reportTime = time.Now()
+		reportTime = timeutil.Now()
 	}
 
 	return resp, []*domain.CallbackResult{{

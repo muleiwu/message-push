@@ -16,8 +16,8 @@ type MessageTemplate struct {
 	Variables    string         `gorm:"type:json;comment:模板变量列表，JSON数组格式" json:"variables"`
 	Description  string         `gorm:"type:text;comment:模板描述" json:"description"`
 	Status       int8           `gorm:"default:1;index:idx_status;comment:状态：1=启用 0=禁用" json:"status"`
-	CreatedAt    time.Time      `gorm:"type:timestamp;default:CURRENT_TIMESTAMP" json:"created_at"`
-	UpdatedAt    time.Time      `gorm:"type:timestamp;default:CURRENT_TIMESTAMP" json:"updated_at"`
+	CreatedAt    time.Time      `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt    time.Time      `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
 	DeletedAt    gorm.DeletedAt `gorm:"index" json:"deleted_at"`
 }
 

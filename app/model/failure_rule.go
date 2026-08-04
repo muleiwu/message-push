@@ -35,8 +35,8 @@ type FailureRule struct {
 	Priority     int            `gorm:"type:int;default:0;index:idx_scene_priority;comment:优先级（数字越大越优先）" json:"priority"`
 	Status       int8           `gorm:"default:1;index:idx_status;comment:状态：1=启用 0=禁用" json:"status"`
 	Remark       string         `gorm:"type:varchar(500);comment:备注说明" json:"remark"`
-	CreatedAt    time.Time      `gorm:"type:timestamp;default:CURRENT_TIMESTAMP" json:"created_at"`
-	UpdatedAt    time.Time      `gorm:"type:timestamp;default:CURRENT_TIMESTAMP" json:"updated_at"`
+	CreatedAt    time.Time      `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt    time.Time      `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
 	DeletedAt    gorm.DeletedAt `gorm:"index" json:"deleted_at"`
 }
 

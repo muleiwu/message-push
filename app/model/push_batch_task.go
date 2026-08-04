@@ -14,8 +14,8 @@ type PushBatchTask struct {
 	FailedCount  int       `gorm:"type:int;default:0;comment:失败数" json:"failed_count"`
 	PendingCount int       `gorm:"type:int;default:0;comment:待处理数" json:"pending_count"`
 	Status       string    `gorm:"type:varchar(20);default:'processing';index:idx_app_id_status;comment:状态：processing, completed, failed" json:"status"`
-	CreatedAt    time.Time `gorm:"type:timestamp;default:CURRENT_TIMESTAMP;index:idx_created_at" json:"created_at"`
-	UpdatedAt    time.Time `gorm:"type:timestamp;default:CURRENT_TIMESTAMP" json:"updated_at"`
+	CreatedAt    time.Time `gorm:"default:CURRENT_TIMESTAMP;index:idx_created_at" json:"created_at"`
+	UpdatedAt    time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
 }
 
 // TableName 指定表名

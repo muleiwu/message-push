@@ -14,8 +14,8 @@ type ChannelSignatureMapping struct {
 	ProviderSignatureID uint               `gorm:"not null;comment:供应商签名ID（关联provider_signatures表）" json:"provider_signature_id"`
 	ProviderID          uint               `gorm:"not null;index:idx_provider;comment:供应商账号ID（冗余字段，便于查询）" json:"provider_id"`
 	Status              int8               `gorm:"default:1;comment:状态：1=启用 0=禁用" json:"status"`
-	CreatedAt           time.Time          `gorm:"type:timestamp;default:CURRENT_TIMESTAMP" json:"created_at"`
-	UpdatedAt           time.Time          `gorm:"type:timestamp;default:CURRENT_TIMESTAMP" json:"updated_at"`
+	CreatedAt           time.Time          `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt           time.Time          `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
 	DeletedAt           gorm.DeletedAt     `gorm:"index" json:"deleted_at"`
 	Channel             *Channel           `gorm:"foreignKey:ChannelID;references:ID" json:"channel,omitempty"`
 	ProviderSignature   *ProviderSignature `gorm:"foreignKey:ProviderSignatureID;references:ID" json:"provider_signature,omitempty"`

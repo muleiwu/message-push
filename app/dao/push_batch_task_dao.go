@@ -3,6 +3,7 @@ package dao
 import (
 	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	"gorm.io/gorm"
 )
 
@@ -20,6 +21,8 @@ func NewPushBatchTaskDAO() *PushBatchTaskDAO {
 
 // Create 创建批量任务
 func (d *PushBatchTaskDAO) Create(batch *model.PushBatchTask) error {
+	batch.CreatedAt = timeutil.Normalize(batch.CreatedAt)
+	batch.UpdatedAt = timeutil.Normalize(batch.UpdatedAt)
 	return d.db.Create(batch).Error
 }
 
@@ -35,6 +38,8 @@ func (d *PushBatchTaskDAO) GetByBatchID(batchID string) (*model.PushBatchTask, e
 
 // Update 更新批量任务
 func (d *PushBatchTaskDAO) Update(batch *model.PushBatchTask) error {
+	batch.CreatedAt = timeutil.Normalize(batch.CreatedAt)
+	batch.UpdatedAt = timeutil.Normalize(batch.UpdatedAt)
 	return d.db.Save(batch).Error
 }
 
@@ -70,11 +75,11 @@ func (d *PushBatchTaskDAO) List(page, pageSize int, filters map[string]interface
 	if batchID, ok := filters["batch_id"]; ok {
 		query = query.Where("batch_id LIKE ?", "%"+batchID.(string)+"%")
 	}
-	if startDate, ok := filters["start_date"]; ok {
-		query = query.Where("DATE(created_at) >= ?", startDate)
-	}
-	if endDate, ok := filters["end_date"]; ok {
-		query = query.Where("DATE(created_at) <= ?", endDate)
+	startDate, _ := filters["start_date"].(string)
+	endDate, _ := filters["end_date"].(string)
+	query, err := applyBusinessDateFilter(query, "created_at", startDate, endDate)
+	if err != nil {
+		return nil, 0, err
 	}
 
 	// 获取总数
@@ -83,7 +88,7 @@ func (d *PushBatchTaskDAO) List(page, pageSize int, filters map[string]interface
 	}
 
 	// 分页查询
-	err := query.Offset(offset).Limit(pageSize).
+	err = query.Offset(offset).Limit(pageSize).
 		Order("created_at DESC").
 		Find(&batches).Error
 

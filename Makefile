@@ -1,4 +1,4 @@
-.PHONY: demo-reset demo-run dev build test fmt docker-build docker-up docker-down
+.PHONY: demo-reset demo-run dev build test test-timezone-integration fmt docker-build docker-up docker-down
 
 # 本地 SQLite 演示（仅供本机文档与界面体验）
 demo-reset:
@@ -23,6 +23,13 @@ build-prod:
 # 测试
 test:
 	go test ./... -v -cover
+
+# PostgreSQL/MySQL UTC migration and round-trip integration tests.
+test-timezone-integration:
+	@set -e; \
+	trap 'docker compose -p message-push-timezone-test -f deploy/docker-compose.timezone-test.yml down -v' EXIT; \
+	docker compose -p message-push-timezone-test -f deploy/docker-compose.timezone-test.yml up -d --wait; \
+	TIMEZONE_INTEGRATION=1 go test -tags=integration ./migration -count=1 -v
 
 # 测试覆盖率
 test-coverage:

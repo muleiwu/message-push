@@ -3,7 +3,6 @@ package infrastructure
 import (
 	"context"
 	"fmt"
-	"time"
 
 	internalHelper "cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/constants"
@@ -13,6 +12,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/app/readiness"
 	applicationService "cnb.cool/mliev/push/message-push/app/service"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	"cnb.cool/mliev/push/message-push/modules/channel"
 	"cnb.cool/mliev/push/message-push/modules/delivery"
 	"cnb.cool/mliev/push/message-push/modules/messaging/domain"
@@ -127,8 +127,8 @@ func (s *MessageService) Send(ctx context.Context, req *dto.SendRequest) (*dto.S
 		Status:         constants.TaskStatusPending,
 		RetryCount:     0,
 		MaxRetry:       3,
-		ScheduledAt:    req.ScheduledAt,
-		CreatedAt:      time.Now(),
+		ScheduledAt:    timeutil.NormalizePtr(req.ScheduledAt),
+		CreatedAt:      timeutil.Now(),
 	}
 
 	// 保存任务到数据库
@@ -144,7 +144,7 @@ func (s *MessageService) Send(ctx context.Context, req *dto.SendRequest) (*dto.S
 			Event:        constants.WebhookEventFailed,
 			ErrorCode:    "QUEUE_ERROR",
 			ErrorMessage: err.Error(),
-			OccurredAt:   time.Now(),
+			OccurredAt:   timeutil.Now(),
 		}); transitionErr != nil {
 			return nil, fmt.Errorf("failed to push to queue: %v; failed to persist terminal state: %w", err, transitionErr)
 		}
@@ -154,7 +154,7 @@ func (s *MessageService) Send(ctx context.Context, req *dto.SendRequest) (*dto.S
 	return &dto.SendResponse{
 		TaskID:    taskID,
 		Status:    constants.TaskStatusPending,
-		CreatedAt: task.CreatedAt,
+		CreatedAt: timeutil.Normalize(task.CreatedAt),
 	}, nil
 }
 
@@ -233,7 +233,7 @@ func (s *MessageService) BatchSend(ctx context.Context, req *dto.BatchSendReques
 			Status:         constants.TaskStatusPending,
 			RetryCount:     0,
 			MaxRetry:       3,
-			ScheduledAt:    req.ScheduledAt,
+			ScheduledAt:    timeutil.NormalizePtr(req.ScheduledAt),
 		}
 
 		tasks = append(tasks, task)
@@ -258,7 +258,7 @@ func (s *MessageService) BatchSend(ctx context.Context, req *dto.BatchSendReques
 		TotalCount:   len(req.Receivers),
 		SuccessCount: successCount,
 		FailedCount:  len(req.Receivers) - successCount,
-		CreatedAt:    time.Now(),
+		CreatedAt:    timeutil.Now(),
 	}, nil
 }
 
@@ -268,7 +268,18 @@ func (s *MessageService) QueryTask(ctx context.Context, taskID string) (*model.P
 	if err != nil {
 		return nil, fmt.Errorf("task not found: %w", err)
 	}
+	normalizePushTaskTimes(task)
 	return task, nil
+}
+
+func normalizePushTaskTimes(task *model.PushTask) {
+	if task == nil {
+		return
+	}
+	task.CallbackTime = timeutil.NormalizePtr(task.CallbackTime)
+	task.ScheduledAt = timeutil.NormalizePtr(task.ScheduledAt)
+	task.CreatedAt = timeutil.Normalize(task.CreatedAt)
+	task.UpdatedAt = timeutil.Normalize(task.UpdatedAt)
 }
 
 // validateTemplateParams 验证模板参数是否完整

@@ -32,15 +32,16 @@ func TestScanProcessingTasksCreatesOneFailedOutbox(t *testing.T) {
 		MessageType: constants.MessageTypeEmail,
 		Receiver:    "user@example.com",
 		Status:      constants.TaskStatusProcessing,
-		UpdatedAt:   time.Now().Add(-10 * time.Minute),
+		UpdatedAt:   time.Now().In(time.FixedZone("UTC+8", 8*60*60)).Add(-10 * time.Minute),
 	}
-	if err := db.Create(task).Error; err != nil {
+	taskDAO := dao.NewPushTaskDAOWithDB(db)
+	if err := taskDAO.Create(task); err != nil {
 		t.Fatalf("create task: %v", err)
 	}
 
 	scanner := &SMSTimeoutScanner{
 		logger:            timeoutScannerNoopLogger{},
-		taskDao:           dao.NewPushTaskDAOWithDB(db),
+		taskDao:           taskDAO,
 		processingTimeout: time.Minute,
 		limit:             100,
 		terminalService:   service.NewTaskTerminalServiceWithDB(db),

@@ -9,6 +9,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/service"
+	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	"cnb.cool/mliev/push/message-push/modules/delivery/infrastructure/lock"
 	"github.com/muleiwu/gsr"
 )
@@ -111,7 +112,7 @@ func (s *SMSTimeoutScanner) scanProcessingTasks(ctx context.Context) {
 			Event:        constants.WebhookEventFailed,
 			ErrorCode:    "PROCESSING_TIMEOUT",
 			ErrorMessage: "message processing timed out",
-			OccurredAt:   time.Now(),
+			OccurredAt:   timeutil.Now(),
 		})
 		if transitionErr != nil {
 			s.logger.Error(fmt.Sprintf("failed to terminalize timeout task id=%s: %v", task.TaskID, transitionErr))

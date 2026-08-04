@@ -16,7 +16,7 @@ type PushLog struct {
 	Status            string    `gorm:"type:varchar(20);not null;index:idx_status_created;comment:状态：success, failed" json:"status"`
 	ErrorMessage      string    `gorm:"type:text;comment:错误信息" json:"error_message"`
 	CostTime          int       `gorm:"type:int;comment:耗时（毫秒）" json:"cost_time"`
-	CreatedAt         time.Time `gorm:"type:timestamp;default:CURRENT_TIMESTAMP;index:idx_created_at,idx_app_id_created,idx_status_created" json:"created_at"`
+	CreatedAt         time.Time `gorm:"default:CURRENT_TIMESTAMP;index:idx_created_at,idx_app_id_created,idx_status_created" json:"created_at"`
 }
 
 // TableName 指定表名

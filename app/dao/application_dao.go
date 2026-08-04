@@ -18,6 +18,10 @@ func NewApplicationDAO() *ApplicationDAO {
 	}
 }
 
+func NewApplicationDAOWithDB(db *gorm.DB) *ApplicationDAO {
+	return &ApplicationDAO{db: db}
+}
+
 // Create 创建应用
 func (d *ApplicationDAO) Create(app *model.Application) error {
 	return d.db.Create(app).Error

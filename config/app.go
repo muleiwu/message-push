@@ -4,11 +4,11 @@ import (
 	"cnb.cool/mliev/open/go-web/pkg/interfaces"
 	cacheAssembly "cnb.cool/mliev/open/go-web/pkg/server/cache/assembly"
 	configAssembly "cnb.cool/mliev/open/go-web/pkg/server/config/assembly"
-	databaseAssembly "cnb.cool/mliev/open/go-web/pkg/server/database/assembly"
 	envAssembly "cnb.cool/mliev/open/go-web/pkg/server/env/assembly"
 	httpService "cnb.cool/mliev/open/go-web/pkg/server/http_server/service"
 	loggerAssembly "cnb.cool/mliev/open/go-web/pkg/server/logger/assembly"
 	redisAssembly "cnb.cool/mliev/open/go-web/pkg/server/redis/assembly"
+	databaseAssembly "cnb.cool/mliev/push/message-push/internal/database"
 	"cnb.cool/mliev/push/message-push/migration"
 	identityServer "cnb.cool/mliev/push/message-push/modules/identity/server"
 )
@@ -25,7 +25,7 @@ func (a App) Assemblies() []interfaces.AssemblyInterface {
 		&envAssembly.Env{},
 		&configAssembly.Config{DefaultConfigs: Config{}.Get()},
 		&loggerAssembly.Logger{},
-		&databaseAssembly.Database{},
+		&databaseAssembly.Assembly{},
 		&redisAssembly.Redis{},
 		&cacheAssembly.Cache{},
 	}

@@ -238,22 +238,24 @@ func TestAdminStatisticsAppliesEachDimensionFilter(t *testing.T) {
 func TestAdminStatisticsUsesInclusiveDateBoundaries(t *testing.T) {
 	db := newAdminStatisticsTestDB(t)
 	statisticsService := &AdminStatisticsService{db: db}
-	start := time.Date(2026, 7, 20, 0, 0, 0, 0, time.Local)
-	end := start.AddDate(0, 0, 1)
+	start, rangeEnd, err := statisticsDateRange("2026-07-20", "2026-07-21")
+	if err != nil {
+		t.Fatalf("statisticsDateRange() error = %v", err)
+	}
 
 	tasks := []*model.PushTask{
 		{TaskID: "before-range", AppID: "boundary-app", ChannelID: 1, MessageType: "sms", Receiver: "13800138000", Status: "success", CreatedAt: start.Add(-time.Nanosecond)},
 		{TaskID: "at-range-start", AppID: "boundary-app", ChannelID: 1, MessageType: "sms", Receiver: "13800138001", Status: "success", CreatedAt: start},
-		{TaskID: "at-range-end", AppID: "boundary-app", ChannelID: 1, MessageType: "sms", Receiver: "13800138002", Status: "failed", CreatedAt: end.AddDate(0, 0, 1).Add(-time.Nanosecond)},
-		{TaskID: "after-range", AppID: "boundary-app", ChannelID: 1, MessageType: "sms", Receiver: "13800138003", Status: "success", CreatedAt: end.AddDate(0, 0, 1)},
+		{TaskID: "at-range-end", AppID: "boundary-app", ChannelID: 1, MessageType: "sms", Receiver: "13800138002", Status: "failed", CreatedAt: rangeEnd.Add(-time.Nanosecond)},
+		{TaskID: "after-range", AppID: "boundary-app", ChannelID: 1, MessageType: "sms", Receiver: "13800138003", Status: "success", CreatedAt: rangeEnd},
 	}
 	if err := db.Select("task_id", "app_id", "channel_id", "message_type", "receiver", "status", "created_at", "updated_at").Create(&tasks).Error; err != nil {
 		t.Fatalf("create push tasks: %v", err)
 	}
 
 	stats, err := statisticsService.GetStatistics(&dto.StatisticsRequest{
-		StartDate: start.Format(statisticsDateLayout),
-		EndDate:   end.Format(statisticsDateLayout),
+		StartDate: "2026-07-20",
+		EndDate:   "2026-07-21",
 	})
 	if err != nil {
 		t.Fatalf("GetStatistics() error = %v", err)
@@ -266,25 +268,21 @@ func TestAdminStatisticsUsesInclusiveDateBoundaries(t *testing.T) {
 	}
 }
 
-func TestStatisticsDateRangesUseLocalCalendarDays(t *testing.T) {
-	originalLocal := time.Local
-	time.Local = time.FixedZone("UTC+8", 8*60*60)
-	t.Cleanup(func() { time.Local = originalLocal })
-
+func TestStatisticsDateRangesUseShanghaiCalendarDaysInUTC(t *testing.T) {
 	start, end, err := statisticsDateRange("2026-07-23", "2026-07-23")
 	if err != nil {
 		t.Fatalf("statistics date range: %v", err)
 	}
-	if got, want := start.Format(time.RFC3339), "2026-07-23T00:00:00+08:00"; got != want {
+	if got, want := start.Format(time.RFC3339), "2026-07-22T16:00:00Z"; got != want {
 		t.Fatalf("start = %s, want %s", got, want)
 	}
-	if got, want := end.Format(time.RFC3339), "2026-07-24T00:00:00+08:00"; got != want {
+	if got, want := end.Format(time.RFC3339), "2026-07-23T16:00:00Z"; got != want {
 		t.Fatalf("end = %s, want %s", got, want)
 	}
 
-	todayStart, tomorrowStart := localDayRange(time.Date(2026, 7, 23, 0, 0, 1, 0, time.Local))
+	todayStart, tomorrowStart := localDayRange(time.Date(2026, 7, 23, 15, 59, 59, 0, time.UTC))
 	if !todayStart.Equal(start) || !tomorrowStart.Equal(end) {
-		t.Fatalf("local day range = [%s, %s), want [%s, %s)", todayStart, tomorrowStart, start, end)
+		t.Fatalf("business day range = [%s, %s), want [%s, %s)", todayStart, tomorrowStart, start, end)
 	}
 }
 
@@ -295,15 +293,15 @@ func TestStatisticsDateBucketExpressionsReturnTextForEveryDialect(t *testing.T) 
 	}{
 		{
 			dialect: "sqlite",
-			want:    "strftime('%Y-%m-%d', created_at, 'localtime')",
+			want:    "strftime('%Y-%m-%d', created_at, '+8 hours')",
 		},
 		{
 			dialect: "mysql",
-			want:    "DATE_FORMAT(created_at, '%Y-%m-%d')",
+			want:    "DATE_FORMAT(CONVERT_TZ(created_at, '+00:00', '+08:00'), '%Y-%m-%d')",
 		},
 		{
 			dialect: "postgres",
-			want:    "TO_CHAR(created_at, 'YYYY-MM-DD')",
+			want:    "TO_CHAR(created_at AT TIME ZONE 'Asia/Shanghai', 'YYYY-MM-DD')",
 		},
 	}
 
@@ -316,13 +314,9 @@ func TestStatisticsDateBucketExpressionsReturnTextForEveryDialect(t *testing.T) 
 	}
 }
 
-func TestStatisticsTimezoneLabelDisambiguatesLocal(t *testing.T) {
-	originalLocal := time.Local
-	time.Local = time.FixedZone("Local", 8*60*60)
-	t.Cleanup(func() { time.Local = originalLocal })
-
-	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.Local)
-	if got, want := statisticsTimezoneLabel(now), "Local (UTC+08:00)"; got != want {
+func TestStatisticsTimezoneLabelIsBusinessTimezone(t *testing.T) {
+	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
+	if got, want := statisticsTimezoneLabel(now), "Asia/Shanghai"; got != want {
 		t.Fatalf("statistics timezone = %q, want %q", got, want)
 	}
 }
