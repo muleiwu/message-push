@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	appHelper "cnb.cool/mliev/push/message-push/app/helper"
@@ -46,6 +47,26 @@ func TestResetDemoCreatesValidDeterministicDataset(t *testing.T) {
 	}
 	if secret != "demo-shop-secret-2026" {
 		t.Fatalf("unexpected decrypted app secret: %q", secret)
+	}
+	var providerTemplates []model.ProviderTemplate
+	if err := db.Order("id").Find(&providerTemplates).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, providerTemplate := range providerTemplates {
+		if strings.Contains(providerTemplate.TemplateContent, "${") {
+			t.Fatalf(
+				"provider template %q uses unsupported ${variable} syntax: %q",
+				providerTemplate.TemplateCode,
+				providerTemplate.TemplateContent,
+			)
+		}
+	}
+	var aliyunLoginTemplate model.ProviderTemplate
+	if err := db.Where("template_code = ?", "SMS_DEMO_100001").First(&aliyunLoginTemplate).Error; err != nil {
+		t.Fatal(err)
+	}
+	if aliyunLoginTemplate.TemplateContent != "您的验证码是 {code}，{minutes} 分钟内有效。" {
+		t.Fatalf("unexpected Aliyun demo template content: %q", aliyunLoginTemplate.TemplateContent)
 	}
 	var batchLinked int64
 	if err := db.Table("push_tasks").Where("batch_id <> ''").Count(&batchLinked).Error; err != nil {

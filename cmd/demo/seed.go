@@ -148,10 +148,10 @@ func seedTemplates(db *gorm.DB, accounts []model.ProviderAccount, anchor time.Ti
 	}
 
 	providers := []model.ProviderTemplate{
-		{ProviderID: accounts[0].ID, TemplateCode: "SMS_DEMO_100001", TemplateName: "阿里云登录验证码（演示）", ContentType: "text", TemplateContent: "您的验证码是 ${code}，${minutes} 分钟内有效。", Status: 1, Remark: "虚构模板代码", CreatedAt: anchor.AddDate(0, 0, -50), UpdatedAt: anchor.AddDate(0, 0, -4)},
+		{ProviderID: accounts[0].ID, TemplateCode: "SMS_DEMO_100001", TemplateName: "阿里云登录验证码（演示）", ContentType: "text", TemplateContent: "您的验证码是 {code}，{minutes} 分钟内有效。", Status: 1, Remark: "虚构模板代码", CreatedAt: anchor.AddDate(0, 0, -50), UpdatedAt: anchor.AddDate(0, 0, -4)},
 		{ProviderID: accounts[1].ID, TemplateCode: "200001", TemplateName: "腾讯云登录验证码（演示）", ContentType: "text", TemplateContent: "您的验证码是 {1}，{2} 分钟内有效。", Status: 1, Remark: "虚构模板代码", CreatedAt: anchor.AddDate(0, 0, -49), UpdatedAt: anchor.AddDate(0, 0, -4)},
 		{ProviderID: accounts[2].ID, TemplateCode: "SMTP_DEMO_ALERT", TemplateName: "SMTP 服务告警（演示）", ContentType: "html", TemplateContent: "<h2>{{service}} 告警</h2><p>{{level}}</p><p>{{detail}}</p>", Status: 1, Remark: "本地演示模板", CreatedAt: anchor.AddDate(0, 0, -48), UpdatedAt: anchor.AddDate(0, 0, -4)},
-		{ProviderID: accounts[0].ID, TemplateCode: "SMS_DEMO_ORDER", TemplateName: "阿里云订单通知（演示）", ContentType: "text", TemplateContent: "订单 ${order_no} 已更新为 ${status}。", Status: 1, Remark: "虚构模板代码", CreatedAt: anchor.AddDate(0, 0, -47), UpdatedAt: anchor.AddDate(0, 0, -4)},
+		{ProviderID: accounts[0].ID, TemplateCode: "SMS_DEMO_ORDER", TemplateName: "阿里云订单通知（演示）", ContentType: "text", TemplateContent: "订单 {order_no} 已更新为 {status}。", Status: 1, Remark: "虚构模板代码", CreatedAt: anchor.AddDate(0, 0, -47), UpdatedAt: anchor.AddDate(0, 0, -4)},
 		{ProviderID: accounts[3].ID, TemplateCode: "SMS_DISABLED_001", TemplateName: "历史模板（停用账号）", ContentType: "text", TemplateContent: "历史演示 {name}", Status: 0, Remark: "用于展示异常状态", CreatedAt: anchor.AddDate(0, 0, -90), UpdatedAt: anchor.AddDate(0, 0, -30)},
 	}
 	providerVars := [][]string{{"code", "minutes"}, {"code", "minutes"}, {"service", "level", "detail"}, {"order_no", "status"}, {"name"}}
