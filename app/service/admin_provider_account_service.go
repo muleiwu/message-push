@@ -388,13 +388,22 @@ func (s *AdminProviderAccountService) TestProviderAccount(id uint, req *dto.Test
 			return nil, fmt.Errorf("email is required for email")
 		}
 		task.Receiver = req.Email
-		task.Signature = "测试邮件"
+	}
+
+	var signature *model.ProviderSignature
+	if account.ProviderType == constants.MessageTypeEmail {
+		// 账号连通性测试不经过生产通道映射，使用固定的临时标题资源。
+		signature = &model.ProviderSignature{
+			SignatureName: "测试邮件",
+			SignatureCode: "测试邮件",
+			Status:        1,
+		}
 	}
 
 	sendReq := &sender.SendRequest{
 		Task:            task,
 		ProviderAccount: account,
-		Signature:       nil,         // 测试时不加载签名，由服务商返回错误
+		Signature:       signature,
 		RenderedContent: req.Message, // 测试消息直接作为渲染内容
 	}
 

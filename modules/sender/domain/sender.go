@@ -32,7 +32,7 @@ type SendRequest struct {
 	Task                   *model.PushTask
 	ProviderAccount        *model.ProviderAccount        // 服务商账号配置
 	ChannelTemplateBinding *model.ChannelTemplateBinding // 通道模板绑定配置
-	Signature              *model.ProviderSignature      // 签名配置（用于SMS类型）
+	Signature              *model.ProviderSignature      // 映射资源配置（短信签名或邮件标题）
 	MappedParams           map[string]string             // 映射后的模板参数（供应商变量名到值的映射）
 	RenderedContent        string                        // 供应商模板渲染后的内容
 
@@ -73,9 +73,9 @@ type BatchSendRequest struct {
 	Tasks                  []*model.PushTask
 	ProviderAccount        *model.ProviderAccount
 	ChannelTemplateBinding *model.ChannelTemplateBinding
-	Signature              *model.ProviderSignature
-	MappedParams           map[string]string // 映射后的模板参数（供应商变量名到值的映射）
-	RenderedContent        string            // 供应商模板渲染后的内容（批量发送时所有任务共用）
+	Signature              *model.ProviderSignature // 映射资源配置（短信签名或邮件标题）
+	MappedParams           map[string]string        // 映射后的模板参数（供应商变量名到值的映射）
+	RenderedContent        string                   // 供应商模板渲染后的内容（批量发送时所有任务共用）
 }
 
 // BatchSendResponse 批量发送响应

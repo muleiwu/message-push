@@ -7,8 +7,10 @@ import (
 	"testing"
 
 	"cnb.cool/mliev/push/message-push/app/constants"
+	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/model"
 	registry "cnb.cool/mliev/push/message-push/modules/sender/domain"
+	_ "cnb.cool/mliev/push/message-push/modules/sender/infrastructure"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 )
@@ -297,6 +299,60 @@ func TestMissingRequiredSignatureDegradesWhenPlainPathRemains(t *testing.T) {
 	}
 	if len(eligibility.ValidBindingIDs) != 1 || eligibility.ValidBindingIDs[0] != plainBinding.ID {
 		t.Fatalf("eligibility = %v, want plain binding %d", eligibility.ValidBindingIDs, plainBinding.ID)
+	}
+}
+
+func TestSMTPTitleMappingControlsReadinessAndAcceptance(t *testing.T) {
+	db := newReadinessTestDB(t)
+	fixture := createReadyFixture(t, db, constants.MessageTypeEmail, constants.ProviderSMTP)
+	evaluator := NewChannelEvaluator(db)
+
+	result, err := evaluator.EvaluateChannel(fixture.channel.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.State != constants.ChannelReadinessBlocked || result.ValidBindingCount != 0 ||
+		result.RequiredSignatureAccountCount != 1 || !containsString(result.BlockerCodes, constants.ReadinessBlockerSignatureRequired) {
+		t.Fatalf("SMTP readiness without title mapping = %+v, want blocked", result)
+	}
+	if err := evaluator.ValidateForSend(fixture.channel.ID, ""); !validationHasCode(err, constants.ReadinessBlockerSignatureRequired) {
+		t.Fatalf("empty SMTP title alias error = %v, want %s", err, constants.ReadinessBlockerSignatureRequired)
+	}
+
+	secondAccount, _, _ := createProviderPath(t, db, fixture.channel.ID, constants.MessageTypeEmail, constants.ProviderSMTP)
+	firstMapping := createSignatureAlias(t, db, fixture.channel.ID, fixture.account.ID, "order-created")
+	secondMapping := createSignatureAlias(t, db, fixture.channel.ID, secondAccount.ID, "order-created")
+	if err := db.Model(&model.ProviderSignature{}).Where("id = ?", firstMapping.ProviderSignatureID).Update("signature_code", "账号 A 的订单标题").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.ProviderSignature{}).Where("id = ?", secondMapping.ProviderSignatureID).Update("signature_code", "账号 B 的订单标题").Error; err != nil {
+		t.Fatal(err)
+	}
+	result, err = evaluator.EvaluateChannel(fixture.channel.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.State != constants.ChannelReadinessReady || result.ValidBindingCount != 2 || result.RequiredSignatureAccountCount != 2 ||
+		len(result.CommonSignatureAliases) != 1 || result.CommonSignatureAliases[0] != "order-created" {
+		t.Fatalf("SMTP readiness with title mapping = %+v, want ready", result)
+	}
+	lookup := dao.NewChannelSignatureMappingDAO(db)
+	firstTitle, err := lookup.GetByChannelIDAndSignatureName(fixture.channel.ID, "order-created", fixture.account.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondTitle, err := lookup.GetByChannelIDAndSignatureName(fixture.channel.ID, "order-created", secondAccount.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if firstTitle.SignatureCode != "账号 A 的订单标题" || secondTitle.SignatureCode != "账号 B 的订单标题" {
+		t.Fatalf("SMTP title mapping resolved first=%q second=%q", firstTitle.SignatureCode, secondTitle.SignatureCode)
+	}
+	if err := evaluator.ValidateForSend(fixture.channel.ID, "order-created"); err != nil {
+		t.Fatalf("mapped SMTP title alias was rejected: %v", err)
+	}
+	if err := evaluator.ValidateForSend(fixture.channel.ID, "unknown"); !validationHasCode(err, constants.ReadinessBlockerSignatureAliasNotCommon) {
+		t.Fatalf("unknown SMTP title alias error = %v, want %s", err, constants.ReadinessBlockerSignatureAliasNotCommon)
 	}
 }
 

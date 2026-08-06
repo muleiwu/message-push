@@ -194,6 +194,36 @@ func TestNeteaseSignatureCanBeCreatedAndUpdated(t *testing.T) {
 	}
 }
 
+func TestSMTPTitleCanBeCreatedAndUpdated(t *testing.T) {
+	db := newSignatureServiceTestDB(t)
+	account := createSignatureTestAccount(t, db, "smtp", constants.ProviderSMTP, constants.MessageTypeEmail)
+	service := &AdminProviderSignatureService{
+		signatureDAO: dao.NewProviderSignatureDAO(db),
+		accountDAO:   dao.NewProviderAccountDAOWithDB(db),
+	}
+
+	created, err := service.CreateSignature(account.ID, &dto.CreateProviderSignatureRequest{
+		SignatureCode: "订单已经创建",
+		SignatureName: "订单创建标题",
+		Status:        1,
+	})
+	if err != nil {
+		t.Fatalf("CreateSignature() error = %v", err)
+	}
+	if !created.RequiresSignature || created.ReadOnly || created.HistoricalOnly {
+		t.Fatalf("created SMTP title policy = %+v, want writable required mapping", created)
+	}
+
+	err = service.UpdateSignature(created.ID, &dto.UpdateProviderSignatureRequest{
+		SignatureCode: "您的订单已经创建",
+		SignatureName: "订单创建标题",
+		Status:        1,
+	})
+	if err != nil {
+		t.Fatalf("UpdateSignature() error = %v", err)
+	}
+}
+
 func newSignatureServiceTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "signature.db")), &gorm.Config{DisableForeignKeyConstraintWhenMigrating: true})

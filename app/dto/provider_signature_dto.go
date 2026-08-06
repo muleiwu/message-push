@@ -1,20 +1,20 @@
 package dto
 
-// CreateProviderSignatureRequest 创建签名请求
+// CreateProviderSignatureRequest 创建供应商映射资源请求
 type CreateProviderSignatureRequest struct {
-	// SignatureCode 签名代码：实际发送用，原样提交给供应商作为短信签名，须与供应商平台报备审核通过的签名一致
+	// SignatureCode 映射值：实际发送用；短信为供应商平台审核通过的签名，邮件为静态标题
 	SignatureCode string `json:"signature_code" binding:"required,max=200" example:"墨蕾科技"`
-	// SignatureName 签名名称：仅后台展示用，不参与实际发送，仅用于后台识别。通常与签名代码相同
+	// SignatureName 资源名称：仅后台展示和识别，不参与实际发送
 	SignatureName string `json:"signature_name" binding:"required,max=100" example:"墨蕾科技验证码签名"`
 	Status        int8   `json:"status" example:"1"`
 	Remark        string `json:"remark" example:"用于发送验证码"`
 }
 
-// UpdateProviderSignatureRequest 更新签名请求
+// UpdateProviderSignatureRequest 更新供应商映射资源请求
 type UpdateProviderSignatureRequest struct {
-	// SignatureCode 签名代码：实际发送用，原样提交给供应商作为短信签名，须与供应商平台报备审核通过的签名一致
+	// SignatureCode 映射值：实际发送用；短信为供应商平台审核通过的签名，邮件为静态标题
 	SignatureCode string `json:"signature_code" binding:"required,max=200" example:"墨蕾科技"`
-	// SignatureName 签名名称：仅后台展示用，不参与实际发送，仅用于后台识别。通常与签名代码相同
+	// SignatureName 资源名称：仅后台展示和识别，不参与实际发送
 	SignatureName string `json:"signature_name" binding:"required,max=100" example:"墨蕾科技验证码签名"`
 	Status        int8   `json:"status" example:"1"`
 	Remark        string `json:"remark" example:"用于发送验证码"`

@@ -47,3 +47,22 @@ func TestMessageSignatureAliasRejectsMoreThan100Characters(t *testing.T) {
 		t.Fatalf("100-character signature alias was rejected: %v", err)
 	}
 }
+
+func TestChannelMappingAliasRejectsMoreThan100Characters(t *testing.T) {
+	validate := validator.New()
+	validate.SetTagName("binding")
+
+	request := CreateChannelSignatureMappingRequest{
+		SignatureName:       strings.Repeat("a", 101),
+		ProviderSignatureID: 1,
+		ProviderID:          1,
+	}
+	if err := validate.Struct(request); err == nil {
+		t.Fatal("expected a 101-character channel mapping alias to be rejected")
+	}
+
+	request.SignatureName = strings.Repeat("a", 100)
+	if err := validate.Struct(request); err != nil {
+		t.Fatalf("100-character channel mapping alias was rejected: %v", err)
+	}
+}

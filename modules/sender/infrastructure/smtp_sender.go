@@ -26,7 +26,7 @@ func normalizeEmailSubject(subject string) (string, error) {
 	}
 	subject = strings.TrimSpace(subject)
 	if subject == "" {
-		return "通知", nil
+		return "", fmt.Errorf("email title must not be empty")
 	}
 	return subject, nil
 }
@@ -37,7 +37,7 @@ func init() {
 		Code:        constants.ProviderSMTP,
 		Name:        "SMTP邮件",
 		Type:        constants.MessageTypeEmail,
-		Description: "通用SMTP邮件发送服务，支持各类邮件服务器",
+		Description: "通用SMTP邮件发送服务，支持按标题别名映射不同账号的邮件标题",
 		ConfigFields: []domain.ConfigField{
 			{
 				Key:         "host",
@@ -103,6 +103,7 @@ func init() {
 		SupportsSend:      true,
 		SupportsBatchSend: true,
 		SupportsCallback:  true,
+		RequiresSignature: true,
 		// 扩展信息
 		Website:    "",
 		Icon:       "",
@@ -362,7 +363,10 @@ func (s *SMTPSender) Send(ctx context.Context, req *domain.SendRequest) (*domain
 	}
 
 	// 构建邮件内容
-	subject, err := normalizeEmailSubject(req.Task.Signature)
+	if req.Signature == nil {
+		return nil, fmt.Errorf("email title mapping is required")
+	}
+	subject, err := normalizeEmailSubject(req.Signature.SignatureCode)
 	if err != nil {
 		return nil, fmt.Errorf("invalid email subject: %w", err)
 	}
@@ -436,15 +440,14 @@ func (s *SMTPSender) BatchSend(ctx context.Context, req *domain.BatchSendRequest
 		return nil, fmt.Errorf("invalid provider config: %w", err)
 	}
 
-	results := make([]*domain.SendResponse, len(req.Tasks))
-	subjects := make([]string, len(req.Tasks))
-	for i, task := range req.Tasks {
-		subject, err := normalizeEmailSubject(task.Signature)
-		if err != nil {
-			return nil, fmt.Errorf("invalid email subject for task %s: %w", task.TaskID, err)
-		}
-		subjects[i] = subject
+	if req.Signature == nil {
+		return nil, fmt.Errorf("email title mapping is required")
 	}
+	subject, err := normalizeEmailSubject(req.Signature.SignatureCode)
+	if err != nil {
+		return nil, fmt.Errorf("invalid email title: %w", err)
+	}
+	results := make([]*domain.SendResponse, len(req.Tasks))
 
 	// 获取邮件内容类型
 	contentType := "text/plain; charset=UTF-8"
@@ -460,8 +463,6 @@ func (s *SMTPSender) BatchSend(ctx context.Context, req *domain.BatchSendRequest
 
 	// 逐个发送邮件（SMTP 批量发送时每个收件人内容可能不同）
 	for i, task := range req.Tasks {
-		subject := subjects[i]
-
 		message := fmt.Sprintf("From: %s\r\n", config.From)
 		message += fmt.Sprintf("To: %s\r\n", task.Receiver)
 		message += fmt.Sprintf("Subject: %s\r\n", subject)
