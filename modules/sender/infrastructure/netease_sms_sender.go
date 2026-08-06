@@ -44,7 +44,7 @@ func init() {
 		Code:        constants.ProviderNeteaseSMS,
 		Name:        "网易云信短信",
 		Type:        constants.MessageTypeSMS,
-		Description: "网易云信短信服务，支持通知短信与验证码短信发送、回执抄送。注意：短信签名已内嵌在已审核的模板内容中，无需在「签名管理」中单独配置",
+		Description: "网易云信短信服务，支持通知短信与验证码短信发送、回执抄送。短信签名需在网易云信控制台单独提交审核，并在本系统的「签名管理」中配置",
 		ConfigFields: []domain.ConfigField{
 			{
 				Key:         "app_key",
@@ -83,6 +83,7 @@ func init() {
 		SupportsSend:      true,
 		SupportsBatchSend: true,
 		SupportsCallback:  true,
+		RequiresSignature: true,
 		// 扩展信息
 		Website: "https://yunxin.163.com",
 		// 使用仓库内置的通用图标，避免服务商列表请求不存在的静态文件。
@@ -310,7 +311,8 @@ func (s *NeteaseSMSSender) Send(ctx context.Context, req *domain.SendRequest) (*
 		return nil, err
 	}
 
-	// 2. 获取模板编号与内容（网易签名内嵌于模板，忽略 req.Signature）
+	// 2. 获取模板编号与内容。网易发送接口通过模板编号使用其关联的已审核签名，
+	// 不提供逐次传入签名的参数；req.Signature 用于本系统发送前的签名映射与就绪校验。
 	templateCode, templateContent := resolveNeteaseTemplate(req.ChannelTemplateBinding, req.Task.TemplateCode)
 	if templateCode == "" {
 		return nil, fmt.Errorf("missing template_code")

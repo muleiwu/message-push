@@ -11,6 +11,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/model"
 	registry "cnb.cool/mliev/push/message-push/modules/sender/domain"
+	_ "cnb.cool/mliev/push/message-push/modules/sender/infrastructure"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 )
@@ -160,6 +161,36 @@ func TestNonSignatureProviderHistoryIsReadOnly(t *testing.T) {
 	}
 	if err := service.DeleteSignature(readOnlyRecord.ID); err == nil || !strings.Contains(err.Error(), "read-only") {
 		t.Fatalf("non-email delete error = %v, want read-only policy", err)
+	}
+}
+
+func TestNeteaseSignatureCanBeCreatedAndUpdated(t *testing.T) {
+	db := newSignatureServiceTestDB(t)
+	account := createSignatureTestAccount(t, db, "netease", constants.ProviderNeteaseSMS, constants.MessageTypeSMS)
+	service := &AdminProviderSignatureService{
+		signatureDAO: dao.NewProviderSignatureDAO(db),
+		accountDAO:   dao.NewProviderAccountDAOWithDB(db),
+	}
+
+	created, err := service.CreateSignature(account.ID, &dto.CreateProviderSignatureRequest{
+		SignatureCode: "reviewed-signature",
+		SignatureName: "reviewed-signature",
+		Status:        1,
+	})
+	if err != nil {
+		t.Fatalf("CreateSignature() error = %v", err)
+	}
+	if !created.RequiresSignature || created.ReadOnly || created.HistoricalOnly {
+		t.Fatalf("created signature policy = %+v, want writable required signature", created)
+	}
+
+	err = service.UpdateSignature(created.ID, &dto.UpdateProviderSignatureRequest{
+		SignatureCode: "updated-reviewed-signature",
+		SignatureName: "updated-reviewed-signature",
+		Status:        1,
+	})
+	if err != nil {
+		t.Fatalf("UpdateSignature() error = %v", err)
 	}
 }
 
