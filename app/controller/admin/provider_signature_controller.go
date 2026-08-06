@@ -9,11 +9,11 @@ import (
 	"cnb.cool/mliev/push/message-push/app/service"
 )
 
-// ProviderSignatureController 供应商签名管理控制器
+// ProviderSignatureController 供应商签名/邮件标题资源管理控制器
 type ProviderSignatureController struct {
 }
 
-// GetGlobalSignatureList 获取全局签名分页列表
+// GetGlobalSignatureList 获取全局签名/标题资源分页列表
 func (c ProviderSignatureController) GetGlobalSignatureList(ctx httpInterfaces.RouterContextInterface) {
 	signatureService := service.NewAdminProviderSignatureService()
 
@@ -32,7 +32,7 @@ func (c ProviderSignatureController) GetGlobalSignatureList(ctx httpInterfaces.R
 	controller.SuccessResponse(ctx, resp)
 }
 
-// GetSignatureList 获取签名列表
+// GetSignatureList 获取账号的签名/标题资源列表
 func (c ProviderSignatureController) GetSignatureList(ctx httpInterfaces.RouterContextInterface) {
 	signatureService := service.NewAdminProviderSignatureService()
 
@@ -58,7 +58,7 @@ func (c ProviderSignatureController) GetSignatureList(ctx httpInterfaces.RouterC
 	controller.SuccessResponse(ctx, resp)
 }
 
-// CreateSignature 创建签名
+// CreateSignature 创建供应商签名/邮件标题资源
 func (c ProviderSignatureController) CreateSignature(ctx httpInterfaces.RouterContextInterface) {
 	signatureService := service.NewAdminProviderSignatureService()
 
@@ -84,7 +84,7 @@ func (c ProviderSignatureController) CreateSignature(ctx httpInterfaces.RouterCo
 	controller.SuccessResponse(ctx, resp)
 }
 
-// UpdateSignature 更新签名
+// UpdateSignature 更新供应商签名/邮件标题资源
 func (c ProviderSignatureController) UpdateSignature(ctx httpInterfaces.RouterContextInterface) {
 	signatureService := service.NewAdminProviderSignatureService()
 
@@ -109,7 +109,7 @@ func (c ProviderSignatureController) UpdateSignature(ctx httpInterfaces.RouterCo
 	controller.SuccessResponse(ctx, map[string]any{"message": "updated successfully"})
 }
 
-// DeleteSignature 删除签名
+// DeleteSignature 删除供应商签名/邮件标题资源
 func (c ProviderSignatureController) DeleteSignature(ctx httpInterfaces.RouterContextInterface) {
 	signatureService := service.NewAdminProviderSignatureService()
 

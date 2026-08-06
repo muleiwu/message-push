@@ -6,7 +6,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// ChannelSignatureMapping 通道签名映射表
+// ChannelSignatureMapping 通道签名/标题映射表
 type ChannelSignatureMapping struct {
 	ID                  uint               `gorm:"primaryKey;autoIncrement" json:"id"`
 	ChannelID           uint               `gorm:"not null;index:idx_channel;comment:通道ID（关联channels表）" json:"channel_id"`

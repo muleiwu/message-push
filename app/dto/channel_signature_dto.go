@@ -1,6 +1,6 @@
 package dto
 
-// CreateChannelSignatureMappingRequest 创建通道签名映射请求
+// CreateChannelSignatureMappingRequest 创建通道签名/标题映射请求
 type CreateChannelSignatureMappingRequest struct {
 	SignatureName       string `json:"signature_name" binding:"required,max=100"`
 	ProviderSignatureID uint   `json:"provider_signature_id" binding:"required"`
@@ -8,14 +8,14 @@ type CreateChannelSignatureMappingRequest struct {
 	Status              *int8  `json:"status"`
 }
 
-// UpdateChannelSignatureMappingRequest 更新通道签名映射请求
+// UpdateChannelSignatureMappingRequest 更新通道签名/标题映射请求
 type UpdateChannelSignatureMappingRequest struct {
 	SignatureName       string `json:"signature_name" binding:"omitempty,max=100"`
 	ProviderSignatureID uint   `json:"provider_signature_id"`
 	Status              *int8  `json:"status"`
 }
 
-// ChannelSignatureMappingResponse 通道签名映射响应
+// ChannelSignatureMappingResponse 通道签名/标题映射响应
 type ChannelSignatureMappingResponse struct {
 	ID                    uint   `json:"id"`
 	ChannelID             uint   `json:"channel_id"`

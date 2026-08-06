@@ -20,7 +20,7 @@ type UpdateProviderSignatureRequest struct {
 	Remark        string `json:"remark" example:"用于发送验证码"`
 }
 
-// ProviderSignatureListRequest 签名列表查询请求
+// ProviderSignatureListRequest 签名/标题资源列表查询请求
 type ProviderSignatureListRequest struct {
 	ProviderAccountID uint  `form:"provider_account_id"`
 	Status            *int8 `form:"status" binding:"omitempty,oneof=0 1"`
@@ -28,7 +28,7 @@ type ProviderSignatureListRequest struct {
 	PageSize          int   `form:"page_size" binding:"omitempty,min=1,max=100"`
 }
 
-// ProviderSignatureListResponse 全局签名分页响应
+// ProviderSignatureListResponse 全局签名/标题资源分页响应
 type ProviderSignatureListResponse struct {
 	Total int                          `json:"total"`
 	Page  int                          `json:"page"`
@@ -36,7 +36,7 @@ type ProviderSignatureListResponse struct {
 	Items []*ProviderSignatureResponse `json:"items"`
 }
 
-// ProviderSignatureResponse 签名响应
+// ProviderSignatureResponse 供应商签名/邮件标题资源响应
 type ProviderSignatureResponse struct {
 	ID                  uint   `json:"id"`
 	ProviderAccountID   uint   `json:"provider_account_id"`

@@ -261,7 +261,7 @@ func (c ChannelController) GetAvailableTemplateBindings(ctx httpInterfaces.Route
 	controller.SuccessResponse(ctx, resp)
 }
 
-// GetChannelSignatureMappings 获取通道的签名映射列表
+// GetChannelSignatureMappings 获取通道的签名/标题映射列表
 func (c ChannelController) GetChannelSignatureMappings(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminChannelService()
 	idStr := ctx.Param("id")
@@ -280,7 +280,7 @@ func (c ChannelController) GetChannelSignatureMappings(ctx httpInterfaces.Router
 	controller.SuccessResponse(ctx, resp)
 }
 
-// GetChannelSignatureMapping 获取单个通道签名映射
+// GetChannelSignatureMapping 获取单个通道签名/标题映射
 func (c ChannelController) GetChannelSignatureMapping(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminChannelService()
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
@@ -304,7 +304,7 @@ func (c ChannelController) GetChannelSignatureMapping(ctx httpInterfaces.RouterC
 	controller.SuccessResponse(ctx, resp)
 }
 
-// CreateChannelSignatureMapping 创建通道签名映射
+// CreateChannelSignatureMapping 创建通道签名/标题映射
 func (c ChannelController) CreateChannelSignatureMapping(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminChannelService()
 	idStr := ctx.Param("id")
@@ -329,7 +329,7 @@ func (c ChannelController) CreateChannelSignatureMapping(ctx httpInterfaces.Rout
 	controller.SuccessResponse(ctx, resp)
 }
 
-// UpdateChannelSignatureMapping 更新通道签名映射
+// UpdateChannelSignatureMapping 更新通道签名/标题映射
 func (c ChannelController) UpdateChannelSignatureMapping(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminChannelService()
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
@@ -358,7 +358,7 @@ func (c ChannelController) UpdateChannelSignatureMapping(ctx httpInterfaces.Rout
 	controller.SuccessResponse(ctx, map[string]any{"message": "updated successfully"})
 }
 
-// DeleteChannelSignatureMapping 删除通道签名映射
+// DeleteChannelSignatureMapping 删除通道签名/标题映射
 func (c ChannelController) DeleteChannelSignatureMapping(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminChannelService()
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
@@ -381,7 +381,7 @@ func (c ChannelController) DeleteChannelSignatureMapping(ctx httpInterfaces.Rout
 	controller.SuccessResponse(ctx, map[string]any{"message": "deleted successfully"})
 }
 
-// GetAvailableProviderSignatures 获取通道可用的供应商签名列表
+// GetAvailableProviderSignatures 获取通道可用的供应商签名/邮件标题资源列表
 func (c ChannelController) GetAvailableProviderSignatures(ctx httpInterfaces.RouterContextInterface) {
 	adminService := service.NewAdminChannelService()
 	idStr := ctx.Param("id")
