@@ -102,6 +102,58 @@ func TestTaskTerminalServiceTransitionCreatesOneOutbox(t *testing.T) {
 	}
 }
 
+func TestTaskTerminalServicePurgesSharedAttachmentsAfterLastTask(t *testing.T) {
+	db := newTerminalServiceTestDB(t, true)
+	groupID := "shared-attachment-group"
+	tasks := []*model.PushTask{
+		createTerminalTestTask(t, db, "attachment-first", "attachment-app"),
+		createTerminalTestTask(t, db, "attachment-second", "attachment-app"),
+	}
+	for _, task := range tasks {
+		if err := db.Table("push_tasks").Where("id = ?", task.ID).Update("attachment_group_id", groupID).Error; err != nil {
+			t.Fatalf("assign attachment group: %v", err)
+		}
+		var persisted model.PushTask
+		if err := db.Where("id = ?", task.ID).First(&persisted).Error; err != nil || persisted.AttachmentGroupID != groupID {
+			t.Fatalf("persisted attachment group = %q, error=%v", persisted.AttachmentGroupID, err)
+		}
+	}
+	if err := db.Create(&model.EmailAttachment{
+		AttachmentGroupID: groupID,
+		Position:          0,
+		Filename:          "shared.txt",
+		ContentType:       "text/plain",
+		SizeBytes:         6,
+		SHA256:            "unused-in-cleanup-test",
+		Content:           []byte("shared"),
+	}).Error; err != nil {
+		t.Fatalf("create attachment: %v", err)
+	}
+
+	service := NewTaskTerminalServiceWithDB(db)
+	for index, task := range tasks {
+		result, err := service.Transition(context.Background(), TerminalTransition{
+			TaskID:       task.TaskID,
+			Status:       constants.TaskStatusFailed,
+			Event:        constants.WebhookEventFailed,
+			ErrorMessage: "test failure",
+		})
+		if err != nil || !result.Changed {
+			t.Fatalf("transition task %d: result=%+v error=%v", index, result, err)
+		}
+		var attachment model.EmailAttachment
+		if err := db.First(&attachment).Error; err != nil {
+			t.Fatalf("load attachment after task %d: %v", index, err)
+		}
+		if index == 0 && (attachment.PurgedAt != nil || string(attachment.Content) != "shared") {
+			t.Fatalf("attachment purged before final task: %+v", attachment)
+		}
+		if index == 1 && (attachment.PurgedAt == nil || attachment.Content != nil) {
+			t.Fatalf("attachment not purged after final task: %+v", attachment)
+		}
+	}
+}
+
 func TestTaskTerminalServiceApplicationFallbackAndExplicitDisable(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -288,9 +340,15 @@ func newTerminalServiceTestDB(t *testing.T, withWebhookLogs bool) *gorm.DB {
 		`CREATE TABLE push_tasks (
 			id INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT NOT NULL UNIQUE, app_id TEXT NOT NULL,
 			channel_id INTEGER NOT NULL, provider_account_id INTEGER, message_type TEXT NOT NULL, receiver TEXT NOT NULL,
-			template_code TEXT, template_params TEXT, signature TEXT, status TEXT,
+			template_code TEXT, template_params TEXT, signature TEXT, attachment_group_id TEXT, status TEXT,
 			callback_status TEXT, callback_time DATETIME, retry_count INTEGER, max_retry INTEGER,
 			exclude_provider_ids TEXT, scheduled_at DATETIME, created_at DATETIME, updated_at DATETIME
+		)`,
+		`CREATE TABLE email_attachments (
+			id INTEGER PRIMARY KEY AUTOINCREMENT, attachment_group_id TEXT NOT NULL,
+			position INTEGER NOT NULL, filename TEXT NOT NULL, content_type TEXT NOT NULL,
+			size_bytes INTEGER NOT NULL, sha256 TEXT NOT NULL, content BLOB,
+			purged_at DATETIME, created_at DATETIME
 		)`,
 		`CREATE TABLE webhook_configs (
 			id INTEGER PRIMARY KEY AUTOINCREMENT, app_id TEXT NOT NULL UNIQUE, webhook_url TEXT NOT NULL,

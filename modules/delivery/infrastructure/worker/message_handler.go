@@ -35,6 +35,7 @@ func sanitizeJSONData(data string) string {
 type MessageHandler struct {
 	logger              gsr.Logger
 	taskDao             *dao.PushTaskDAO
+	attachmentDao       *dao.EmailAttachmentDAO
 	logDao              *dao.PushLogDAO
 	selector            channel.Selector
 	senderResolver      sender.Resolver
@@ -59,6 +60,7 @@ func NewMessageHandler() *MessageHandler {
 	return &MessageHandler{
 		logger:              internalHelper.GetLogger(),
 		taskDao:             dao.NewPushTaskDAO(),
+		attachmentDao:       dao.NewEmailAttachmentDAO(),
 		logDao:              dao.NewPushLogDAO(),
 		selector:            channel.GetSelector(),
 		senderResolver:      sender.GetResolver(),
@@ -145,6 +147,20 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 		h.logger.Info(fmt.Sprintf("signature resolved task_id=%s signature_name=%s signature_code=%s", taskID, task.Signature, providerSignature.SignatureCode))
 	}
 
+	var attachments []*model.EmailAttachment
+	if task.AttachmentGroupID != "" {
+		attachmentDao := h.attachmentDao
+		if attachmentDao == nil {
+			attachmentDao = dao.NewEmailAttachmentDAO()
+		}
+		attachments, err = attachmentDao.GetForSend(task.AttachmentGroupID)
+		if err != nil {
+			h.logger.Error(fmt.Sprintf("failed to load email attachments task_id=%s provider_id=%d: %v", taskID, providerAccount.ID, err))
+			h.handleEarlyFailure(task, providerAccount.ID, err.Error())
+			return err
+		}
+	}
+
 	// 解析模板参数并进行映射转换
 	var mappedParams map[string]string
 	if task.TemplateParams != "" && node.ChannelTemplateBinding != nil {
@@ -201,6 +217,7 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 		Signature:              providerSignature,
 		MappedParams:           mappedParams,
 		RenderedContent:        renderedContent,
+		Attachments:            attachments,
 	}
 
 	// 统一解析手机号，供发送器按地区直接判断（仅 SMS 类型）

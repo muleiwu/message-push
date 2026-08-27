@@ -363,9 +363,10 @@ type ActiveItem struct {
 
 // TestProviderRequest 测试服务商配置请求
 type TestProviderRequest struct {
-	Phone   string `json:"phone"`
-	Email   string `json:"email"`
-	Message string `json:"message"`
+	Phone       string                   `json:"phone"`
+	Email       string                   `json:"email"`
+	Message     string                   `json:"message"`
+	Attachments []EmailAttachmentRequest `json:"attachments,omitempty"`
 }
 
 // TestProviderResponse 测试结果

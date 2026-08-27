@@ -27,11 +27,33 @@ func NewPushTaskDAOWithDB(db *gorm.DB) *PushTaskDAO {
 
 // Create 创建任务
 func (d *PushTaskDAO) Create(task *model.PushTask) error {
+	return d.create(d.db, task)
+}
+
+func (d *PushTaskDAO) create(db *gorm.DB, task *model.PushTask) error {
 	task.CallbackTime = timeutil.NormalizePtr(task.CallbackTime)
 	task.ScheduledAt = timeutil.NormalizePtr(task.ScheduledAt)
 	task.CreatedAt = timeutil.Normalize(task.CreatedAt)
 	task.UpdatedAt = timeutil.Normalize(task.UpdatedAt)
-	return d.db.Create(task).Error
+	if err := db.Create(task).Error; err != nil {
+		return err
+	}
+	if task.AttachmentGroupID != "" {
+		return db.Table("push_tasks").
+			Where("id = ?", task.ID).
+			Update("attachment_group_id", task.AttachmentGroupID).Error
+	}
+	return nil
+}
+
+// CreateWithAttachments 原子写入任务及其附件组。
+func (d *PushTaskDAO) CreateWithAttachments(task *model.PushTask, attachments []*model.EmailAttachment) error {
+	return d.db.Transaction(func(tx *gorm.DB) error {
+		if err := d.create(tx, task); err != nil {
+			return err
+		}
+		return NewEmailAttachmentDAOWithDB(tx).CreateMany(attachments)
+	})
 }
 
 // GetByID 根据ID获取任务

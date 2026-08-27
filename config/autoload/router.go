@@ -50,6 +50,7 @@ func (receiver Router) InitConfig() map[string]any {
 
 			// API v1 - 需要认证、限流、配额检查
 			v1 := router.Group("/api/v1")
+			v1.Use(middleware.EmailAttachmentRequestBodyLimitMiddleware())
 			v1.Use(middleware.AuthMiddleware())
 			v1.Use(middleware.RateLimitMiddleware(100)) // 默认100 QPS
 			v1.Use(middleware.QuotaMiddleware())
@@ -78,7 +79,9 @@ func (receiver Router) InitConfig() map[string]any {
 			// Admin API - 管理后台业务接口（需要 JWT 认证）
 			adminGroup := router.Group("/api/admin")
 			adminGroup.Use(middleware.AdminJWTMiddleware())
+			adminGroup.Use(middleware.EmailAttachmentRequestBodyLimitMiddleware())
 			{
+				adminGroup.GET("/email-attachments/limits", admin.EmailAttachmentController{}.GetLimits)
 				// 用户信息和权限
 				adminGroup.GET("/user/info", admin.AuthController{}.GetUserInfo)
 				adminGroup.GET("/auth/codes", admin.AuthController{}.GetAccessCodes)

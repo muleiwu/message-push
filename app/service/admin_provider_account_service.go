@@ -389,6 +389,13 @@ func (s *AdminProviderAccountService) TestProviderAccount(id uint, req *dto.Test
 		}
 		task.Receiver = req.Email
 	}
+	if len(req.Attachments) > 0 && account.ProviderType != constants.MessageTypeEmail {
+		return nil, fmt.Errorf("email attachments are only supported for email providers")
+	}
+	attachments, err := appHelper.DecodeEmailAttachments(req.Attachments, appHelper.GetEmailAttachmentLimits())
+	if err != nil {
+		return nil, err
+	}
 
 	var signature *model.ProviderSignature
 	if account.ProviderType == constants.MessageTypeEmail {
@@ -405,6 +412,7 @@ func (s *AdminProviderAccountService) TestProviderAccount(id uint, req *dto.Test
 		ProviderAccount: account,
 		Signature:       signature,
 		RenderedContent: req.Message, // 测试消息直接作为渲染内容
+		Attachments:     attachments,
 	}
 
 	// 3. 获取发送器（使用服务商代码）

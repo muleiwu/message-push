@@ -35,6 +35,7 @@ type SendRequest struct {
 	Signature              *model.ProviderSignature      // 映射资源配置（短信签名或邮件标题）
 	MappedParams           map[string]string             // 映射后的模板参数（供应商变量名到值的映射）
 	RenderedContent        string                        // 供应商模板渲染后的内容
+	Attachments            []*model.EmailAttachment      // 邮件附件；非邮件类型为空
 
 	// 以下字段由 worker 统一解析手机号后填充（仅 SMS 类型有值），供发送器直接按地区判断，避免各自重复解析。
 	PhoneRegion         string // 手机号地区码（如 "CN"）；非手机号/解析失败为空
@@ -76,6 +77,7 @@ type BatchSendRequest struct {
 	Signature              *model.ProviderSignature // 映射资源配置（短信签名或邮件标题）
 	MappedParams           map[string]string        // 映射后的模板参数（供应商变量名到值的映射）
 	RenderedContent        string                   // 供应商模板渲染后的内容（批量发送时所有任务共用）
+	Attachments            []*model.EmailAttachment // 邮件附件（批量任务共用）
 }
 
 // BatchSendResponse 批量发送响应

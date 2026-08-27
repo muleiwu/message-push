@@ -9,6 +9,7 @@ import (
 
 	internalHelper "cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/constants"
+	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/internal/timeutil"
@@ -103,6 +104,9 @@ func (s *TaskTerminalService) Transition(ctx context.Context, transition Termina
 		outbox, err := s.createOutboxTx(tx, &task, transition, persistedAt)
 		if err != nil {
 			return err
+		}
+		if err := dao.NewEmailAttachmentDAOWithDB(tx).PurgeIfUnreferenced(task.AttachmentGroupID, persistedAt); err != nil {
+			return fmt.Errorf("purge terminal email attachments: %w", err)
 		}
 		result.Changed = true
 		if outbox != nil {

@@ -3,7 +3,7 @@
   "info": {
     "title": "木雷消息服务 API",
     "description": "木雷消息服务 API 接口文档，支持短信、邮件、企业微信、钉钉、Webhook、推送通知等多种消息类型。",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "contact": {
       "name": "API Support"
     }
@@ -30,7 +30,7 @@
       "type": "apiKey",
       "in": "header",
       "name": "X-Signature",
-      "description": "请求签名，使用 HMAC-SHA256 算法生成"
+      "description": "请求签名，使用 HMAC-SHA256 算法生成；attachments 数组及其 Base64 内容与其他 JSON 字段一同参与签名"
     },
     "Timestamp": {
       "type": "apiKey",
@@ -241,6 +241,18 @@
             "expire_time": "5"
           }
         },
+        "signature_name": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "短信签名或邮件标题映射别名"
+        },
+        "attachments": {
+          "type": "array",
+          "description": "邮件附件，仅邮件通道支持；默认单个不超过 5 MiB、合计不超过 10 MiB",
+          "items": {
+            "$ref": "#/definitions/EmailAttachmentRequest"
+          }
+        },
         "scheduled_at": {
           "type": "string",
           "format": "date-time",
@@ -284,11 +296,49 @@
             "duration": "2小时"
           }
         },
+        "signature_name": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "短信签名或邮件标题映射别名"
+        },
+        "attachments": {
+          "type": "array",
+          "description": "邮件附件，所有批量收件人共用同一组；默认单个不超过 5 MiB、合计不超过 10 MiB",
+          "items": {
+            "$ref": "#/definitions/EmailAttachmentRequest"
+          }
+        },
         "scheduled_at": {
           "type": "string",
           "format": "date-time",
           "description": "定时发送时间（ISO 8601 格式）",
           "example": "2025-11-25T22:00:00Z"
+        }
+      }
+    },
+    "EmailAttachmentRequest": {
+      "type": "object",
+      "required": [
+        "filename",
+        "content_base64"
+      ],
+      "properties": {
+        "filename": {
+          "type": "string",
+          "maxLength": 255,
+          "description": "不含路径和控制字符的 UTF-8 文件名",
+          "example": "invoice.pdf"
+        },
+        "content_type": {
+          "type": "string",
+          "description": "可选 MIME 类型；省略时由服务端探测",
+          "example": "application/pdf"
+        },
+        "content_base64": {
+          "type": "string",
+          "format": "byte",
+          "description": "RFC 4648 标准 Base64 内容，不包含 data URL 前缀",
+          "example": "JVBERi0xLjQK"
         }
       }
     },
@@ -526,4 +576,3 @@
     "url": "docs/API_INTEGRATION.md"
   }
 }
-

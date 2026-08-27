@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"mime"
 	"net"
 	"strconv"
 	"strings"
@@ -82,8 +83,8 @@ func TestSMTPSendUsesMappedTitleInsteadOfTaskAlias(t *testing.T) {
 	}
 
 	message := <-messages
-	if !strings.Contains(message, "Subject: 订单已经创建\r\n") {
-		t.Fatalf("SMTP message did not use mapped title:\n%s", message)
+	if subject := decodedSubject(t, message); subject != "订单已经创建" {
+		t.Fatalf("SMTP message subject = %q, want mapped title; message:\n%s", subject, message)
 	}
 	if strings.Contains(message, "Subject: order-created\r\n") {
 		t.Fatalf("SMTP message used task alias as title:\n%s", message)
@@ -141,12 +142,29 @@ func TestSMTPBatchSendUsesMappedTitleInsteadOfTaskAlias(t *testing.T) {
 	}
 
 	message := <-messages
-	if !strings.Contains(message, "Subject: 批量订单通知\r\n") {
-		t.Fatalf("SMTP batch message did not use mapped title:\n%s", message)
+	if subject := decodedSubject(t, message); subject != "批量订单通知" {
+		t.Fatalf("SMTP batch message subject = %q, want mapped title; message:\n%s", subject, message)
 	}
 	if strings.Contains(message, "Subject: order-created\r\n") {
 		t.Fatalf("SMTP batch message used task alias as title:\n%s", message)
 	}
+}
+
+func decodedSubject(t *testing.T, message string) string {
+	t.Helper()
+	for _, line := range strings.Split(message, "\r\n") {
+		if !strings.HasPrefix(line, "Subject: ") {
+			continue
+		}
+		value := strings.TrimPrefix(line, "Subject: ")
+		decoded, err := new(mime.WordDecoder).DecodeHeader(value)
+		if err != nil {
+			t.Fatalf("decode Subject header %q: %v", value, err)
+		}
+		return decoded
+	}
+	t.Fatal("SMTP message has no Subject header")
+	return ""
 }
 
 func startSMTPRecorder(t *testing.T, messageCount int) (string, int, <-chan string) {

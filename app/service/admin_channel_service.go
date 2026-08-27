@@ -1119,6 +1119,7 @@ func (s *AdminChannelService) TestChannel(channelID uint, req *dto.TestChannelRe
 		Receiver:       req.Receiver,
 		TemplateParams: req.TemplateParams,
 		SignatureName:  req.SignatureName,
+		Attachments:    req.Attachments,
 	}
 
 	resp, err := messageService.Send(db.Statement.Context, sendReq)
