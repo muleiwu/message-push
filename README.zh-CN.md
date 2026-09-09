@@ -74,6 +74,8 @@ make demo-run
 
 ## 更多文档
 
+通过[开放通道目录与可视化接入](docs/public-channel-catalog.md)，在业务系统中选择通道、展示模板与变量、选择签名后发送消息。
+
 打开[木雷消息服务文档](https://mdoc.cc/mliev/message-push)，查看安装指南、管理后台手册、API 认证与示例、部署说明、故障排查和架构设计。
 
 ## 许可协议

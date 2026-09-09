@@ -48,6 +48,14 @@ func (receiver Router) InitConfig() map[string]any {
 				callback.GET("/:id", controller.CallbackController{}.Handle)
 			}
 
+			// Channel catalog uses application authentication and rate limiting, but no sending quota.
+			catalog := router.Group("/api/v1/channels")
+			catalog.Use(middleware.EmailAttachmentRequestBodyLimitMiddleware())
+			catalog.Use(middleware.AuthMiddleware())
+			catalog.Use(middleware.RateLimitMiddleware(100))
+			catalog.GET("", controller.ChannelController{}.ListChannels)
+			catalog.GET("/:id", controller.ChannelController{}.GetChannel)
+
 			// API v1 - 需要认证、限流、配额检查
 			v1 := router.Group("/api/v1")
 			v1.Use(middleware.EmailAttachmentRequestBodyLimitMiddleware())

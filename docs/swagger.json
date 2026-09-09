@@ -3,7 +3,7 @@
   "info": {
     "title": "木雷消息服务 API",
     "description": "木雷消息服务 API 接口文档，支持短信、邮件、企业微信、钉钉、Webhook、推送通知等多种消息类型。",
-    "version": "1.3.0",
+    "version": "1.4.0",
     "contact": {
       "name": "API Support"
     }
@@ -30,7 +30,7 @@
       "type": "apiKey",
       "in": "header",
       "name": "X-Signature",
-      "description": "请求签名，使用 HMAC-SHA256 算法生成；attachments 数组及其 Base64 内容与其他 JSON 字段一同参与签名"
+      "description": "请求签名，使用 HMAC-SHA256 算法生成；attachments 数组及其 Base64 内容与其他 JSON 字段一同参与签名；GET 无正文时参数串为空，路径含 /api/v1 且不含查询串，查询参数不参与当前签名。"
     },
     "Timestamp": {
       "type": "apiKey",
@@ -210,6 +210,117 @@
           }
         }
       }
+    },
+    "/channels": {
+      "get": {
+        "tags": [
+          "通道目录"
+        ],
+        "summary": "获取开放通道列表",
+        "operationId": "listPublicChannels",
+        "description": "所有有效应用共享已启用通道；保留配置不完整或暂时不可发送的通道并返回就绪状态。需要 X-App-Id、X-Timestamp、X-Nonce、X-Signature，复用现有限流，不检查或消耗发送配额。GET 无正文，签名使用 GET + URL 路径（含 /api/v1，不含查询串）+ 空参数串 + 时间戳 + nonce；查询参数不参与当前签名。",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "sms",
+              "email",
+              "wechat_work",
+              "dingtalk",
+              "webhook",
+              "push"
+            ],
+            "description": "按消息类型筛选；省略时返回所有类型。"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "default": 1,
+            "minimum": 1
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "code=0 成功；沿用现有中间件，鉴权失败返回 code=20001～20006，限流返回 code=30001（HTTP 仍为 200）。请同时检查 code。",
+            "schema": {
+              "$ref": "#/definitions/PublicChannelListResponse"
+            }
+          },
+          "400": {
+            "description": "非法参数，code=400。",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "数据库或查询故障，code=500。",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/channels/{id}": {
+      "get": {
+        "tags": [
+          "通道目录"
+        ],
+        "summary": "获取通道模板、变量与签名选项",
+        "operationId": "getPublicChannel",
+        "description": "所有有效应用共享已启用通道；保留配置不完整或暂时不可发送的通道并返回就绪状态。需要 X-App-Id、X-Timestamp、X-Nonce、X-Signature，复用现有限流，不检查或消耗发送配额。GET 无正文，签名使用 GET + URL 路径（含 /api/v1，不含查询串）+ 空参数串 + 时间戳 + nonce；查询参数不参与当前签名。 一个通道绑定一个系统模板；选择通道后一次获取联动表单所需的全部配置。",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "description": "通道列表返回的 id。"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "code=0 成功；沿用现有中间件，鉴权失败返回 code=20001～20006，限流返回 code=30001（HTTP 仍为 200）。请同时检查 code。",
+            "schema": {
+              "$ref": "#/definitions/PublicChannelDetailResponse"
+            }
+          },
+          "400": {
+            "description": "非法参数，code=400。",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "数据库或查询故障，code=500。",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "通道不存在、已删除或已禁用，code=404。",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        }
+      }
     }
   },
   "definitions": {
@@ -232,7 +343,7 @@
         },
         "template_params": {
           "type": "object",
-          "description": "模板参数（键值对）",
+          "description": "系统模板变量的字符串键值对，所有键来自 GET /channels/{id} 返回的 template.variables。",
           "additionalProperties": {
             "type": "string"
           },
@@ -244,7 +355,7 @@
         "signature_name": {
           "type": "string",
           "maxLength": 100,
-          "description": "短信签名或邮件标题映射别名"
+          "description": "短信签名或邮件标题映射别名；从 GET /channels/{id} 的 signature_names 选择。signature_required=true 时必填。"
         },
         "attachments": {
           "type": "array",
@@ -287,7 +398,7 @@
         },
         "template_params": {
           "type": "object",
-          "description": "模板参数（所有接收者共用）",
+          "description": "系统模板变量的字符串键值对，所有键来自 GET /channels/{id} 返回的 template.variables。",
           "additionalProperties": {
             "type": "string"
           },
@@ -299,7 +410,7 @@
         "signature_name": {
           "type": "string",
           "maxLength": 100,
-          "description": "短信签名或邮件标题映射别名"
+          "description": "短信签名或邮件标题映射别名；从 GET /channels/{id} 的 signature_names 选择。signature_required=true 时必填。"
         },
         "attachments": {
           "type": "array",
@@ -557,6 +668,221 @@
           "type": "string",
           "description": "错误描述",
           "example": "请求参数错误"
+        }
+      }
+    },
+    "PublicChannelReadiness": {
+      "type": "object",
+      "required": [
+        "state",
+        "blocker_codes"
+      ],
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "ready",
+            "degraded",
+            "blocked"
+          ],
+          "description": "ready/degraded 可选；blocked 应置灰。表示当前配置就绪状态，发送时会重新校验。"
+        },
+        "blocker_codes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "稳定的配置原因码；不含供应商账号或内部资源 ID。"
+        }
+      }
+    },
+    "PublicChannel": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "type",
+        "message_template_id",
+        "template_name",
+        "readiness"
+      ],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 1
+        },
+        "name": {
+          "type": "string",
+          "description": "通道名称"
+        },
+        "type": {
+          "type": "string",
+          "description": "通道消息类型"
+        },
+        "message_template_id": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 0,
+          "description": "绑定的系统模板 ID；模板缺失时仍保留配置值。"
+        },
+        "template_name": {
+          "type": "string",
+          "description": "绑定的系统模板名称；模板缺失时为空字符串。"
+        },
+        "readiness": {
+          "$ref": "#/definitions/PublicChannelReadiness"
+        }
+      }
+    },
+    "PublicChannelTemplate": {
+      "type": "object",
+      "required": [
+        "id",
+        "template_name",
+        "content_type",
+        "content",
+        "variables",
+        "description"
+      ],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 1
+        },
+        "template_name": {
+          "type": "string",
+          "description": "系统模板名称"
+        },
+        "content_type": {
+          "type": "string",
+          "description": "模板内容格式，通常为 text/html/markdown；未配置时返回 text。"
+        },
+        "content": {
+          "type": "string",
+          "description": "系统模板原文，使用 {variable} 占位符；不是供应商模板或最终投递文本。"
+        },
+        "variables": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "系统变量名，保留配置顺序，所有键均须出现在 template_params 中。有效无变量时为 []，配置无效时为 null 且通道 blocked。",
+          "x-nullable": true
+        },
+        "description": {
+          "type": "string",
+          "description": "模板说明"
+        }
+      }
+    },
+    "PublicChannelDetail": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/PublicChannel"
+        },
+        {
+          "type": "object",
+          "required": [
+            "template",
+            "signature_required",
+            "signature_names"
+          ],
+          "properties": {
+            "template": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/PublicChannelTemplate"
+                }
+              ],
+              "x-nullable": true,
+              "description": "绑定的系统模板；缺失或已删除时为 null，通道为 blocked。禁用模板保留内容并返回原因码。"
+            },
+            "signature_required": {
+              "type": "boolean",
+              "description": "当前有效发送路径是否要求 signature_name，与发送校验一致；blocked 或无必填签名路径时为 false。"
+            },
+            "signature_names": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "当前可发送的签名/邮件标题别名，去重并排序，取需要签名的有效供应商账号的共同别名；blocked 或无需签名时为 []。将选中值原样传入 signature_name。"
+            }
+          }
+        }
+      ]
+    },
+    "PublicChannelListData": {
+      "type": "object",
+      "required": [
+        "items",
+        "total",
+        "page",
+        "size"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PublicChannel"
+          },
+          "description": "已启用通道，按 ID 倒序，包含 blocked 通道；无数据为 []。"
+        },
+        "total": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 0
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      }
+    },
+    "PublicChannelListResponse": {
+      "type": "object",
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "integer",
+          "example": 0
+        },
+        "message": {
+          "type": "string",
+          "example": "success"
+        },
+        "data": {
+          "$ref": "#/definitions/PublicChannelListData"
+        }
+      }
+    },
+    "PublicChannelDetailResponse": {
+      "type": "object",
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "integer",
+          "example": 0
+        },
+        "message": {
+          "type": "string",
+          "example": "success"
+        },
+        "data": {
+          "$ref": "#/definitions/PublicChannelDetail"
         }
       }
     }
