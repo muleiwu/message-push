@@ -11,17 +11,36 @@ import (
 
 var logicalPlaceholder = regexp.MustCompile(`\{([a-zA-Z0-9_]+)\}`)
 var positionalPlaceholder = regexp.MustCompile(`\{([1-9][0-9]*)\}`)
+var numericVariableName = regexp.MustCompile(`^[0-9]+$`)
+var logicalVariableName = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
+var unsupportedHashPlaceholder = regexp.MustCompile(`#[^#\s]+#`)
 
-type PositionalTemplateCodec struct{}
+type PositionalTemplateCodec struct {
+	// AllowNamed accepts named native tokens while retaining positional send slots.
+	// Providers must opt in; Compile continues to produce numbered native tokens.
+	AllowNamed bool
+}
 
 func (PositionalTemplateCodec) Version() string { return "positional-v1" }
 
 func validatePlaceholders(content string, pattern *regexp.Regexp) error {
 	remainder := pattern.ReplaceAllString(content, "")
-	if strings.ContainsAny(remainder, "{}") || strings.Contains(content, "${") || regexp.MustCompile(`#[^#\s]+#`).MatchString(content) {
+	if strings.ContainsAny(remainder, "{}") || strings.Contains(content, "${") || unsupportedHashPlaceholder.MatchString(content) {
 		return fmt.Errorf("无法识别模板占位符，请使用声明的变量格式")
 	}
 	return nil
+}
+
+func nativeVariableTokens(content string, pattern *regexp.Regexp) []string {
+	tokens := make([]string, 0)
+	seen := make(map[string]bool)
+	for _, token := range pattern.FindAllString(content, -1) {
+		if !seen[token] {
+			tokens = append(tokens, token)
+			seen[token] = true
+		}
+	}
+	return tokens
 }
 
 func (c PositionalTemplateCodec) Compile(content string) (*domain.CompiledTemplate, error) {
@@ -40,10 +59,38 @@ func (c PositionalTemplateCodec) Compile(content string) (*domain.CompiledTempla
 		}
 		return "{" + position + "}"
 	})
+	out.NativeVariables = nativeVariableTokens(out.NativeContent, positionalPlaceholder)
 	return out, nil
 }
 
 func (c PositionalTemplateCodec) Decode(content string, previous []domain.VariableSlot) (*domain.CompiledTemplate, error) {
+	if c.AllowNamed {
+		if err := validatePlaceholders(content, logicalPlaceholder); err != nil {
+			return nil, err
+		}
+		hasNamed, hasNumeric := false, false
+		for _, match := range logicalPlaceholder.FindAllStringSubmatch(content, -1) {
+			if numericVariableName.MatchString(match[1]) {
+				hasNumeric = true
+			} else {
+				hasNamed = true
+			}
+		}
+		if hasNamed && hasNumeric {
+			return nil, fmt.Errorf("不能混用数字与命名占位符，请使用同一种变量格式")
+		}
+		if hasNamed {
+			// Native names are authoritative. Reusing previous ordinal aliases here
+			// would silently swap values after a supplier reorders named tokens.
+			out, err := c.Compile(content)
+			if err != nil {
+				return nil, err
+			}
+			out.NativeContent = content
+			out.NativeVariables = nativeVariableTokens(content, logicalPlaceholder)
+			return out, nil
+		}
+	}
 	if err := validatePlaceholders(content, positionalPlaceholder); err != nil {
 		return nil, err
 	}
@@ -70,7 +117,7 @@ func (c PositionalTemplateCodec) Decode(content string, previous []domain.Variab
 		if name == "" {
 			name = "var" + key
 		}
-		if !regexp.MustCompile(`^[a-zA-Z0-9_]+$`).MatchString(name) {
+		if !logicalVariableName.MatchString(name) {
 			return nil, fmt.Errorf("invalid stored variable name")
 		}
 		out.Slots = append(out.Slots, domain.VariableSlot{Native: key, Name: name})
@@ -83,6 +130,7 @@ func (c PositionalTemplateCodec) Decode(content string, previous []domain.Variab
 		n, _ := strconv.Atoi(token[1 : len(token)-1])
 		return "{" + out.Slots[n-1].Name + "}"
 	})
+	out.NativeVariables = nativeVariableTokens(content, positionalPlaceholder)
 	return out, nil
 }
 
@@ -114,6 +162,7 @@ func (c NamedTemplateCodec) Compile(content string) (*domain.CompiledTemplate, e
 	p.Version = c.Version()
 	// ReplaceAllString treats '$' as expansion, so use a function for literal prefixes.
 	p.NativeContent = logicalPlaceholder.ReplaceAllStringFunc(content, func(t string) string { return c.Prefix + t })
+	p.NativeVariables = nativeVariableTokens(p.NativeContent, regexp.MustCompile(regexp.QuoteMeta(c.Prefix)+logicalPlaceholder.String()))
 	p.Slots = []domain.VariableSlot{}
 	for _, name := range p.Variables {
 		p.Slots = append(p.Slots, domain.VariableSlot{Native: name, Name: name})
@@ -141,6 +190,7 @@ func (c NamedTemplateCodec) Decode(content string, previous []domain.VariableSlo
 		return nil, err
 	}
 	p.NativeContent = content
+	p.NativeVariables = nativeVariableTokens(content, pattern)
 	nativeMatches := pattern.FindAllStringSubmatch(content, -1)
 	p.Slots = []domain.VariableSlot{}
 	seen := map[string]bool{}

@@ -56,11 +56,11 @@ func TestTemplateCodecRejectsUnknownOrIncompleteSyntax(t *testing.T) {
 func TestNamedTemplateCodecPreservesNativeNames(t *testing.T) {
 	c := NamedTemplateCodec{Prefix: "$"}
 	p, err := c.Compile("您的验证码是 {code}")
-	if err != nil || p.NativeContent != "您的验证码是 ${code}" {
+	if err != nil || p.NativeContent != "您的验证码是 ${code}" || !reflect.DeepEqual(p.NativeVariables, []string{"${code}"}) {
 		t.Fatalf("compile: %+v %v", p, err)
 	}
 	d, err := c.Decode("您好 ${recipient}", []domain.VariableSlot{{Native: "recipient", Name: "name"}})
-	if err != nil || d.Content != "您好 {name}" || d.Slots[0].Native != "recipient" {
+	if err != nil || d.Content != "您好 {name}" || d.Slots[0].Native != "recipient" || !reflect.DeepEqual(d.NativeVariables, []string{"${recipient}"}) {
 		t.Fatalf("decode: %+v %v", d, err)
 	}
 }

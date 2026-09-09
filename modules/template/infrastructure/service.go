@@ -8,6 +8,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/internal/timeutil"
+	senderdomain "cnb.cool/mliev/push/message-push/modules/sender/domain"
 	"cnb.cool/mliev/push/message-push/modules/template/domain"
 	"gorm.io/gorm"
 )
@@ -369,6 +370,18 @@ func (s *TemplateService) buildProviderTemplateResponse(template *model.Provider
 	}
 
 	if template.ProviderAccount != nil {
+		// Native tokens come from the provider grammar, independently of local mapping names.
+		if meta, err := senderdomain.GetByCode(template.ProviderAccount.ProviderCode); err == nil {
+			if definition := meta.Resources[senderdomain.ResourceTemplates]; definition != nil && definition.Codec != nil {
+				content := template.NativeContent
+				if content == "" {
+					content = template.TemplateContent
+				}
+				if decoded, err := definition.Codec.Decode(content, nil); err == nil {
+					resp.NativeVariables = decoded.NativeVariables
+				}
+			}
+		}
 		resp.ProviderAccount = &dto.SimpleProviderResponse{
 			ID:           template.ProviderAccount.ID,
 			AccountCode:  template.ProviderAccount.AccountCode,

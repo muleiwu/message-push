@@ -2,13 +2,16 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"sync"
 	"testing"
 
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/app/readiness"
 	"cnb.cool/mliev/push/message-push/modules/sender/domain"
 	"gorm.io/gorm"
 )
@@ -81,6 +84,71 @@ func newResourceServiceFixture(t *testing.T) *resourceServiceFixture {
 
 func resourceSelection(item *ResourcePreviewItem, action string) ResourceSelection {
 	return ResourceSelection{ID: item.Remote.ID, Version: item.Version, Action: action}
+}
+
+func TestResourceNamedTemplatePreviewImportReadinessAndSendOrder(t *testing.T) {
+	f := newResourceServiceFixture(t)
+	ctx := context.Background()
+	kind := domain.ResourceTemplates
+	original := "主机{host_name}的规则“{rule_name}”已恢复，再检查{host_name}。"
+	f.rows[kind]["3344800"] = domain.RemoteResource{ResourceInput: domain.ResourceInput{ID: "3344800", Content: original}, AuditStatus: 2}
+	rows, err := f.s.Preview(ctx, f.account.ID, kind, "")
+	if err != nil || len(rows) != 1 || rows[0].Error != "" {
+		t.Fatalf("named preview rejected: %+v %v", rows, err)
+	}
+	if rows[0].Remote.Content != original || !reflect.DeepEqual(rows[0].Compiled.NativeVariables, []string{"{host_name}", "{rule_name}"}) {
+		t.Fatalf("original changed: %+v", rows[0])
+	}
+	_, err = f.s.Import(ctx, f.account.ID, ResourceImportRequest{Kind: kind, Selections: []ResourceSelection{resourceSelection(rows[0], "create")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var record model.ProviderTemplate
+	if err = f.s.db.Preload("ProviderAccount").Where("provider_id = ? AND template_code = ?", f.account.ID, "3344800").First(&record).Error; err != nil {
+		t.Fatal(err)
+	}
+	if record.NativeContent != original || record.TemplateContent != original || record.CodecVersion != "positional-v1" || !record.Usable() || !readiness.ProviderTemplateVariablesValid(&record) {
+		t.Fatalf("imported named resource not usable: %+v", record)
+	}
+	bindings := &model.ChannelTemplateBinding{ProviderID: f.account.ID, ProviderTemplateID: record.ID, ProviderTemplate: &record, Status: 1, IsActive: 1, Weight: 1}
+	if err = bindings.SetParamMapping([]model.ParamMappingItem{{Type: model.ParamMappingTypeMapping, ProviderVar: "host_name", SystemVar: "host"}, {Type: model.ParamMappingTypeMapping, ProviderVar: "rule_name", SystemVar: "rule"}}); err != nil {
+		t.Fatal(err)
+	}
+	if issues := readiness.ValidateBinding("sms", []string{"host", "rule"}, bindings); len(issues) > 0 {
+		t.Fatalf("binding rejected named variables: %v", issues)
+	}
+	var slots []domain.VariableSlot
+	if err = json.Unmarshal([]byte(record.VariableSlots), &slots); err != nil {
+		t.Fatal(err)
+	}
+	meta, _ := f.s.lookup(f.account.ProviderCode)
+	values, err := meta.Resources[kind].Codec.Bind(slots, map[string]string{"host_name": "server01", "rule_name": "health"})
+	if err != nil || !reflect.DeepEqual(values, []string{"server01", "health", "server01"}) {
+		t.Fatalf("wrong send order: %v %v", values, err)
+	}
+	before, _ := bindings.GetParamMapping()
+	updated := f.rows[kind]["3344800"]
+	updated.Content = "规则{rule_name}，主机{host_name}。"
+	f.rows[kind]["3344800"] = updated
+	rows, err = f.s.Preview(ctx, f.account.ID, kind, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = f.s.Import(ctx, f.account.ID, ResourceImportRequest{Kind: kind, Selections: []ResourceSelection{resourceSelection(rows[0], "update")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = f.s.db.Preload("ProviderAccount").First(&record, record.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	bindings.ProviderTemplate = &record
+	if issues := readiness.ValidateBinding("sms", []string{"host", "rule"}, bindings); len(issues) > 0 {
+		t.Fatalf("reordering should preserve name-based mappings: %v", issues)
+	}
+	after, _ := bindings.GetParamMapping()
+	if !reflect.DeepEqual(before, after) {
+		t.Fatal("logical parameter mapping changed")
+	}
 }
 
 func TestResourcePreviewImportConflictAndLocalPolicy(t *testing.T) {

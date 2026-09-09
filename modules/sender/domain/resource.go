@@ -204,9 +204,10 @@ type VariableSlot struct {
 }
 
 type CompiledTemplate struct {
-	Content       string         `json:"content"`
-	NativeContent string         `json:"native_content"`
-	Variables     []string       `json:"variables"`
-	Slots         []VariableSlot `json:"slots"`
-	Version       string         `json:"version"`
+	Content         string         `json:"content"`
+	NativeContent   string         `json:"native_content"`
+	NativeVariables []string       `json:"native_variables"` // Exact native tokens, unique in first-occurrence order; not the send parameter order.
+	Variables       []string       `json:"variables"`
+	Slots           []VariableSlot `json:"slots"`
+	Version         string         `json:"version"`
 }

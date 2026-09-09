@@ -81,6 +81,7 @@ type UpdateProviderTemplateRequest struct {
 
 // ProviderTemplateResponse 供应商模板响应
 type ProviderTemplateResponse struct {
+	NativeVariables []string `json:"native_variables"`
 	model.ProviderResourceState
 	NativeContent   string                  `json:"native_content"`
 	CodecVersion    string                  `json:"codec_version"`

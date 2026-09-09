@@ -43,7 +43,7 @@ func newZrwinfoResourceDefinitions(client *http.Client, baseURL string) map[doma
 			}
 		}
 		if isTemplate {
-			definition.Codec = PositionalTemplateCodec{}
+			definition.Codec = PositionalTemplateCodec{AllowNamed: true}
 		}
 		for _, action := range []domain.ResourceAction{domain.ResourceQuery, domain.ResourceCreate, domain.ResourceUpdate, domain.ResourceDelete} {
 			protocol := domain.ResourceProtocol{SuccessValue: "0", DataField: "data", ResponseFields: response, RequestFields: map[string]string{}, AuditStatuses: map[string]int8{"1": 1, "2": 2, "3": 3}}
