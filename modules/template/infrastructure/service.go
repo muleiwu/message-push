@@ -222,6 +222,22 @@ func (s *TemplateService) UpdateProviderTemplate(id uint, req *dto.UpdateProvide
 		return nil, fmt.Errorf("failed to get provider template: %w", err)
 	}
 
+	if template.RemoteID != "" {
+		if (req.TemplateContent != "" && req.TemplateContent != template.TemplateContent) || (req.ContentType != "" && req.ContentType != template.ContentType) {
+			return nil, errors.New("已关联模板的内容请通过供应商操作修改")
+		}
+		if req.Variables != nil {
+			existing, _ := template.GetVariables()
+			if len(existing) != len(req.Variables) {
+				return nil, errors.New("已关联模板的变量请通过供应商操作修改")
+			}
+			for i, name := range existing {
+				if req.Variables[i] != name {
+					return nil, errors.New("已关联模板的变量请通过供应商操作修改")
+				}
+			}
+		}
+	}
 	// 更新字段
 	if req.TemplateName != "" {
 		template.TemplateName = req.TemplateName
@@ -335,17 +351,21 @@ func (s *TemplateService) buildProviderTemplateResponse(template *model.Provider
 	}
 
 	resp := &dto.ProviderTemplateResponse{
-		ID:              template.ID,
-		ProviderID:      template.ProviderID,
-		TemplateCode:    template.TemplateCode,
-		TemplateName:    template.TemplateName,
-		ContentType:     contentType,
-		TemplateContent: template.TemplateContent,
-		Variables:       variables,
-		Status:          template.Status,
-		Remark:          template.Remark,
-		CreatedAt:       timeutil.Normalize(template.CreatedAt),
-		UpdatedAt:       timeutil.Normalize(template.UpdatedAt),
+		ProviderResourceState: template.ProviderResourceState,
+		NativeContent:         template.NativeContent,
+		CodecVersion:          template.CodecVersion,
+		Category:              template.Category,
+		ID:                    template.ID,
+		ProviderID:            template.ProviderID,
+		TemplateCode:          template.TemplateCode,
+		TemplateName:          template.TemplateName,
+		ContentType:           contentType,
+		TemplateContent:       template.TemplateContent,
+		Variables:             variables,
+		Status:                template.Status,
+		Remark:                template.Remark,
+		CreatedAt:             timeutil.Normalize(template.CreatedAt),
+		UpdatedAt:             timeutil.Normalize(template.UpdatedAt),
 	}
 
 	if template.ProviderAccount != nil {

@@ -198,6 +198,7 @@ func (s *AdminOnboardingService) signatureFacts() (dto.OnboardingProviderSignatu
 	}
 	step.RequiredAccountCount = len(requiredAccounts)
 
+	usableSignatures := 0
 	configuredAccounts := make(map[uint]struct{})
 	if len(requiredAccounts) > 0 {
 		ids := uintSetValues(requiredAccounts)
@@ -210,11 +211,12 @@ func (s *AdminOnboardingService) signatureFacts() (dto.OnboardingProviderSignatu
 			if signature.Status == 1 {
 				step.Enabled++
 			}
-			if signature.Status == 1 && strings.TrimSpace(signature.SignatureCode) != "" {
+			if signature.Usable() && strings.TrimSpace(signature.SignatureCode) != "" {
 				configuredAccounts[signature.ProviderAccountID] = struct{}{}
+				usableSignatures++
 			}
 		}
-		step.Abnormal = step.Total - step.Enabled
+		step.Abnormal = step.Total - usableSignatures
 
 		var mappings []*model.ChannelSignatureMapping
 		if err := s.db.Preload("ProviderSignature").Where("status = 1 AND provider_id IN ?", ids).Find(&mappings).Error; err != nil {
@@ -224,7 +226,7 @@ func (s *AdminOnboardingService) signatureFacts() (dto.OnboardingProviderSignatu
 		for _, mapping := range mappings {
 			alias := strings.TrimSpace(mapping.SignatureName)
 			signature := mapping.ProviderSignature
-			if alias == "" || signature == nil || signature.Status != 1 ||
+			if alias == "" || !signature.Usable() ||
 				signature.ProviderAccountID != mapping.ProviderID || strings.TrimSpace(signature.SignatureCode) == "" {
 				continue
 			}
@@ -255,6 +257,9 @@ func (s *AdminOnboardingService) countUsableProviderTemplates() (int, error) {
 	}
 	usable := 0
 	for _, providerTemplate := range templates {
+		if !providerTemplate.Usable() {
+			continue
+		}
 		account := providerTemplate.ProviderAccount
 		if account == nil || account.Status != 1 || account.ID != providerTemplate.ProviderID || strings.TrimSpace(providerTemplate.TemplateCode) == "" {
 			continue

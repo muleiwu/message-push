@@ -1,5 +1,7 @@
 package dto
 
+import "cnb.cool/mliev/push/message-push/modules/sender/domain"
+
 // ParamMappingType 参数映射类型
 type ParamMappingType string
 
@@ -133,11 +135,12 @@ type ProviderAccountListResponse struct {
 
 // AvailableProviderResponse 可用服务商响应
 type AvailableProviderResponse struct {
-	Code         string                `json:"code"`
-	Name         string                `json:"name"`
-	Type         string                `json:"type"`
-	Description  string                `json:"description"`
-	ConfigFields []ConfigFieldResponse `json:"config_fields"`
+	Resources    map[domain.ResourceKind]domain.ResourceCapability `json:"resources"`
+	Code         string                                            `json:"code"`
+	Name         string                                            `json:"name"`
+	Type         string                                            `json:"type"`
+	Description  string                                            `json:"description"`
+	ConfigFields []ConfigFieldResponse                             `json:"config_fields"`
 	// 能力声明
 	SupportsSend      bool `json:"supports_send"`
 	SupportsBatchSend bool `json:"supports_batch_send"`

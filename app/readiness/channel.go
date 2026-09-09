@@ -3,6 +3,7 @@
 package readiness
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -305,7 +306,7 @@ func ValidateBinding(channelType string, systemVariables []string, binding *mode
 	if providerTemplate == nil {
 		return append(issues, constants.ReadinessBlockerProviderTemplateMissing)
 	}
-	if providerTemplate.Status != 1 {
+	if !providerTemplate.Usable() {
 		issues = append(issues, constants.ReadinessBlockerProviderTemplateDisabled)
 	}
 	if strings.TrimSpace(providerTemplate.TemplateCode) == "" {
@@ -473,7 +474,7 @@ func evaluateRequiredSignatures(response *dto.ChannelReadinessResponse, channelI
 
 		signature := mapping.ProviderSignature
 		alias := strings.TrimSpace(mapping.SignatureName)
-		if signature == nil || signature.Status != 1 ||
+		if !signature.Usable() ||
 			signature.ProviderAccountID != mapping.ProviderID ||
 			alias == "" || strings.TrimSpace(signature.SignatureCode) == "" {
 			// A stale redundant mapping does not remove an otherwise valid route.
@@ -606,7 +607,42 @@ func ProviderTemplateVariablesValid(providerTemplate *model.ProviderTemplate) bo
 		return false
 	}
 	variables, err := providerTemplate.GetVariables()
-	return err == nil && validVariableNames(variables)
+	if err != nil || !validVariableNames(variables) {
+		return false
+	}
+	if providerTemplate.CodecVersion == "" {
+		return true
+	}
+	if providerTemplate.ProviderAccount == nil {
+		return false
+	}
+	meta, err := registry.GetByCode(providerTemplate.ProviderAccount.ProviderCode)
+	if err != nil {
+		return false
+	}
+	definition := meta.Resources[registry.ResourceTemplates]
+	if definition == nil || definition.Codec == nil || definition.Codec.Version() != providerTemplate.CodecVersion {
+		return false
+	}
+	var slots []registry.VariableSlot
+	if json.Unmarshal([]byte(providerTemplate.VariableSlots), &slots) != nil {
+		return false
+	}
+	decoded, err := definition.Codec.Decode(providerTemplate.NativeContent, slots)
+	if err != nil || decoded.Content != providerTemplate.TemplateContent || len(decoded.Slots) != len(slots) || len(decoded.Variables) != len(variables) {
+		return false
+	}
+	for i, name := range variables {
+		if decoded.Variables[i] != name {
+			return false
+		}
+	}
+	for i, slot := range slots {
+		if slot != decoded.Slots[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func stringSet(values []string) map[string]struct{} {

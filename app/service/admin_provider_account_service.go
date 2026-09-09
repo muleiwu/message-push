@@ -78,6 +78,7 @@ func (s *AdminProviderAccountService) GetAvailableProviders(providerType string)
 		}
 
 		result = append(result, &dto.AvailableProviderResponse{
+			Resources:         p.ResourceCapabilities(),
 			Code:              p.Code,
 			Name:              p.Name,
 			Type:              p.Type,

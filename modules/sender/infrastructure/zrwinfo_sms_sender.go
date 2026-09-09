@@ -29,12 +29,13 @@ const (
 
 func init() {
 	// 注册掌榕网短信服务商
-	domain.Register(&domain.ProviderMeta{
+	if err := domain.Register(&domain.ProviderMeta{
 		Code:              constants.ProviderZrwinfoSMS,
 		Name:              "掌榕网短信",
 		Type:              constants.MessageTypeSMS,
 		Description:       "掌榕网融合通信产品，提供国内短信、语音、5G智慧短信等服务。注意：当前仅支持国内短信发送，接收者必须为中国大陆手机号；短信签名需在「签名管理」中单独配置",
 		RequiresSignature: true,
+		Resources:         zrwinfoResourceDefinitions(),
 		ConfigFields: []domain.ConfigField{
 			{
 				Key:         "accesskey",
@@ -69,7 +70,9 @@ func init() {
 		Tags:       []string{"国内"},
 		Regions:    []string{"中国大陆"},
 		Deprecated: false,
-	})
+	}); err != nil {
+		panic(err)
+	}
 }
 
 // ZrwinfoSMSSender 掌榕网短信发送器
@@ -216,7 +219,10 @@ func (s *ZrwinfoSMSSender) Send(ctx context.Context, req *domain.SendRequest) (*
 	}
 
 	// 4. 转换模板参数
-	content := s.buildContentFromMapping(templateContent, req.MappedParams)
+	content, err := s.buildResourceContent(req.ChannelTemplateBinding, templateContent, req.MappedParams)
+	if err != nil {
+		return nil, err
+	}
 
 	// 5. 构造请求参数
 	params := url.Values{}
@@ -431,7 +437,10 @@ func (s *ZrwinfoSMSSender) batchSendSameContent(ctx context.Context, req *domain
 	}
 
 	// 转换模板参数
-	content := s.buildContentFromMapping(templateContent, req.MappedParams)
+	content, err := s.buildResourceContent(req.ChannelTemplateBinding, templateContent, req.MappedParams)
+	if err != nil {
+		return nil, err
+	}
 
 	// 构造请求参数
 	params := url.Values{}

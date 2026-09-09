@@ -76,7 +76,7 @@ func (d *ProviderTemplateDAO) List(providerID *uint, status *int8, page, pageSiz
 // GetActiveByProvider 获取供应商的所有启用模板
 func (d *ProviderTemplateDAO) GetActiveByProvider(providerID uint) ([]*model.ProviderTemplate, error) {
 	var templates []*model.ProviderTemplate
-	err := d.db.Where("provider_id = ? AND status = 1", providerID).Find(&templates).Error
+	err := d.db.Where("provider_id = ? AND status = 1", providerID).Where(model.ResourceUsableSQL("provider_templates")).Find(&templates).Error
 	return templates, err
 }
 

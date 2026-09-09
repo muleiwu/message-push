@@ -1,5 +1,7 @@
 package dto
 
+import "cnb.cool/mliev/push/message-push/app/model"
+
 // CreateProviderSignatureRequest 创建供应商映射资源请求
 type CreateProviderSignatureRequest struct {
 	// SignatureCode 映射值：实际发送用；短信为供应商平台审核通过的签名，邮件为静态标题
@@ -38,6 +40,7 @@ type ProviderSignatureListResponse struct {
 
 // ProviderSignatureResponse 供应商签名/邮件标题资源响应
 type ProviderSignatureResponse struct {
+	model.ProviderResourceState
 	ID                  uint   `json:"id"`
 	ProviderAccountID   uint   `json:"provider_account_id"`
 	ProviderAccountName string `json:"provider_account_name,omitempty"`

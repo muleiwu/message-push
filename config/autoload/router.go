@@ -130,6 +130,15 @@ func (receiver Router) InitConfig() map[string]any {
 					providerAccounts.DELETE("/:id", admin.ProviderAccountController{}.DeleteProviderAccount)
 					providerAccounts.POST("/:id/test", admin.ProviderAccountController{}.TestProviderAccount)
 
+					providerAccounts.GET("/:id/remote-resources/:kind", admin.ProviderResourceController{}.Query)
+					providerAccounts.GET("/:id/remote-resources/:kind/:remoteId", admin.ProviderResourceController{}.Query)
+					providerAccounts.POST("/:id/remote-resources/:kind", admin.ProviderResourceController{}.Create)
+					providerAccounts.PUT("/:id/remote-resources/:kind/:remoteId", admin.ProviderResourceController{}.Update)
+					providerAccounts.DELETE("/:id/remote-resources/:kind/:remoteId", admin.ProviderResourceController{}.Delete)
+					providerAccounts.POST("/:id/resource-sync/preview", admin.ProviderResourceController{}.Preview)
+					providerAccounts.POST("/:id/resource-sync/import", admin.ProviderResourceController{}.Import)
+					providerAccounts.POST("/:id/template-compile", admin.ProviderResourceController{}.Compile)
+
 					// 签名管理（嵌套在账号下）
 					providerAccounts.GET("/:id/signatures", admin.ProviderSignatureController{}.GetSignatureList)
 					providerAccounts.POST("/:id/signatures", admin.ProviderSignatureController{}.CreateSignature)

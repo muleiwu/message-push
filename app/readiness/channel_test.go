@@ -23,6 +23,49 @@ const (
 	testProviderDingTalkPlain = "readiness_test_dingtalk_plain"
 )
 
+func TestProviderResourceAuditControlsEligibilityAndSignatureLookup(t *testing.T) {
+	registerReadinessTestProviders(t)
+	db := newReadinessTestDB(t)
+	f := createReadyFixture(t, db, constants.MessageTypeSMS, testProviderSMSRequired)
+	mapping := createSignatureAlias(t, db, f.channel.ID, f.account.ID, "login")
+	evaluator := NewChannelEvaluator(db)
+	lookup := dao.NewChannelSignatureMappingDAO(db)
+	for _, state := range []struct {
+		name    string
+		status  any
+		deleted bool
+		usable  bool
+	}{{"manual", nil, false, true}, {"unknown", 0, false, false}, {"pending", 1, false, false}, {"approved", 2, false, true}, {"rejected", 3, false, false}, {"deleted", 2, true, false}} {
+		t.Run(state.name, func(t *testing.T) {
+			if err := db.Model(&model.ProviderSignature{}).Where("id = ?", mapping.ProviderSignatureID).Updates(map[string]any{"audit_status": state.status, "remote_deleted": state.deleted}).Error; err != nil {
+				t.Fatal(err)
+			}
+			eligibility, err := evaluator.GetDeliveryEligibility(f.channel.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if (len(eligibility.ValidBindingIDs) > 0) != state.usable {
+				t.Fatalf("signature eligibility: %+v", eligibility)
+			}
+			_, err = lookup.GetByChannelIDAndSignatureName(f.channel.ID, "login", f.account.ID)
+			if (err == nil) != state.usable {
+				t.Fatalf("signature lookup: %v", err)
+			}
+		})
+	}
+	db.Model(&model.ProviderSignature{}).Where("id = ?", mapping.ProviderSignatureID).Updates(map[string]any{"audit_status": 2, "remote_deleted": false})
+	for _, status := range []int{0, 1, 2, 3} {
+		db.Model(&model.ProviderTemplate{}).Where("id = ?", f.providerTemplate.ID).Update("audit_status", status)
+		eligibility, err := evaluator.GetDeliveryEligibility(f.channel.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if (len(eligibility.ValidBindingIDs) > 0) != (status == 2) {
+			t.Fatalf("template audit status=%d eligibility=%+v", status, eligibility)
+		}
+	}
+}
+
 func TestChannelEvaluatorStatesAndBindingValidation(t *testing.T) {
 	registerReadinessTestProviders(t)
 
@@ -373,9 +416,9 @@ func newReadinessTestDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE message_templates (id INTEGER PRIMARY KEY AUTOINCREMENT, template_name TEXT NOT NULL, content_type TEXT, content TEXT, variables TEXT, description TEXT, status INTEGER, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE channels (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, type TEXT NOT NULL, message_template_id INTEGER, status INTEGER, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE provider_accounts (id INTEGER PRIMARY KEY AUTOINCREMENT, account_code TEXT NOT NULL UNIQUE, account_name TEXT NOT NULL, provider_code TEXT NOT NULL, provider_type TEXT NOT NULL, config TEXT, status INTEGER, remark TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
-		`CREATE TABLE provider_templates (id INTEGER PRIMARY KEY AUTOINCREMENT, provider_id INTEGER NOT NULL, template_code TEXT NOT NULL, template_name TEXT NOT NULL, content_type TEXT, template_content TEXT, variables TEXT, status INTEGER, remark TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
+		`CREATE TABLE provider_templates (remote_id TEXT DEFAULT '', audit_status INTEGER, audit_reply TEXT, remote_deleted INTEGER NOT NULL DEFAULT 0, synced_at DATETIME, remote_description TEXT, native_content TEXT, variable_slots TEXT, codec_version TEXT DEFAULT '', remote_name TEXT DEFAULT '', category TEXT DEFAULT '', id INTEGER PRIMARY KEY AUTOINCREMENT, provider_id INTEGER NOT NULL, template_code TEXT NOT NULL, template_name TEXT NOT NULL, content_type TEXT, template_content TEXT, variables TEXT, status INTEGER, remark TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE channel_template_bindings (id INTEGER PRIMARY KEY AUTOINCREMENT, channel_id INTEGER NOT NULL, provider_template_id INTEGER NOT NULL, provider_id INTEGER NOT NULL, param_mapping TEXT, weight INTEGER, priority INTEGER, status INTEGER, is_active INTEGER, auto_disable_on_fail INTEGER, auto_disable_threshold INTEGER, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
-		`CREATE TABLE provider_signatures (id INTEGER PRIMARY KEY AUTOINCREMENT, provider_account_id INTEGER NOT NULL, signature_code TEXT NOT NULL, signature_name TEXT NOT NULL, status INTEGER, remark TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
+		`CREATE TABLE provider_signatures (remote_id TEXT DEFAULT '', audit_status INTEGER, audit_reply TEXT, remote_deleted INTEGER NOT NULL DEFAULT 0, synced_at DATETIME, remote_description TEXT, id INTEGER PRIMARY KEY AUTOINCREMENT, provider_account_id INTEGER NOT NULL, signature_code TEXT NOT NULL, signature_name TEXT NOT NULL, status INTEGER, remark TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE channel_signature_mappings (id INTEGER PRIMARY KEY AUTOINCREMENT, channel_id INTEGER NOT NULL, signature_name TEXT NOT NULL, provider_signature_id INTEGER NOT NULL, provider_id INTEGER NOT NULL, status INTEGER, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 	}
 	for _, statement := range statements {

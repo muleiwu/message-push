@@ -1,6 +1,9 @@
 package dto
 
-import "time"
+import (
+	"cnb.cool/mliev/push/message-push/app/model"
+	"time"
+)
 
 // ========== 系统模板 DTO ==========
 
@@ -78,6 +81,10 @@ type UpdateProviderTemplateRequest struct {
 
 // ProviderTemplateResponse 供应商模板响应
 type ProviderTemplateResponse struct {
+	model.ProviderResourceState
+	NativeContent   string                  `json:"native_content"`
+	CodecVersion    string                  `json:"codec_version"`
+	Category        string                  `json:"category"`
 	ID              uint                    `json:"id"`
 	ProviderID      uint                    `json:"provider_id"`
 	TemplateCode    string                  `json:"template_code"`

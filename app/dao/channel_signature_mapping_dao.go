@@ -78,6 +78,7 @@ func (dao *ChannelSignatureMappingDAO) GetByChannelIDAndSignatureName(channelID 
 		Where("channel_signature_mappings.channel_id = ? AND channel_signature_mappings.signature_name = ? AND channel_signature_mappings.provider_id = ? AND channel_signature_mappings.status = 1", channelID, strings.TrimSpace(signatureName), providerID).
 		Where("provider_signatures.provider_account_id = channel_signature_mappings.provider_id").
 		Where("provider_signatures.status = 1 AND provider_signatures.deleted_at IS NULL").
+		Where(model.ResourceUsableSQL("provider_signatures")).
 		First(&mapping).Error
 	if err != nil {
 		return nil, err

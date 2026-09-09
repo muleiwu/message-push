@@ -7,11 +7,12 @@ import (
 
 // ProviderMeta 服务商元信息
 type ProviderMeta struct {
-	Code         string        `json:"code"`          // 服务商代码（唯一标识）
-	Name         string        `json:"name"`          // 服务商名称
-	Type         string        `json:"type"`          // 消息类型：sms, email, wechat_work, dingtalk, webhook, push
-	Description  string        `json:"description"`   // 服务商描述
-	ConfigFields []ConfigField `json:"config_fields"` // 配置参数定义
+	Code         string                               `json:"code"`          // 服务商代码（唯一标识）
+	Name         string                               `json:"name"`          // 服务商名称
+	Type         string                               `json:"type"`          // 消息类型：sms, email, wechat_work, dingtalk, webhook, push
+	Description  string                               `json:"description"`   // 服务商描述
+	ConfigFields []ConfigField                        `json:"config_fields"` // 配置参数定义
+	Resources    map[ResourceKind]*ResourceDefinition `json:"-"`             // Registered remote operations and template codecs.
 
 	// 能力声明
 	SupportsSend        bool `json:"supports_send"`         // 是否支持单条发送
@@ -67,6 +68,11 @@ func (r *ProviderRegistry) Register(meta *ProviderMeta) error {
 	}
 	if meta.Type == "" {
 		return fmt.Errorf("provider type cannot be empty")
+	}
+	for kind, definition := range meta.Resources {
+		if err := definition.Validate(kind); err != nil {
+			return fmt.Errorf("provider %s: %w", meta.Code, err)
+		}
 	}
 
 	r.mu.Lock()

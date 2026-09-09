@@ -670,6 +670,7 @@ func (s *AdminChannelService) GetAvailableTemplateBindings(channelID uint) ([]*d
 	var allTemplates []*model.ProviderTemplate
 	if err := db.Joins("JOIN provider_accounts ON provider_accounts.id = provider_templates.provider_id").
 		Where("provider_accounts.provider_type = ? AND provider_accounts.status = 1 AND provider_templates.status = 1", channel.Type).
+		Where(model.ResourceUsableSQL("provider_templates")).
 		Preload("ProviderAccount").
 		Find(&allTemplates).Error; err != nil {
 		return nil, fmt.Errorf("failed to get provider templates: %w", err)
@@ -985,6 +986,7 @@ func (s *AdminChannelService) GetAvailableProviderSignatures(channelID uint) ([]
 	var signatures []*model.ProviderSignature
 	if err := db.Joins("JOIN provider_accounts ON provider_accounts.id = provider_signatures.provider_account_id").
 		Where("provider_signatures.provider_account_id IN ? AND provider_accounts.status = 1 AND provider_signatures.status = 1", accountIDs).
+		Where(model.ResourceUsableSQL("provider_signatures")).
 		Preload("ProviderAccount").
 		Find(&signatures).Error; err != nil {
 		return nil, fmt.Errorf("failed to get provider signatures: %w", err)
@@ -993,11 +995,12 @@ func (s *AdminChannelService) GetAvailableProviderSignatures(channelID uint) ([]
 	items := make([]*dto.ProviderSignatureResponse, 0, len(signatures))
 	for _, sig := range signatures {
 		item := &dto.ProviderSignatureResponse{
-			ID:            sig.ID,
-			SignatureCode: sig.SignatureCode,
-			SignatureName: sig.SignatureName,
-			Status:        sig.Status,
-			CreatedAt:     timeutil.FormatRFC3339(sig.CreatedAt),
+			ProviderResourceState: sig.ProviderResourceState,
+			ID:                    sig.ID,
+			SignatureCode:         sig.SignatureCode,
+			SignatureName:         sig.SignatureName,
+			Status:                sig.Status,
+			CreatedAt:             timeutil.FormatRFC3339(sig.CreatedAt),
 		}
 
 		if sig.ProviderAccount != nil {
@@ -1014,7 +1017,7 @@ func (s *AdminChannelService) validateSignatureMappingTarget(channel *model.Chan
 	if channel == nil || channel.MessageTemplate == nil {
 		return fmt.Errorf("channel message template not found")
 	}
-	if providerSignature == nil || providerSignature.Status != 1 {
+	if !providerSignature.Usable() {
 		return fmt.Errorf("provider signature is not active")
 	}
 	if providerSignature.ProviderAccountID != providerID || providerSignature.ProviderAccount == nil {
