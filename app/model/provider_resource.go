@@ -5,10 +5,11 @@ import "time"
 // ProviderResourceState is independent of the local administrator's status switch.
 // NULL audit status denotes an existing manually maintained resource.
 type ProviderResourceState struct {
-	AuditStatus   *int8      `json:"audit_status"`
-	AuditReply    string     `gorm:"type:text" json:"audit_reply"`
-	RemoteDeleted bool       `gorm:"not null;default:false" json:"remote_deleted"`
-	SyncedAt      *time.Time `json:"synced_at"`
+	AuditStatus      *int8          `json:"audit_status"`
+	AuditReply       string         `gorm:"type:text" json:"audit_reply"`
+	RemoteDeleted    bool           `gorm:"not null;default:false" json:"remote_deleted"`
+	SyncedAt         *time.Time     `json:"synced_at"`
+	ProviderMetadata map[string]any `gorm:"serializer:json;type:json" json:"provider_metadata,omitempty"`
 }
 
 func (s ProviderResourceState) RemoteUsable() bool {

@@ -16,8 +16,8 @@ func newMessageDetailTestService(t *testing.T) (*AdminMessageDetailService, *gor
 	t.Helper()
 	db := newAdminTaskTestDB(t)
 	for _, sql := range []string{
-		`CREATE TABLE callback_logs (id INTEGER PRIMARY KEY, task_id TEXT, raw_data TEXT)`,
-		`CREATE TABLE provider_templates (content_version INTEGER NOT NULL DEFAULT 1, id INTEGER PRIMARY KEY, provider_id INTEGER, template_code TEXT, template_name TEXT, template_content TEXT, content_type TEXT, variables TEXT, deleted_at DATETIME)`,
+		`CREATE TABLE callback_logs (provider_account_id INTEGER DEFAULT 0, source TEXT, sms_event_key TEXT UNIQUE, attribution TEXT, id INTEGER PRIMARY KEY, task_id TEXT, raw_data TEXT)`,
+		`CREATE TABLE provider_templates (provider_metadata TEXT, content_version INTEGER NOT NULL DEFAULT 1, id INTEGER PRIMARY KEY, provider_id INTEGER, template_code TEXT, template_name TEXT, template_content TEXT, content_type TEXT, variables TEXT, deleted_at DATETIME)`,
 		`CREATE TABLE channel_template_bindings (mapped_content_version INTEGER NOT NULL DEFAULT 0, id INTEGER PRIMARY KEY, channel_id INTEGER, provider_id INTEGER, provider_template_id INTEGER, param_mapping TEXT, deleted_at DATETIME)`,
 		`INSERT INTO provider_accounts (id, account_name, provider_code) VALUES (7, '旧供应商', 'netease_sms')`,
 		`INSERT INTO channels (id, name) VALUES (1, '验证码通道')`,

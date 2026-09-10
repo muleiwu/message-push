@@ -32,11 +32,11 @@ func resourceControllerError(c httpInterfaces.RouterContextInterface, err error)
 	var remote *domain.RemoteResourceError
 	if errors.As(err, &remote) {
 		status = 502
-		message := remote.Message
+		message := remote.Error()
 		if remote.Uncertain {
 			message += "；执行结果不确定，请先查询，勿重复提交"
 		}
-		controller.ErrorResponse(c, status, message)
+		controller.BaseResponse{}.ErrorWithData(c, status, message, map[string]any{"provider_error_code": remote.Code, "request_id": remote.RequestID, "uncertain": remote.Uncertain})
 		return
 	}
 	controller.ErrorResponse(c, status, err.Error())

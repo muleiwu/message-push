@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"strings"
 
 	"cnb.cool/mliev/push/message-push/app/constants"
@@ -81,7 +82,11 @@ func describeUnavailableBindingTemplate(binding *model.ChannelTemplateBinding) [
 			case 0:
 				messages = append(messages, "供应商模板审核状态待确认，请同步审核结果后重试")
 			case 1:
-				messages = append(messages, "供应商模板尚未审核通过，请审核通过并同步后重试")
+				if template.ProviderAccount != nil && template.ProviderAccount.ProviderCode == constants.ProviderTencentSMS && fmt.Sprint(template.ProviderMetadata["status_code"]) == "2" {
+					messages = append(messages, "供应商模板审核通过但尚未生效，请生效并同步后重试")
+				} else {
+					messages = append(messages, "供应商模板尚未审核通过，请审核通过并同步后重试")
+				}
 			case 2:
 				// Approved, including when another template check failed.
 			case 3:

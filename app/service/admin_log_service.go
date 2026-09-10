@@ -206,6 +206,7 @@ func (s *AdminLogService) GetCallbackLogsByTaskID(taskID string) (*dto.TaskCallb
 	items := make([]*dto.CallbackLogItem, 0, len(logs))
 	for _, log := range logs {
 		items = append(items, &dto.CallbackLogItem{
+			ProviderAccountID: log.ProviderAccountID, Source: log.Source, Attribution: log.Attribution,
 			ID:             log.ID,
 			TaskID:         log.TaskID,
 			AppID:          log.AppID,

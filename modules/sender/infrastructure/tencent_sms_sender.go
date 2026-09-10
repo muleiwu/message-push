@@ -10,7 +10,6 @@ import (
 	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	domain "cnb.cool/mliev/push/message-push/modules/sender/domain"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
-	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 	sms "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sms/v20210111"
 )
 
@@ -18,6 +17,7 @@ func init() {
 	// 注册腾讯云短信服务商
 	if err := domain.Register(&domain.ProviderMeta{
 		TemplateCodec:     NativeTemplateCodec{ID: "tencent-native-v1", AllowNumeric: true},
+		Resources:         tencentResourceDefinitions(newTencentClient),
 		Code:              constants.ProviderTencentSMS,
 		Name:              "腾讯云短信",
 		Type:              constants.MessageTypeSMS,
@@ -71,6 +71,7 @@ func init() {
 		SupportsBatchSend:   true,
 		SupportsCallback:    true,
 		SupportsStatusQuery: true,
+		SupportsStatusPull:  true,
 		// 扩展信息
 		Website:    "https://cloud.tencent.com/product/sms",
 		Icon:       "https://cloudcache.tencent-cloud.com/qcloud/favicon.ico",
@@ -87,6 +88,8 @@ func init() {
 }
 
 type TencentSMSSender struct {
+	clientFactory tencentClientFactory
+	now           func() time.Time
 }
 
 func NewTencentSMSSender() *TencentSMSSender {
@@ -106,21 +109,20 @@ func (s *TencentSMSSender) Send(ctx context.Context, req *domain.SendRequest) (*
 
 	secretId, _ := config["secret_id"].(string)
 	secretKey, _ := config["secret_key"].(string)
-	region, _ := config["region"].(string)
 	sdkAppId, _ := config["sdk_app_id"].(string)
 
 	if secretId == "" || secretKey == "" || sdkAppId == "" {
 		return nil, fmt.Errorf("missing tencent sms config: secret_id, secret_key or sdk_app_id")
 	}
-	if region == "" {
-		region = "ap-guangzhou"
-	}
-
 	// 2. 初始化客户端
-	credential := common.NewCredential(secretId, secretKey)
-	cpf := profile.NewClientProfile()
-	cpf.HttpProfile.Endpoint = "sms.tencentcloudapi.com"
-	client, _ := sms.NewClient(credential, region, cpf)
+	factory := s.clientFactory
+	if factory == nil {
+		factory = newTencentClient
+	}
+	client, err := factory(req.ProviderAccount)
+	if err != nil {
+		return nil, err
+	}
 
 	// 3. 构造请求
 	request := sms.NewSendSmsRequest()
@@ -168,7 +170,7 @@ func (s *TencentSMSSender) Send(ctx context.Context, req *domain.SendRequest) (*
 	})
 
 	// 5. 发送
-	response, err := client.SendSms(request)
+	response, err := client.SendSmsWithContext(ctx, request)
 	if err != nil {
 		return &domain.SendResponse{
 			Success:      false,
@@ -236,21 +238,20 @@ func (s *TencentSMSSender) BatchSend(ctx context.Context, req *domain.BatchSendR
 
 	secretId, _ := config["secret_id"].(string)
 	secretKey, _ := config["secret_key"].(string)
-	region, _ := config["region"].(string)
 	sdkAppId, _ := config["sdk_app_id"].(string)
 
 	if secretId == "" || secretKey == "" || sdkAppId == "" {
 		return nil, fmt.Errorf("missing tencent sms config: secret_id, secret_key or sdk_app_id")
 	}
-	if region == "" {
-		region = "ap-guangzhou"
-	}
-
 	// 2. 初始化客户端
-	credential := common.NewCredential(secretId, secretKey)
-	cpf := profile.NewClientProfile()
-	cpf.HttpProfile.Endpoint = "sms.tencentcloudapi.com"
-	client, _ := sms.NewClient(credential, region, cpf)
+	factory := s.clientFactory
+	if factory == nil {
+		factory = newTencentClient
+	}
+	client, err := factory(req.ProviderAccount)
+	if err != nil {
+		return nil, err
+	}
 
 	// 3. 构造请求
 	request := sms.NewSendSmsRequest()
@@ -304,7 +305,7 @@ func (s *TencentSMSSender) BatchSend(ctx context.Context, req *domain.BatchSendR
 	})
 
 	// 5. 发送
-	response, err := client.SendSms(request)
+	response, err := client.SendSmsWithContext(ctx, request)
 	if err != nil {
 		return nil, err
 	}
@@ -354,100 +355,22 @@ func (s *TencentSMSSender) SupportsStatusQuery() bool {
 // QueryStatus 查询短信发送状态
 // 使用腾讯云 PullSmsSendStatusByPhoneNumber API
 func (s *TencentSMSSender) QueryStatus(ctx context.Context, req *domain.StatusQueryRequest) (*domain.StatusQueryResponse, error) {
-	// 1. 获取配置
-	config, err := req.ProviderAccount.GetConfig()
+	if req == nil {
+		return nil, fmt.Errorf("查询参数不能为空")
+	}
+	now := time.Now()
+	if s.now != nil {
+		now = s.now()
+	}
+	end := req.SendDate.Add(24 * time.Hour)
+	if end.After(now) {
+		end = now
+	}
+	resp, err := s.QuerySMSEvents(ctx, &domain.SMSEventRequest{Account: req.ProviderAccount, Kind: domain.SMSReports, PhoneNumber: req.PhoneNumber, BeginTime: req.SendDate, EndTime: end, Limit: 100})
 	if err != nil {
-		return nil, fmt.Errorf("invalid provider config: %w", err)
+		return nil, err
 	}
-
-	secretId, _ := config["secret_id"].(string)
-	secretKey, _ := config["secret_key"].(string)
-	region, _ := config["region"].(string)
-	sdkAppId, _ := config["sdk_app_id"].(string)
-
-	if secretId == "" || secretKey == "" || sdkAppId == "" {
-		return nil, fmt.Errorf("missing tencent sms config: secret_id, secret_key or sdk_app_id")
-	}
-	if region == "" {
-		region = "ap-guangzhou"
-	}
-
-	// 2. 初始化客户端
-	credential := common.NewCredential(secretId, secretKey)
-	cpf := profile.NewClientProfile()
-	cpf.HttpProfile.Endpoint = "sms.tencentcloudapi.com"
-	client, _ := sms.NewClient(credential, region, cpf)
-
-	// 3. 构造查询请求
-	// 腾讯云按手机号拉取状态，需要指定时间范围
-	request := sms.NewPullSmsSendStatusByPhoneNumberRequest()
-	request.SmsSdkAppId = common.StringPtr(sdkAppId)
-	request.PhoneNumber = common.StringPtr(req.PhoneNumber)
-
-	// 设置时间范围：发送日期的开始和结束时间戳
-	beginTime := req.SendDate.Unix()
-	endTime := req.SendDate.Add(24 * time.Hour).Unix()
-	request.BeginTime = common.Uint64Ptr(uint64(beginTime))
-	request.EndTime = common.Uint64Ptr(uint64(endTime))
-	request.Offset = common.Uint64Ptr(0)
-	request.Limit = common.Uint64Ptr(100)
-
-	// 4. 发送查询请求
-	response, err := client.PullSmsSendStatusByPhoneNumber(request)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query send status: %w", err)
-	}
-
-	// 5. 转换结果
-	results := make([]*domain.StatusQueryResult, 0)
-	if response.Response != nil && response.Response.PullSmsSendStatusSet != nil {
-		for _, detail := range response.Response.PullSmsSendStatusSet {
-			status := constants.CallbackStatusFailed
-			if detail.ReportStatus != nil && *detail.ReportStatus == "SUCCESS" {
-				status = constants.CallbackStatusDelivered
-			}
-
-			// 获取 SerialNo
-			serialNo := ""
-			if detail.SerialNo != nil {
-				serialNo = *detail.SerialNo
-			}
-
-			// 如果指定了 ProviderMsgID，只返回匹配的记录
-			if req.ProviderMsgID != "" && serialNo != req.ProviderMsgID {
-				continue
-			}
-
-			// 获取接收时间
-			var reportTime time.Time
-			if detail.UserReceiveTime != nil {
-				reportTime = time.Unix(int64(*detail.UserReceiveTime), 0)
-			}
-
-			// 获取手机号
-			phoneNumber := ""
-			if detail.PhoneNumber != nil {
-				phoneNumber = *detail.PhoneNumber
-			}
-
-			// 获取描述信息
-			description := ""
-			if detail.Description != nil {
-				description = *detail.Description
-			}
-
-			results = append(results, &domain.StatusQueryResult{
-				ProviderMsgID: serialNo,
-				PhoneNumber:   phoneNumber,
-				Status:        status,
-				ErrorCode:     "",
-				ErrorMessage:  description,
-				ReportTime:    reportTime,
-			})
-		}
-	}
-
-	return &domain.StatusQueryResponse{Results: results}, nil
+	return tencentLegacyReports(resp, req.ProviderMsgID), nil
 }
 
 // ==================== CallbackHandler 接口实现 ====================
@@ -485,15 +408,13 @@ func (s *TencentSMSSender) HandleCallback(ctx context.Context, req *domain.Callb
 
 	results := make([]*domain.CallbackResult, 0, len(reports))
 	for _, report := range reports {
-		status := constants.CallbackStatusDelivered
-		if report.ReportStatus != "SUCCESS" {
-			status = constants.CallbackStatusFailed
-		}
+		status := tencentReportStatus(report.ReportStatus)
 
 		reportTime, _ := timeutil.ParseBusinessTime("2006-01-02 15:04:05", report.UserReceiveTime)
 
 		results = append(results, &domain.CallbackResult{
 			ProviderID:   report.Sid,
+			Mobile:       tencentEventPhone(nil, &report.NationCode, &report.Mobile),
 			Status:       status,
 			ErrorCode:    report.ErrMsg,
 			ErrorMessage: report.Description,

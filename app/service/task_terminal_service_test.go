@@ -355,7 +355,7 @@ func newTerminalServiceTestDB(t *testing.T, withWebhookLogs bool) *gorm.DB {
 			secret TEXT, events TEXT, status INTEGER, retry_count INTEGER, timeout INTEGER,
 			description TEXT, created_at DATETIME, updated_at DATETIME
 		)`,
-		`CREATE TABLE callback_logs (
+		`CREATE TABLE callback_logs (provider_account_id INTEGER DEFAULT 0, source TEXT, sms_event_key TEXT UNIQUE, attribution TEXT,
 			id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT, task_id TEXT, app_id TEXT NOT NULL,
 			provider_code TEXT NOT NULL, provider_id TEXT, mobile TEXT, content TEXT,
 			callback_status TEXT, error_code TEXT, error_message TEXT, raw_data TEXT, created_at DATETIME

@@ -25,11 +25,14 @@ var ErrResourceUnsupported = errors.New("provider resource operation is not supp
 
 // ResourceField describes the normalized form, never an upstream credential.
 type ResourceField struct {
-	Name     string        `json:"name"`
-	Label    string        `json:"label"`
-	Type     string        `json:"type"`
-	Required bool          `json:"required"`
-	Options  []FieldOption `json:"options,omitempty"`
+	Name         string            `json:"name"`
+	Label        string            `json:"label"`
+	Type         string            `json:"type"`
+	Required     bool              `json:"required"`
+	Options      []FieldOption     `json:"options,omitempty"`
+	Sensitive    bool              `json:"sensitive,omitempty"`
+	Help         string            `json:"help,omitempty"`
+	RequiredWhen map[string]string `json:"required_when,omitempty"`
 }
 
 // ResourceProtocol keeps operation-specific wire names and success semantics in code.
@@ -43,21 +46,48 @@ type ResourceProtocol struct {
 	SuccessField   string
 	SuccessValue   string
 	DataField      string
+	ErrorField     string // SDK APIs report success by the absence of this error envelope.
 }
 
 type ResourceInput struct {
-	ID          string `json:"id,omitempty"`
-	Name        string `json:"name"`
-	Content     string `json:"content"`
-	Category    string `json:"category"`
-	Description string `json:"description"`
+	ID             string            `json:"id,omitempty"`
+	Name           string            `json:"name"`
+	Content        string            `json:"content"`
+	Category       string            `json:"category"`
+	Description    string            `json:"description"`
+	ProviderFields map[string]string `json:"provider_fields,omitempty"`
+}
+
+func (i ResourceInput) FieldValue(name string) string {
+	if key, ok := strings.CutPrefix(name, "provider_fields."); ok {
+		return i.ProviderFields[key]
+	}
+	return map[string]string{"id": i.ID, "name": i.Name, "content": i.Content, "category": i.Category, "description": i.Description}[name]
+}
+
+// PublicCopy excludes submission-only material from mirrors, previews and hashes.
+func (i ResourceInput) PublicCopy(fields []ResourceField) ResourceInput {
+	copy := i
+	copy.ProviderFields = nil
+	for _, field := range fields {
+		key, provider := strings.CutPrefix(field.Name, "provider_fields.")
+		if provider && !field.Sensitive && i.ProviderFields[key] != "" {
+			if copy.ProviderFields == nil {
+				copy.ProviderFields = map[string]string{}
+			}
+			copy.ProviderFields[key] = i.ProviderFields[key]
+		}
+	}
+	return copy
 }
 
 // RemoteResource contains provider facts. Content is native, not canonical text.
 type RemoteResource struct {
 	ResourceInput
-	AuditStatus int8   `json:"audit_status"`
-	AuditReply  string `json:"audit_reply"`
+	AuditStatus      int8           `json:"audit_status"`
+	AuditReply       string         `json:"audit_reply"`
+	ProviderMetadata map[string]any `json:"provider_metadata,omitempty"`
+	RequestID        string         `json:"-"` // Diagnostic only; never part of an optimistic resource version.
 }
 
 // RemoteResourceError distinguishes a rejected request from an uncertain write.
@@ -65,16 +95,23 @@ type RemoteResourceError struct {
 	Code      string `json:"code"`
 	Message   string `json:"message"`
 	Uncertain bool   `json:"uncertain"`
+	RequestID string `json:"request_id,omitempty"`
 }
 
-func (e *RemoteResourceError) Error() string { return e.Message }
+func (e *RemoteResourceError) Error() string {
+	if e.RequestID != "" {
+		return e.Message + "（RequestId: " + e.RequestID + "）"
+	}
+	return e.Message
+}
 
 type ResourceHandler func(context.Context, *model.ProviderAccount, ResourceInput) ([]RemoteResource, error)
 
 type ResourceOperation struct {
-	Protocol ResourceProtocol
-	Fields   []ResourceField
-	Handler  ResourceHandler
+	Protocol      ResourceProtocol
+	Fields        []ResourceField
+	Handler       ResourceHandler
+	ValidateInput func(ResourceInput) error
 }
 
 type ResourceDefinition struct {
@@ -133,15 +170,25 @@ func (d *ResourceDefinition) ValidateInput(action ResourceAction, input Resource
 	if (action == ResourceUpdate || action == ResourceDelete) && strings.TrimSpace(input.ID) == "" {
 		return errors.New("remote resource ID is required")
 	}
-	values := map[string]string{"id": input.ID, "name": input.Name, "content": input.Content, "category": input.Category, "description": input.Description}
 	for _, f := range op.Fields {
-		if f.Required && strings.TrimSpace(values[f.Name]) == "" {
+		value := input.FieldValue(f.Name)
+		required := f.Required
+		if len(f.RequiredWhen) > 0 {
+			matches := true
+			for name, expected := range f.RequiredWhen {
+				if input.FieldValue(name) != expected {
+					matches = false
+				}
+			}
+			required = required || matches
+		}
+		if required && strings.TrimSpace(value) == "" {
 			return fmt.Errorf("%s不能为空", f.Label)
 		}
-		if len(f.Options) > 0 && values[f.Name] != "" {
+		if len(f.Options) > 0 && value != "" {
 			valid := false
 			for _, o := range f.Options {
-				if o.Value == values[f.Name] {
+				if o.Value == value {
 					valid = true
 				}
 			}
@@ -149,6 +196,9 @@ func (d *ResourceDefinition) ValidateInput(action ResourceAction, input Resource
 				return fmt.Errorf("%s不合法", f.Label)
 			}
 		}
+	}
+	if op.ValidateInput != nil {
+		return op.ValidateInput(input)
 	}
 	return nil
 }
@@ -164,7 +214,7 @@ func (d *ResourceDefinition) Validate(kind ResourceKind) error {
 		if action != ResourceQuery && action != ResourceCreate && action != ResourceUpdate && action != ResourceDelete {
 			return errors.New("unknown resource action")
 		}
-		if op == nil || op.Handler == nil || op.Protocol.Path == "" || op.Protocol.SuccessField == "" || op.Protocol.SuccessValue == "" {
+		if op == nil || op.Handler == nil || op.Protocol.Path == "" || (op.Protocol.ErrorField == "" && (op.Protocol.SuccessField == "" || op.Protocol.SuccessValue == "")) {
 			return fmt.Errorf("incomplete %s resource declaration", action)
 		}
 		if action != ResourceDelete && (op.Protocol.DataField == "" || len(op.Protocol.ResponseFields["id"]) == 0) {
