@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -14,6 +15,7 @@ import (
 	"cnb.cool/mliev/push/message-push/modules/channel"
 	"cnb.cool/mliev/push/message-push/modules/messaging"
 	registry "cnb.cool/mliev/push/message-push/modules/sender/domain"
+	"gorm.io/gorm"
 )
 
 // convertModelParamMappingToDTO 将 model.ParamMappingItem 转换为 dto.ParamMappingItem
@@ -394,7 +396,7 @@ func (s *AdminChannelService) UpdateChannelBinding(channelID, bindingID uint, re
 		issues = readiness.ValidateBindingParamMapping(systemVariables, &candidate)
 	}
 	if len(issues) > 0 {
-		return fmt.Errorf("invalid channel binding: %s", strings.Join(issues, ","))
+		return newChannelBindingValidationError(&candidate, issues)
 	}
 
 	if len(updates) == 0 {
@@ -508,6 +510,9 @@ func (s *AdminChannelService) CreateChannelBinding(channelID uint, req *dto.Crea
 	// 验证供应商模板是否存在
 	providerTemplate, err := s.providerTemplateDAO.GetByID(req.ProviderTemplateID)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, newChannelBindingValidationError(nil, []string{constants.ReadinessBlockerProviderTemplateMissing})
+		}
 		return nil, fmt.Errorf("provider template not found: %w", err)
 	}
 
@@ -594,7 +599,7 @@ func (s *AdminChannelService) CreateChannelBinding(channelID uint, req *dto.Crea
 		issues = readiness.ValidateBindingParamMapping(systemVariables, binding)
 	}
 	if len(issues) > 0 {
-		return nil, fmt.Errorf("invalid channel binding: %s", strings.Join(issues, ","))
+		return nil, newChannelBindingValidationError(binding, issues)
 	}
 	// Associations were attached only for validation; persist foreign keys only.
 	binding.ProviderTemplate = nil

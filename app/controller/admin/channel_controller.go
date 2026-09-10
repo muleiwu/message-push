@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"errors"
 	"strconv"
 
 	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
@@ -175,7 +176,7 @@ func (c ChannelController) UpdateChannelBinding(ctx httpInterfaces.RouterContext
 	}
 
 	if err := adminService.UpdateChannelBinding(uint(id), uint(bindingID), &req); err != nil {
-		controller.ErrorResponse(ctx, 500, "failed to update channel binding: "+err.Error())
+		writeChannelBindingError(ctx, err, "failed to update channel binding")
 		return
 	}
 
@@ -235,11 +236,20 @@ func (c ChannelController) CreateChannelBinding(ctx httpInterfaces.RouterContext
 
 	resp, err := adminService.CreateChannelBinding(uint(id), &req)
 	if err != nil {
-		controller.ErrorResponse(ctx, 500, "failed to create channel binding: "+err.Error())
+		writeChannelBindingError(ctx, err, "failed to create channel binding")
 		return
 	}
 
 	controller.SuccessResponse(ctx, resp)
+}
+
+func writeChannelBindingError(ctx httpInterfaces.RouterContextInterface, err error, fallback string) {
+	var validationErr *service.ChannelBindingValidationError
+	if errors.As(err, &validationErr) {
+		controller.ErrorResponse(ctx, 400, validationErr.Message)
+		return
+	}
+	controller.ErrorResponse(ctx, 500, fallback+": "+err.Error())
 }
 
 // GetAvailableTemplateBindings 获取通道可用的模板绑定列表
