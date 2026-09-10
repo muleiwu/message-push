@@ -37,7 +37,7 @@ func TestPositionalTemplateRoundTripAndRepeatedVariables(t *testing.T) {
 
 func TestTemplateCodecRejectsUnknownOrIncompleteSyntax(t *testing.T) {
 	c := PositionalTemplateCodec{}
-	for _, value := range []string{"${code}", "{{code}}", "#code#", "{ code }", "{中文}"} {
+	for _, value := range []string{"${code", "${code}}", "{{code}}", "#code#", "{ code }", "{中文}"} {
 		if _, err := c.Compile(value); err == nil {
 			t.Errorf("accepted %q", value)
 		}
@@ -62,6 +62,22 @@ func TestNamedTemplateCodecPreservesNativeNames(t *testing.T) {
 	d, err := c.Decode("您好 ${recipient}", []domain.VariableSlot{{Native: "recipient", Name: "name"}})
 	if err != nil || d.Content != "您好 {name}" || d.Slots[0].Native != "recipient" || !reflect.DeepEqual(d.NativeVariables, []string{"${recipient}"}) {
 		t.Fatalf("decode: %+v %v", d, err)
+	}
+}
+
+func TestTemplateCodecsPreserveLiteralDollarText(t *testing.T) {
+	const content = "价格$5，变量${code}，再取$$${code}"
+	for _, codec := range []domain.TemplateCodec{PositionalTemplateCodec{}, NamedTemplateCodec{Prefix: "$"}} {
+		t.Run(codec.Version(), func(t *testing.T) {
+			compiled, err := codec.Compile(content)
+			if err != nil {
+				t.Fatal(err)
+			}
+			decoded, err := codec.Decode(compiled.NativeContent, compiled.Slots)
+			if err != nil || decoded.Content != content {
+				t.Fatalf("round trip lost literal text: %+v %v", decoded, err)
+			}
+		})
 	}
 }
 

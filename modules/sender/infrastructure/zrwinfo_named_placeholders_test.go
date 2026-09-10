@@ -20,6 +20,46 @@ func registeredZrwinfoCodec(t *testing.T) domain.TemplateCodec {
 	return meta.Resources[domain.ResourceTemplates].Codec
 }
 
+func TestZrwinfoLiteralDollarTemplateRoundTripAndSend(t *testing.T) {
+	const original = "主机${host_name}的监控规则“{rule_name}”触发时延告警，当前时延{value}毫秒，告警阈值{threshold}毫秒，请及时排查。"
+	codec := registeredZrwinfoCodec(t)
+	decoded, err := codec.Decode(original, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Content != original || decoded.NativeContent != original {
+		t.Fatalf("literal dollar was changed: %+v", decoded)
+	}
+	if !reflect.DeepEqual(decoded.Variables, []string{"host_name", "rule_name", "value", "threshold"}) || !reflect.DeepEqual(decoded.NativeVariables, []string{"{host_name}", "{rule_name}", "{value}", "{threshold}"}) {
+		t.Fatalf("unexpected variables: %+v", decoded)
+	}
+	compiled, err := codec.Compile(decoded.Content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const native = "主机${1}的监控规则“{2}”触发时延告警，当前时延{3}毫秒，告警阈值{4}毫秒，请及时排查。"
+	if compiled.NativeContent != native {
+		t.Fatalf("submission text = %q", compiled.NativeContent)
+	}
+	restored, err := codec.Decode(compiled.NativeContent, compiled.Slots)
+	if err != nil || restored.Content != original {
+		t.Fatalf("round trip = %+v, err = %v", restored, err)
+	}
+	values := map[string]string{"host_name": "server01", "rule_name": "latency", "value": "120", "threshold": "100"}
+	approved := int8(2)
+	for _, text := range []*domain.CompiledTemplate{decoded, compiled} {
+		slots, err := json.Marshal(text.Slots)
+		if err != nil {
+			t.Fatal(err)
+		}
+		template := &model.ProviderTemplate{ProviderResourceState: model.ProviderResourceState{AuditStatus: &approved}, Status: 1, TemplateContent: text.Content, NativeContent: text.NativeContent, VariableSlots: string(slots), CodecVersion: text.Version}
+		got, err := (&ZrwinfoSMSSender{}).buildResourceContent(&model.ChannelTemplateBinding{ProviderTemplate: template}, "", values)
+		if err != nil || got != "server01##latency##120##100" {
+			t.Fatalf("send = %q, err = %v", got, err)
+		}
+	}
+}
+
 func TestZrwinfoScreenshotNamedPlaceholders(t *testing.T) {
 	codec := registeredZrwinfoCodec(t)
 	for _, content := range []string{
@@ -99,7 +139,7 @@ func TestZrwinfoNamedOrderRepeatsAndNumericCompatibility(t *testing.T) {
 
 func TestZrwinfoNativeSyntaxValidation(t *testing.T) {
 	codec := registeredZrwinfoCodec(t)
-	for _, content := range []string{"主机{host_name}规则{1}", "${host_name}", "{{host_name}}", "{中文}", "{ host_name }", "{host_name", "#host_name#", "{0}", "{2}"} {
+	for _, content := range []string{"主机{host_name}规则{1}", "${host_name", "${host_name}}", "{{host_name}}", "{中文}", "{ host_name }", "{host_name", "#host_name#", "{0}", "{2}"} {
 		if _, err := codec.Decode(content, nil); err == nil {
 			t.Errorf("accepted invalid native syntax %q", content)
 		}

@@ -25,7 +25,9 @@ func (PositionalTemplateCodec) Version() string { return "positional-v1" }
 
 func validatePlaceholders(content string, pattern *regexp.Regexp) error {
 	remainder := pattern.ReplaceAllString(content, "")
-	if strings.ContainsAny(remainder, "{}") || strings.Contains(content, "${") || unsupportedHashPlaceholder.MatchString(content) {
+	// Characters outside a recognized token, including '$', are literal text.
+	// Prefix-aware codecs parse their own prefixes before using this validation.
+	if strings.ContainsAny(remainder, "{}") || unsupportedHashPlaceholder.MatchString(content) {
 		return fmt.Errorf("无法识别模板占位符，请使用声明的变量格式")
 	}
 	return nil

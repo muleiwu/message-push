@@ -86,6 +86,35 @@ func resourceSelection(item *ResourcePreviewItem, action string) ResourceSelecti
 	return ResourceSelection{ID: item.Remote.ID, Version: item.Version, Action: action}
 }
 
+func TestResourceLiteralDollarTemplateCanBeImported(t *testing.T) {
+	f := newResourceServiceFixture(t)
+	ctx := context.Background()
+	kind := domain.ResourceTemplates
+	const original = "主机${host_name}的监控规则“{rule_name}”触发时延告警，当前时延{value}毫秒，告警阈值{threshold}毫秒，请及时排查。"
+	f.rows[kind]["11"] = domain.RemoteResource{ResourceInput: domain.ResourceInput{ID: "11", Content: original}, AuditStatus: 2}
+	rows, err := f.s.Preview(ctx, f.account.ID, kind, "")
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("preview: %+v %v", rows, err)
+	}
+	if rows[0].Error != "" || rows[0].Compiled == nil {
+		t.Fatalf("valid original was rejected: %+v", rows[0])
+	}
+	if rows[0].Remote.Content != original {
+		t.Fatal("preview changed original text")
+	}
+	_, err = f.s.Import(ctx, f.account.ID, ResourceImportRequest{Kind: kind, Selections: []ResourceSelection{resourceSelection(rows[0], "create")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var record model.ProviderTemplate
+	if err = f.s.db.Preload("ProviderAccount").Where("provider_id = ? AND template_code = ?", f.account.ID, "11").First(&record).Error; err != nil {
+		t.Fatal(err)
+	}
+	if record.NativeContent != original || record.TemplateContent != original || !record.Usable() || !readiness.ProviderTemplateVariablesValid(&record) {
+		t.Fatalf("imported resource is not usable: %+v", record)
+	}
+}
+
 func TestResourceNamedTemplatePreviewImportReadinessAndSendOrder(t *testing.T) {
 	f := newResourceServiceFixture(t)
 	ctx := context.Background()

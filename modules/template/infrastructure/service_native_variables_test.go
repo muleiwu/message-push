@@ -17,6 +17,7 @@ func TestProviderTemplateResponseSeparatesNativeTokensFromMappingNames(t *testin
 	}{
 		{"numeric", "主机{1}告警，使用率{2}%", "主机{host_name}告警，使用率{usage}%", []string{"host_name", "usage"}, []string{"{1}", "{2}"}},
 		{"named", "主机{host_name}规则{rule_name}恢复。", "主机{host_name}规则{rule_name}恢复。", []string{"host_name", "rule_name"}, []string{"{host_name}", "{rule_name}"}},
+		{"literal-dollar", "主机${host_name}规则{rule_name}恢复。", "主机${host_name}规则{rule_name}恢复。", []string{"host_name", "rule_name"}, []string{"{host_name}", "{rule_name}"}},
 		{"manual", "", "主机{host_name}告警。", []string{"host_name"}, []string{"{host_name}"}},
 		{"static", "固定内容。", "固定内容。", []string{}, []string{}},
 	} {
