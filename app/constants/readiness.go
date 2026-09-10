@@ -29,6 +29,7 @@ const (
 	ReadinessBlockerProviderAccountMismatch          = "PROVIDER_RELATION_MISMATCH"
 	ReadinessBlockerProviderTypeMismatch             = "PROVIDER_RELATION_MISMATCH"
 	ReadinessBlockerProviderNotRegistered            = "PROVIDER_ACCOUNT_UNAVAILABLE"
+	ReadinessBlockerMappingUnconfirmed               = "TEMPLATE_MAPPING_UNCONFIRMED"
 	ReadinessBlockerParamMappingInvalid              = "PARAM_MAPPING_INVALID"
 	ReadinessBlockerParamMappingIncomplete           = "PARAM_MAPPING_INVALID"
 	ReadinessBlockerSignatureMappingInvalid          = "SIGNATURE_REQUIRED"

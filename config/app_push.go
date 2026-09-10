@@ -24,6 +24,7 @@ func pushAssemblies() []interfaces.AssemblyInterface {
 		&quotaAssembly.Quota{},
 		&senderAssembly.Sender{},
 		&channelAssembly.Channel{},
+		&channelAssembly.Catalog{},
 		&ruleengineAssembly.RuleEngine{},
 		&deliveryAssembly.Producer{},
 		&templateAssembly.Renderer{},

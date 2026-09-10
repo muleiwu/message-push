@@ -53,9 +53,9 @@ func TestResetDemoCreatesValidDeterministicDataset(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, providerTemplate := range providerTemplates {
-		if strings.Contains(providerTemplate.TemplateContent, "${") {
+		if providerTemplate.ProviderID == 1 && !strings.Contains(providerTemplate.TemplateContent, "${") {
 			t.Fatalf(
-				"provider template %q uses unsupported ${variable} syntax: %q",
+				"provider template %q is missing native Alibaba placeholders: %q",
 				providerTemplate.TemplateCode,
 				providerTemplate.TemplateContent,
 			)
@@ -65,7 +65,7 @@ func TestResetDemoCreatesValidDeterministicDataset(t *testing.T) {
 	if err := db.Where("template_code = ?", "SMS_DEMO_100001").First(&aliyunLoginTemplate).Error; err != nil {
 		t.Fatal(err)
 	}
-	if aliyunLoginTemplate.TemplateContent != "您的验证码是 {code}，{minutes} 分钟内有效。" {
+	if aliyunLoginTemplate.TemplateContent != "您的验证码是 ${code}，${minutes} 分钟内有效。" {
 		t.Fatalf("unexpected Aliyun demo template content: %q", aliyunLoginTemplate.TemplateContent)
 	}
 	var batchLinked int64
@@ -96,7 +96,7 @@ func TestResetDemoCreatesValidDeterministicDataset(t *testing.T) {
 	if err := db.Table("goose_db_version").Select("MAX(version_id)").Scan(&currentVersion).Error; err != nil {
 		t.Fatal(err)
 	}
-	if currentVersion != 20260804000001 {
+	if currentVersion != 20260910000003 {
 		t.Fatalf("migration version = %d", currentVersion)
 	}
 }

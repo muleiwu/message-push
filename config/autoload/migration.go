@@ -17,6 +17,7 @@ func (receiver Migration) Get() []any {
 
 		// 推送任务
 		&model.PushTask{},
+		&model.EmailAttachment{},
 		&model.PushBatchTask{},
 		&model.PushLog{},
 

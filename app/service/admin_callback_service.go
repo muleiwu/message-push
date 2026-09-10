@@ -49,6 +49,7 @@ func (s *AdminCallbackService) GetCallbackList(req *dto.CallbackListRequest) (*d
 		}
 
 		items = append(items, &dto.CallbackItem{
+			ProviderAccountID: log.ProviderAccountID, Source: log.Source, Attribution: log.Attribution,
 			ID:             log.ID,
 			Type:           log.Type,
 			TaskID:         log.TaskID,

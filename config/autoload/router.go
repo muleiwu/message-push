@@ -48,8 +48,17 @@ func (receiver Router) InitConfig() map[string]any {
 				callback.GET("/:id", controller.CallbackController{}.Handle)
 			}
 
+			// Channel catalog uses application authentication and rate limiting, but no sending quota.
+			catalog := router.Group("/api/v1/channels")
+			catalog.Use(middleware.EmailAttachmentRequestBodyLimitMiddleware())
+			catalog.Use(middleware.AuthMiddleware())
+			catalog.Use(middleware.RateLimitMiddleware(100))
+			catalog.GET("", controller.ChannelController{}.ListChannels)
+			catalog.GET("/:id", controller.ChannelController{}.GetChannel)
+
 			// API v1 - 需要认证、限流、配额检查
 			v1 := router.Group("/api/v1")
+			v1.Use(middleware.EmailAttachmentRequestBodyLimitMiddleware())
 			v1.Use(middleware.AuthMiddleware())
 			v1.Use(middleware.RateLimitMiddleware(100)) // 默认100 QPS
 			v1.Use(middleware.QuotaMiddleware())
@@ -78,7 +87,9 @@ func (receiver Router) InitConfig() map[string]any {
 			// Admin API - 管理后台业务接口（需要 JWT 认证）
 			adminGroup := router.Group("/api/admin")
 			adminGroup.Use(middleware.AdminJWTMiddleware())
+			adminGroup.Use(middleware.EmailAttachmentRequestBodyLimitMiddleware())
 			{
+				adminGroup.GET("/email-attachments/limits", admin.EmailAttachmentController{}.GetLimits)
 				// 用户信息和权限
 				adminGroup.GET("/user/info", admin.AuthController{}.GetUserInfo)
 				adminGroup.GET("/auth/codes", admin.AuthController{}.GetAccessCodes)
@@ -118,6 +129,21 @@ func (receiver Router) InitConfig() map[string]any {
 					providerAccounts.PUT("/:id", admin.ProviderAccountController{}.UpdateProviderAccount)
 					providerAccounts.DELETE("/:id", admin.ProviderAccountController{}.DeleteProviderAccount)
 					providerAccounts.POST("/:id/test", admin.ProviderAccountController{}.TestProviderAccount)
+
+					providerAccounts.GET("/:id/remote-resources/:kind", admin.ProviderResourceController{}.Query)
+					providerAccounts.GET("/:id/remote-resources/:kind/:remoteId", admin.ProviderResourceController{}.Query)
+					providerAccounts.POST("/:id/remote-resources/:kind", admin.ProviderResourceController{}.Create)
+					providerAccounts.PUT("/:id/remote-resources/:kind/:remoteId", admin.ProviderResourceController{}.Update)
+					providerAccounts.DELETE("/:id/remote-resources/:kind/:remoteId", admin.ProviderResourceController{}.Delete)
+					providerAccounts.POST("/:id/sms-events/:event/query", admin.SMSEventController{}.Query)
+					providerAccounts.POST("/:id/sms-events/:event/pull", admin.SMSEventController{}.Pull)
+					providerAccounts.GET("/:id/sms-events", admin.SMSEventController{}.List)
+					providerAccounts.POST("/:id/sms-events/:event/retry", admin.SMSEventController{}.Retry)
+					providerAccounts.GET("/:id/sms-polling", admin.SMSEventController{}.GetPolling)
+					providerAccounts.PUT("/:id/sms-polling", admin.SMSEventController{}.UpdatePolling)
+					providerAccounts.POST("/:id/resource-sync/preview", admin.ProviderResourceController{}.Preview)
+					providerAccounts.POST("/:id/resource-sync/import", admin.ProviderResourceController{}.Import)
+					providerAccounts.POST("/:id/template-parse", admin.ProviderResourceController{}.Parse)
 
 					// 签名管理（嵌套在账号下）
 					providerAccounts.GET("/:id/signatures", admin.ProviderSignatureController{}.GetSignatureList)

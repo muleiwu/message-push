@@ -11,6 +11,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/model"
 	registry "cnb.cool/mliev/push/message-push/modules/sender/domain"
+	_ "cnb.cool/mliev/push/message-push/modules/sender/infrastructure"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 )
@@ -163,6 +164,66 @@ func TestNonSignatureProviderHistoryIsReadOnly(t *testing.T) {
 	}
 }
 
+func TestNeteaseSignatureCanBeCreatedAndUpdated(t *testing.T) {
+	db := newSignatureServiceTestDB(t)
+	account := createSignatureTestAccount(t, db, "netease", constants.ProviderNeteaseSMS, constants.MessageTypeSMS)
+	service := &AdminProviderSignatureService{
+		signatureDAO: dao.NewProviderSignatureDAO(db),
+		accountDAO:   dao.NewProviderAccountDAOWithDB(db),
+	}
+
+	created, err := service.CreateSignature(account.ID, &dto.CreateProviderSignatureRequest{
+		SignatureCode: "reviewed-signature",
+		SignatureName: "reviewed-signature",
+		Status:        1,
+	})
+	if err != nil {
+		t.Fatalf("CreateSignature() error = %v", err)
+	}
+	if !created.RequiresSignature || created.ReadOnly || created.HistoricalOnly {
+		t.Fatalf("created signature policy = %+v, want writable required signature", created)
+	}
+
+	err = service.UpdateSignature(created.ID, &dto.UpdateProviderSignatureRequest{
+		SignatureCode: "updated-reviewed-signature",
+		SignatureName: "updated-reviewed-signature",
+		Status:        1,
+	})
+	if err != nil {
+		t.Fatalf("UpdateSignature() error = %v", err)
+	}
+}
+
+func TestSMTPTitleCanBeCreatedAndUpdated(t *testing.T) {
+	db := newSignatureServiceTestDB(t)
+	account := createSignatureTestAccount(t, db, "smtp", constants.ProviderSMTP, constants.MessageTypeEmail)
+	service := &AdminProviderSignatureService{
+		signatureDAO: dao.NewProviderSignatureDAO(db),
+		accountDAO:   dao.NewProviderAccountDAOWithDB(db),
+	}
+
+	created, err := service.CreateSignature(account.ID, &dto.CreateProviderSignatureRequest{
+		SignatureCode: "订单已经创建",
+		SignatureName: "订单创建标题",
+		Status:        1,
+	})
+	if err != nil {
+		t.Fatalf("CreateSignature() error = %v", err)
+	}
+	if !created.RequiresSignature || created.ReadOnly || created.HistoricalOnly {
+		t.Fatalf("created SMTP title policy = %+v, want writable required mapping", created)
+	}
+
+	err = service.UpdateSignature(created.ID, &dto.UpdateProviderSignatureRequest{
+		SignatureCode: "您的订单已经创建",
+		SignatureName: "订单创建标题",
+		Status:        1,
+	})
+	if err != nil {
+		t.Fatalf("UpdateSignature() error = %v", err)
+	}
+}
+
 func newSignatureServiceTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "signature.db")), &gorm.Config{DisableForeignKeyConstraintWhenMigrating: true})
@@ -171,7 +232,7 @@ func newSignatureServiceTestDB(t *testing.T) *gorm.DB {
 	}
 	for _, statement := range []string{
 		`CREATE TABLE provider_accounts (id INTEGER PRIMARY KEY AUTOINCREMENT, account_code TEXT NOT NULL UNIQUE, account_name TEXT NOT NULL, provider_code TEXT NOT NULL, provider_type TEXT NOT NULL, config TEXT, status INTEGER, remark TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
-		`CREATE TABLE provider_signatures (id INTEGER PRIMARY KEY AUTOINCREMENT, provider_account_id INTEGER NOT NULL, signature_code TEXT NOT NULL, signature_name TEXT NOT NULL, status INTEGER, remark TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
+		`CREATE TABLE provider_signatures (provider_metadata TEXT, remote_id TEXT DEFAULT '', audit_status INTEGER, audit_reply TEXT, remote_deleted INTEGER NOT NULL DEFAULT 0, synced_at DATETIME, remote_description TEXT, id INTEGER PRIMARY KEY AUTOINCREMENT, provider_account_id INTEGER NOT NULL, signature_code TEXT NOT NULL, signature_name TEXT NOT NULL, status INTEGER, remark TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 	} {
 		if err := db.Exec(statement).Error; err != nil {
 			t.Fatalf("create signature schema: %v", err)

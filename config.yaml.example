@@ -43,6 +43,13 @@ redis:
   pool_size: 10
   min_idle_conns: 5
 
+# 邮件附件配置（解码后的文件大小，单位 MiB）
+email:
+  attachments:
+    max_count: 5
+    max_file_size_mb: 5
+    max_total_size_mb: 10
+
 # 日志配置
 log:
   level: info    # debug, info, warn, error

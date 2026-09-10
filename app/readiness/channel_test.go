@@ -7,8 +7,11 @@ import (
 	"testing"
 
 	"cnb.cool/mliev/push/message-push/app/constants"
+	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/model"
 	registry "cnb.cool/mliev/push/message-push/modules/sender/domain"
+	_ "cnb.cool/mliev/push/message-push/modules/sender/infrastructure"
+	senderinfra "cnb.cool/mliev/push/message-push/modules/sender/infrastructure"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 )
@@ -20,6 +23,49 @@ const (
 	testProviderWechatPlain   = "readiness_test_wechat_plain"
 	testProviderDingTalkPlain = "readiness_test_dingtalk_plain"
 )
+
+func TestProviderResourceAuditControlsEligibilityAndSignatureLookup(t *testing.T) {
+	registerReadinessTestProviders(t)
+	db := newReadinessTestDB(t)
+	f := createReadyFixture(t, db, constants.MessageTypeSMS, testProviderSMSRequired)
+	mapping := createSignatureAlias(t, db, f.channel.ID, f.account.ID, "login")
+	evaluator := NewChannelEvaluator(db)
+	lookup := dao.NewChannelSignatureMappingDAO(db)
+	for _, state := range []struct {
+		name    string
+		status  any
+		deleted bool
+		usable  bool
+	}{{"manual", nil, false, true}, {"unknown", 0, false, false}, {"pending", 1, false, false}, {"approved", 2, false, true}, {"rejected", 3, false, false}, {"deleted", 2, true, false}} {
+		t.Run(state.name, func(t *testing.T) {
+			if err := db.Model(&model.ProviderSignature{}).Where("id = ?", mapping.ProviderSignatureID).Updates(map[string]any{"audit_status": state.status, "remote_deleted": state.deleted}).Error; err != nil {
+				t.Fatal(err)
+			}
+			eligibility, err := evaluator.GetDeliveryEligibility(f.channel.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if (len(eligibility.ValidBindingIDs) > 0) != state.usable {
+				t.Fatalf("signature eligibility: %+v", eligibility)
+			}
+			_, err = lookup.GetByChannelIDAndSignatureName(f.channel.ID, "login", f.account.ID)
+			if (err == nil) != state.usable {
+				t.Fatalf("signature lookup: %v", err)
+			}
+		})
+	}
+	db.Model(&model.ProviderSignature{}).Where("id = ?", mapping.ProviderSignatureID).Updates(map[string]any{"audit_status": 2, "remote_deleted": false})
+	for _, status := range []int{0, 1, 2, 3} {
+		db.Model(&model.ProviderTemplate{}).Where("id = ?", f.providerTemplate.ID).Update("audit_status", status)
+		eligibility, err := evaluator.GetDeliveryEligibility(f.channel.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if (len(eligibility.ValidBindingIDs) > 0) != (status == 2) {
+			t.Fatalf("template audit status=%d eligibility=%+v", status, eligibility)
+		}
+	}
+}
 
 func TestChannelEvaluatorStatesAndBindingValidation(t *testing.T) {
 	registerReadinessTestProviders(t)
@@ -300,6 +346,60 @@ func TestMissingRequiredSignatureDegradesWhenPlainPathRemains(t *testing.T) {
 	}
 }
 
+func TestSMTPTitleMappingControlsReadinessAndAcceptance(t *testing.T) {
+	db := newReadinessTestDB(t)
+	fixture := createReadyFixture(t, db, constants.MessageTypeEmail, constants.ProviderSMTP)
+	evaluator := NewChannelEvaluator(db)
+
+	result, err := evaluator.EvaluateChannel(fixture.channel.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.State != constants.ChannelReadinessBlocked || result.ValidBindingCount != 0 ||
+		result.RequiredSignatureAccountCount != 1 || !containsString(result.BlockerCodes, constants.ReadinessBlockerSignatureRequired) {
+		t.Fatalf("SMTP readiness without title mapping = %+v, want blocked", result)
+	}
+	if err := evaluator.ValidateForSend(fixture.channel.ID, ""); !validationHasCode(err, constants.ReadinessBlockerSignatureRequired) {
+		t.Fatalf("empty SMTP title alias error = %v, want %s", err, constants.ReadinessBlockerSignatureRequired)
+	}
+
+	secondAccount, _, _ := createProviderPath(t, db, fixture.channel.ID, constants.MessageTypeEmail, constants.ProviderSMTP)
+	firstMapping := createSignatureAlias(t, db, fixture.channel.ID, fixture.account.ID, "order-created")
+	secondMapping := createSignatureAlias(t, db, fixture.channel.ID, secondAccount.ID, "order-created")
+	if err := db.Model(&model.ProviderSignature{}).Where("id = ?", firstMapping.ProviderSignatureID).Update("signature_code", "账号 A 的订单标题").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.ProviderSignature{}).Where("id = ?", secondMapping.ProviderSignatureID).Update("signature_code", "账号 B 的订单标题").Error; err != nil {
+		t.Fatal(err)
+	}
+	result, err = evaluator.EvaluateChannel(fixture.channel.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.State != constants.ChannelReadinessReady || result.ValidBindingCount != 2 || result.RequiredSignatureAccountCount != 2 ||
+		len(result.CommonSignatureAliases) != 1 || result.CommonSignatureAliases[0] != "order-created" {
+		t.Fatalf("SMTP readiness with title mapping = %+v, want ready", result)
+	}
+	lookup := dao.NewChannelSignatureMappingDAO(db)
+	firstTitle, err := lookup.GetByChannelIDAndSignatureName(fixture.channel.ID, "order-created", fixture.account.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondTitle, err := lookup.GetByChannelIDAndSignatureName(fixture.channel.ID, "order-created", secondAccount.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if firstTitle.SignatureCode != "账号 A 的订单标题" || secondTitle.SignatureCode != "账号 B 的订单标题" {
+		t.Fatalf("SMTP title mapping resolved first=%q second=%q", firstTitle.SignatureCode, secondTitle.SignatureCode)
+	}
+	if err := evaluator.ValidateForSend(fixture.channel.ID, "order-created"); err != nil {
+		t.Fatalf("mapped SMTP title alias was rejected: %v", err)
+	}
+	if err := evaluator.ValidateForSend(fixture.channel.ID, "unknown"); !validationHasCode(err, constants.ReadinessBlockerSignatureAliasNotCommon) {
+		t.Fatalf("unknown SMTP title alias error = %v, want %s", err, constants.ReadinessBlockerSignatureAliasNotCommon)
+	}
+}
+
 type readinessFixture struct {
 	channel          *model.Channel
 	account          *model.ProviderAccount
@@ -317,9 +417,9 @@ func newReadinessTestDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE message_templates (id INTEGER PRIMARY KEY AUTOINCREMENT, template_name TEXT NOT NULL, content_type TEXT, content TEXT, variables TEXT, description TEXT, status INTEGER, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE channels (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, type TEXT NOT NULL, message_template_id INTEGER, status INTEGER, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE provider_accounts (id INTEGER PRIMARY KEY AUTOINCREMENT, account_code TEXT NOT NULL UNIQUE, account_name TEXT NOT NULL, provider_code TEXT NOT NULL, provider_type TEXT NOT NULL, config TEXT, status INTEGER, remark TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
-		`CREATE TABLE provider_templates (id INTEGER PRIMARY KEY AUTOINCREMENT, provider_id INTEGER NOT NULL, template_code TEXT NOT NULL, template_name TEXT NOT NULL, content_type TEXT, template_content TEXT, variables TEXT, status INTEGER, remark TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
-		`CREATE TABLE channel_template_bindings (id INTEGER PRIMARY KEY AUTOINCREMENT, channel_id INTEGER NOT NULL, provider_template_id INTEGER NOT NULL, provider_id INTEGER NOT NULL, param_mapping TEXT, weight INTEGER, priority INTEGER, status INTEGER, is_active INTEGER, auto_disable_on_fail INTEGER, auto_disable_threshold INTEGER, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
-		`CREATE TABLE provider_signatures (id INTEGER PRIMARY KEY AUTOINCREMENT, provider_account_id INTEGER NOT NULL, signature_code TEXT NOT NULL, signature_name TEXT NOT NULL, status INTEGER, remark TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
+		`CREATE TABLE provider_templates (provider_metadata TEXT, content_version INTEGER NOT NULL DEFAULT 1, audit_status INTEGER, audit_reply TEXT, remote_deleted INTEGER NOT NULL DEFAULT 0, synced_at DATETIME, remote_description TEXT, remote_name TEXT DEFAULT '', category TEXT DEFAULT '', id INTEGER PRIMARY KEY AUTOINCREMENT, provider_id INTEGER NOT NULL, template_code TEXT NOT NULL, template_name TEXT NOT NULL, content_type TEXT, template_content TEXT, variables TEXT, status INTEGER, remark TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
+		`CREATE TABLE channel_template_bindings (mapped_content_version INTEGER NOT NULL DEFAULT 0, id INTEGER PRIMARY KEY AUTOINCREMENT, channel_id INTEGER NOT NULL, provider_template_id INTEGER NOT NULL, provider_id INTEGER NOT NULL, param_mapping TEXT, weight INTEGER, priority INTEGER, status INTEGER, is_active INTEGER, auto_disable_on_fail INTEGER, auto_disable_threshold INTEGER, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
+		`CREATE TABLE provider_signatures (provider_metadata TEXT, remote_id TEXT DEFAULT '', audit_status INTEGER, audit_reply TEXT, remote_deleted INTEGER NOT NULL DEFAULT 0, synced_at DATETIME, remote_description TEXT, id INTEGER PRIMARY KEY AUTOINCREMENT, provider_account_id INTEGER NOT NULL, signature_code TEXT NOT NULL, signature_name TEXT NOT NULL, status INTEGER, remark TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE channel_signature_mappings (id INTEGER PRIMARY KEY AUTOINCREMENT, channel_id INTEGER NOT NULL, signature_name TEXT NOT NULL, provider_signature_id INTEGER NOT NULL, provider_id INTEGER NOT NULL, status INTEGER, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 	}
 	for _, statement := range statements {
@@ -340,6 +440,9 @@ func registerReadinessTestProviders(t *testing.T) {
 		{Code: testProviderDingTalkPlain, Name: "DingTalk plain", Type: constants.MessageTypeDingTalk},
 	}
 	for _, provider := range providers {
+		if provider.Type == "sms" {
+			provider.TemplateCodec = senderinfra.NativeTemplateCodec{ID: "fixture-native", AllowNamed: true}
+		}
 		if err := registry.Register(provider); err != nil && !stringsContains(err.Error(), "already registered") {
 			t.Fatalf("register provider %s: %v", provider.Code, err)
 		}
@@ -383,6 +486,7 @@ func createProviderPath(t *testing.T, db *gorm.DB, channelID uint, messageType, 
 		t.Fatal(err)
 	}
 	providerTemplate := &model.ProviderTemplate{
+		TemplateContent: "code={code}", ContentVersion: 1,
 		ProviderID:   account.ID,
 		TemplateCode: fmt.Sprintf("tpl-%d", account.ID),
 		TemplateName: "provider",
@@ -394,21 +498,22 @@ func createProviderPath(t *testing.T, db *gorm.DB, channelID uint, messageType, 
 	if err := db.Create(providerTemplate).Error; err != nil {
 		t.Fatal(err)
 	}
-	binding := createBinding(t, db, channelID, providerTemplate.ID, account.ID, 1, 1, "")
+	binding := createBinding(t, db, channelID, providerTemplate.ID, account.ID, 1, 1, `[{"type":"mapping","provider_var":"code","system_var":"code"}]`)
 	return account, providerTemplate, binding
 }
 
 func createBinding(t *testing.T, db *gorm.DB, channelID, providerTemplateID, accountID uint, status, active int8, mapping string) *model.ChannelTemplateBinding {
 	t.Helper()
 	binding := &model.ChannelTemplateBinding{
-		ChannelID:          channelID,
-		ProviderTemplateID: providerTemplateID,
-		ProviderID:         accountID,
-		ParamMapping:       mapping,
-		Weight:             10,
-		Priority:           100,
-		Status:             status,
-		IsActive:           active,
+		MappedContentVersion: 1,
+		ChannelID:            channelID,
+		ProviderTemplateID:   providerTemplateID,
+		ProviderID:           accountID,
+		ParamMapping:         mapping,
+		Weight:               10,
+		Priority:             100,
+		Status:               status,
+		IsActive:             active,
 	}
 	if err := db.Create(binding).Error; err != nil {
 		t.Fatal(err)

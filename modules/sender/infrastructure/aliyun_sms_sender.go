@@ -8,7 +8,6 @@ import (
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	domain "cnb.cool/mliev/push/message-push/modules/sender/domain"
-
 	openapi "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	dysmsapi "github.com/alibabacloud-go/dysmsapi-20170525/v3/client"
 	"github.com/alibabacloud-go/tea/tea"
@@ -16,7 +15,8 @@ import (
 
 func init() {
 	// 注册阿里云短信服务商
-	domain.Register(&domain.ProviderMeta{
+	if err := domain.Register(&domain.ProviderMeta{
+		TemplateCodec:     NativeTemplateCodec{ID: "aliyun-native-v1", Prefix: "$", AllowNamed: true},
 		Code:              constants.ProviderAliyunSMS,
 		Name:              "阿里云短信",
 		Type:              constants.MessageTypeSMS,
@@ -61,7 +61,9 @@ func init() {
 		Tags:       []string{"国内", "国际", "推荐"},
 		Regions:    []string{"中国大陆", "国际"},
 		Deprecated: false,
-	})
+	}); err != nil {
+		panic(err)
+	}
 }
 
 // AliyunSMSSender 阿里云短信发送器
@@ -114,11 +116,6 @@ func (s *AliyunSMSSender) Send(ctx context.Context, req *domain.SendRequest) (*d
 		signName = req.Signature.SignatureCode
 	}
 
-	// 兜底：从任务获取模板代码
-	if templateCode == "" {
-		templateCode = req.Task.TemplateCode
-	}
-
 	if templateCode == "" {
 		return nil, fmt.Errorf("missing template_code")
 	}
@@ -132,8 +129,12 @@ func (s *AliyunSMSSender) Send(ctx context.Context, req *domain.SendRequest) (*d
 
 	// 模板参数（阿里云要求JSON对象格式）
 	var templateParamStr string
-	if len(req.MappedParams) > 0 {
-		paramBytes, _ := json.Marshal(req.MappedParams)
+	bound, err := smsTemplateParameters(req.ProviderAccount, req.ChannelTemplateBinding, req.MappedParams)
+	if err != nil {
+		return nil, err
+	}
+	if len(bound.Named) > 0 {
+		paramBytes, _ := json.Marshal(bound.Named)
 		templateParamStr = string(paramBytes)
 		sendRequest.TemplateParam = tea.String(templateParamStr)
 	}
@@ -250,11 +251,6 @@ func (s *AliyunSMSSender) BatchSend(ctx context.Context, req *domain.BatchSendRe
 		signName = req.Signature.SignatureCode
 	}
 
-	// 兜底：从第一个任务获取模板代码
-	if templateCode == "" && len(req.Tasks) > 0 {
-		templateCode = req.Tasks[0].TemplateCode
-	}
-
 	if templateCode == "" {
 		return nil, fmt.Errorf("missing template_code")
 	}
@@ -266,8 +262,12 @@ func (s *AliyunSMSSender) BatchSend(ctx context.Context, req *domain.BatchSendRe
 
 	// 批量发送时使用 MappedParams（所有任务共用相同参数）
 	var mappedParamStr = "{}"
-	if len(req.MappedParams) > 0 {
-		paramBytes, _ := json.Marshal(req.MappedParams)
+	bound, err := smsTemplateParameters(req.ProviderAccount, req.ChannelTemplateBinding, req.MappedParams)
+	if err != nil {
+		return nil, err
+	}
+	if len(bound.Named) > 0 {
+		paramBytes, _ := json.Marshal(bound.Named)
 		mappedParamStr = string(paramBytes)
 	}
 

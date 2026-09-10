@@ -76,6 +76,10 @@ Installation, API integration, deployment, security, and operations guidance is 
 
 Open the [Mulei Message Service documentation](https://mdoc.cc/mliev/message-push) for the installation guide, admin console manual, API authentication and examples, deployment instructions, troubleshooting, and architecture.
 
+## Channel catalog API
+
+The [channel catalog integration guide](docs/public-channel-catalog.md) explains how to list channels and load templates, variables, and signature aliases for a message form in your business application.
+
 ## License
 
 Copyright © 2025 Hefei Muleiwu (Mliev) Information Technology Co., Ltd. See [LICENSE](LICENSE) for permitted use and restrictions.

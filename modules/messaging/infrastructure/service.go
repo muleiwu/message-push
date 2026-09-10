@@ -93,6 +93,11 @@ func (s *MessageService) Send(ctx context.Context, req *dto.SendRequest) (*dto.S
 		return nil, fmt.Errorf("invalid message_type: %s", channel.Type)
 	}
 
+	attachments, attachmentGroupID, err := prepareEmailAttachments(channel.Type, req.Attachments)
+	if err != nil {
+		return nil, err
+	}
+
 	// 3. 加载并渲染系统模板（使用 channel 的 MessageTemplateID）
 	messageTemplate, err := s.messageTemplateDao.GetByID(channel.MessageTemplateID)
 	if err != nil {
@@ -116,23 +121,24 @@ func (s *MessageService) Send(ctx context.Context, req *dto.SendRequest) (*dto.S
 	taskID := uuid.New().String()
 	templateParamsJSON, _ := s.templateHelper.RenderJSON(req.TemplateParams)
 	task := &model.PushTask{
-		TaskID:         taskID,
-		AppID:          req.AppID,
-		ChannelID:      req.ChannelID,
-		MessageType:    channel.Type,
-		Receiver:       req.Receiver,
-		TemplateCode:   "", // 将由 worker 更新为实际使用的供应商模板代码
-		TemplateParams: templateParamsJSON,
-		Signature:      req.SignatureName, // 用户自定义签名名称
-		Status:         constants.TaskStatusPending,
-		RetryCount:     0,
-		MaxRetry:       3,
-		ScheduledAt:    timeutil.NormalizePtr(req.ScheduledAt),
-		CreatedAt:      timeutil.Now(),
+		TaskID:            taskID,
+		AppID:             req.AppID,
+		ChannelID:         req.ChannelID,
+		MessageType:       channel.Type,
+		Receiver:          req.Receiver,
+		TemplateCode:      "", // 将由 worker 更新为实际使用的供应商模板代码
+		TemplateParams:    templateParamsJSON,
+		Signature:         req.SignatureName, // 签名或标题映射别名
+		AttachmentGroupID: attachmentGroupID,
+		Status:            constants.TaskStatusPending,
+		RetryCount:        0,
+		MaxRetry:          3,
+		ScheduledAt:       timeutil.NormalizePtr(req.ScheduledAt),
+		CreatedAt:         timeutil.Now(),
 	}
 
 	// 保存任务到数据库
-	if err := s.taskDao.Create(task); err != nil {
+	if err := s.createTask(task, attachments); err != nil {
 		return nil, fmt.Errorf("failed to create task: %w", err)
 	}
 
@@ -194,6 +200,11 @@ func (s *MessageService) BatchSend(ctx context.Context, req *dto.BatchSendReques
 		return nil, fmt.Errorf("channel is not ready for send: %w", err)
 	}
 
+	attachments, attachmentGroupID, err := prepareEmailAttachments(channel.Type, req.Attachments)
+	if err != nil {
+		return nil, err
+	}
+
 	// 2. 加载系统模板（使用 channel 的 MessageTemplateID）
 	messageTemplate, err := s.messageTemplateDao.GetByID(channel.MessageTemplateID)
 	if err != nil {
@@ -222,35 +233,61 @@ func (s *MessageService) BatchSend(ctx context.Context, req *dto.BatchSendReques
 	for _, receiver := range req.Receivers {
 		taskID := uuid.New().String()
 		task := &model.PushTask{
-			TaskID:         taskID,
-			AppID:          req.AppID,
-			ChannelID:      req.ChannelID,
-			MessageType:    channel.Type,
-			Receiver:       receiver,
-			TemplateCode:   "", // 将由 worker 更新为实际使用的供应商模板代码
-			TemplateParams: templateParamsJSON,
-			Signature:      req.SignatureName, // 用户自定义签名名称
-			Status:         constants.TaskStatusPending,
-			RetryCount:     0,
-			MaxRetry:       3,
-			ScheduledAt:    timeutil.NormalizePtr(req.ScheduledAt),
+			TaskID:            taskID,
+			AppID:             req.AppID,
+			ChannelID:         req.ChannelID,
+			MessageType:       channel.Type,
+			Receiver:          receiver,
+			TemplateCode:      "", // 将由 worker 更新为实际使用的供应商模板代码
+			TemplateParams:    templateParamsJSON,
+			Signature:         req.SignatureName, // 签名或标题映射别名
+			AttachmentGroupID: attachmentGroupID,
+			Status:            constants.TaskStatusPending,
+			RetryCount:        0,
+			MaxRetry:          3,
+			ScheduledAt:       timeutil.NormalizePtr(req.ScheduledAt),
 		}
 
 		tasks = append(tasks, task)
 	}
 
-	// 批量保存任务
+	// 批量保存任务。附件与第一个成功任务原子写入，后续任务共享附件组。
+	persistedTasks := make([]*model.PushTask, 0, len(tasks))
+	attachmentsPersisted := len(attachments) == 0
 	for _, task := range tasks {
-		if err := s.taskDao.Create(task); err != nil {
-			s.logger.Error(fmt.Sprintf("failed to create task id=%s: %v", task.TaskID, err))
+		var createErr error
+		if attachmentsPersisted {
+			createErr = s.taskDao.Create(task)
+		} else {
+			createErr = s.taskDao.CreateWithAttachments(task, attachments)
+		}
+		if createErr != nil {
+			s.logger.Error(fmt.Sprintf("failed to create task id=%s: %v", task.TaskID, createErr))
 			continue
 		}
+		attachmentsPersisted = true
+		persistedTasks = append(persistedTasks, task)
 		successCount++
 	}
 
 	// 批量推送到队列
-	if err := s.producer.PushBatch(ctx, tasks); err != nil {
-		s.logger.Error(fmt.Sprintf("failed to push batch to queue: %v", err))
+	if len(persistedTasks) > 0 {
+		if err := s.producer.PushBatch(ctx, persistedTasks); err != nil {
+			s.logger.Error(fmt.Sprintf("failed to push batch to queue: %v", err))
+			for _, task := range persistedTasks {
+				if _, transitionErr := s.terminalService.Transition(ctx, applicationService.TerminalTransition{
+					TaskID:       task.TaskID,
+					Status:       constants.TaskStatusFailed,
+					Event:        constants.WebhookEventFailed,
+					ErrorCode:    "QUEUE_ERROR",
+					ErrorMessage: err.Error(),
+					OccurredAt:   timeutil.Now(),
+				}); transitionErr != nil {
+					s.logger.Error(fmt.Sprintf("failed to terminalize queued batch task id=%s: %v", task.TaskID, transitionErr))
+				}
+			}
+			successCount = 0
+		}
 	}
 
 	return &dto.BatchSendResponse{
@@ -260,6 +297,31 @@ func (s *MessageService) BatchSend(ctx context.Context, req *dto.BatchSendReques
 		FailedCount:  len(req.Receivers) - successCount,
 		CreatedAt:    timeutil.Now(),
 	}, nil
+}
+
+func (s *MessageService) createTask(task *model.PushTask, attachments []*model.EmailAttachment) error {
+	if len(attachments) == 0 {
+		return s.taskDao.Create(task)
+	}
+	return s.taskDao.CreateWithAttachments(task, attachments)
+}
+
+func prepareEmailAttachments(messageType string, requests []dto.EmailAttachmentRequest) ([]*model.EmailAttachment, string, error) {
+	if len(requests) == 0 {
+		return nil, "", nil
+	}
+	if messageType != constants.MessageTypeEmail {
+		return nil, "", fmt.Errorf("email attachments are only supported for email channels")
+	}
+	attachments, err := helper.DecodeEmailAttachments(requests, helper.GetEmailAttachmentLimits())
+	if err != nil {
+		return nil, "", err
+	}
+	groupID := uuid.New().String()
+	for _, attachment := range attachments {
+		attachment.AttachmentGroupID = groupID
+	}
+	return attachments, groupID, nil
 }
 
 // QueryTask 查询任务状态

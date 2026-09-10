@@ -69,6 +69,17 @@ func (p *Producer) PushDelayed(ctx context.Context, task *model.PushTask, at tim
 	}).Err()
 }
 
+var pushDelayedOnceScript = redis.NewScript(`
+if redis.call('EXISTS', KEYS[1]) == 1 then return 0 end
+redis.call('ZADD', KEYS[2], ARGV[1], ARGV[2])
+redis.call('SET', KEYS[1], '1')
+return 1
+`)
+
+func (p *Producer) PushDelayedOnce(ctx context.Context, task *model.PushTask, at time.Time, eventKey string) error {
+	return pushDelayedOnceScript.Run(ctx, p.redis, []string{"push:sms-effect:" + eventKey, "push:scheduled:tasks"}, timeutil.Normalize(at).Unix(), task.TaskID).Err()
+}
+
 func isFutureInstant(scheduledAt, now time.Time) bool {
 	return timeutil.Normalize(scheduledAt).After(timeutil.Normalize(now))
 }

@@ -22,18 +22,19 @@ type LogListResponse struct {
 
 // LogItem 日志项
 type LogItem struct {
-	ID                uint   `json:"id"`
-	TaskID            string `json:"task_id"`
-	AppID             string `json:"app_id"`
-	AppName           string `json:"app_name"`
-	ProviderAccountID uint   `json:"provider_account_id"`
-	ProviderName      string `json:"provider_name"`
-	RequestData       string `json:"request_data"`
-	ResponseData      string `json:"response_data"`
-	Status            string `json:"status"`
-	ErrorMessage      string `json:"error_message"`
-	CostTime          int    `json:"cost_time"`
-	CreatedAt         string `json:"created_at"`
+	MessageDetail     *MessageDetail `json:"message_detail,omitempty"`
+	ID                uint           `json:"id"`
+	TaskID            string         `json:"task_id"`
+	AppID             string         `json:"app_id"`
+	AppName           string         `json:"app_name"`
+	ProviderAccountID uint           `json:"provider_account_id"`
+	ProviderName      string         `json:"provider_name"`
+	RequestData       string         `json:"request_data"`
+	ResponseData      string         `json:"response_data"`
+	Status            string         `json:"status"`
+	ErrorMessage      string         `json:"error_message"`
+	CostTime          int            `json:"cost_time"`
+	CreatedAt         string         `json:"created_at"`
 }
 
 // TaskLogsResponse 任务日志响应（按task_id查询，不分页）
@@ -43,16 +44,19 @@ type TaskLogsResponse struct {
 
 // CallbackLogItem 回调日志项
 type CallbackLogItem struct {
-	ID             uint   `json:"id"`
-	TaskID         string `json:"task_id"`
-	AppID          string `json:"app_id"`
-	ProviderCode   string `json:"provider_code"`
-	ProviderID     string `json:"provider_id"`
-	CallbackStatus string `json:"callback_status"`
-	ErrorCode      string `json:"error_code"`
-	ErrorMessage   string `json:"error_message"`
-	RawData        string `json:"raw_data"`
-	CreatedAt      string `json:"created_at"`
+	ProviderAccountID uint   `json:"provider_account_id,omitempty"`
+	Source            string `json:"source,omitempty"`
+	Attribution       string `json:"attribution,omitempty"`
+	ID                uint   `json:"id"`
+	TaskID            string `json:"task_id"`
+	AppID             string `json:"app_id"`
+	ProviderCode      string `json:"provider_code"`
+	ProviderID        string `json:"provider_id"`
+	CallbackStatus    string `json:"callback_status"`
+	ErrorCode         string `json:"error_code"`
+	ErrorMessage      string `json:"error_message"`
+	RawData           string `json:"raw_data"`
+	CreatedAt         string `json:"created_at"`
 }
 
 // TaskCallbackLogsResponse 任务回调日志响应

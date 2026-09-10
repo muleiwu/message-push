@@ -20,6 +20,7 @@ func (receiver Config) Get() []interfaces.InitConfig {
 		autoload.Middleware{},
 		autoload.Jwt{},
 		autoload.Oidc{},
+		autoload.EmailAttachments{},
 		autoload.Router{},
 	}
 }

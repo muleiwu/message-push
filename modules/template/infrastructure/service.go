@@ -4,10 +4,13 @@ import (
 	"errors"
 	"fmt"
 
+	"cnb.cool/mliev/open/go-web/pkg/container"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/internal/timeutil"
+	"cnb.cool/mliev/push/message-push/modules/channel"
+	senderdomain "cnb.cool/mliev/push/message-push/modules/sender/domain"
 	"cnb.cool/mliev/push/message-push/modules/template/domain"
 	"gorm.io/gorm"
 )
@@ -154,7 +157,7 @@ func (s *TemplateService) ListMessageTemplates(req *dto.MessageTemplateListReque
 // CreateProviderTemplate 创建供应商模板
 func (s *TemplateService) CreateProviderTemplate(req *dto.CreateProviderTemplateRequest) (*dto.ProviderTemplateResponse, error) {
 	// 检查供应商是否存在
-	_, err := s.providerAccountDAO.GetByID(req.ProviderID)
+	account, err := s.providerAccountDAO.GetByID(req.ProviderID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("provider not found")
@@ -179,6 +182,8 @@ func (s *TemplateService) CreateProviderTemplate(req *dto.CreateProviderTemplate
 
 	// 创建模板
 	template := &model.ProviderTemplate{
+		ProviderAccount: account,
+		ContentVersion:  1,
 		ProviderID:      req.ProviderID,
 		TemplateCode:    req.TemplateCode,
 		TemplateName:    req.TemplateName,
@@ -192,11 +197,18 @@ func (s *TemplateService) CreateProviderTemplate(req *dto.CreateProviderTemplate
 		template.Status = *req.Status
 	}
 
-	if req.Variables != nil {
+	if senderdomain.IsSMSTemplate(template) {
+		template.ContentType = "text"
+		if _, err := senderdomain.ParseProviderTemplate(template); err != nil {
+			return nil, err
+		}
+		template.Variables = "[]"
+	} else if req.Variables != nil {
 		if err := template.SetVariables(req.Variables); err != nil {
-			return nil, fmt.Errorf("failed to set variables: %w", err)
+			return nil, err
 		}
 	}
+	template.ProviderAccount = nil
 
 	if err := s.providerTemplateDAO.Create(template); err != nil {
 		return nil, fmt.Errorf("failed to create provider template: %w", err)
@@ -222,6 +234,12 @@ func (s *TemplateService) UpdateProviderTemplate(id uint, req *dto.UpdateProvide
 		return nil, fmt.Errorf("failed to get provider template: %w", err)
 	}
 
+	if template.SyncedAt != nil {
+		if (req.TemplateContent != "" && req.TemplateContent != template.TemplateContent) || (req.ContentType != "" && req.ContentType != template.ContentType) {
+			return nil, errors.New("已关联模板的内容请通过供应商操作修改")
+		}
+
+	}
 	// 更新字段
 	if req.TemplateName != "" {
 		template.TemplateName = req.TemplateName
@@ -238,16 +256,24 @@ func (s *TemplateService) UpdateProviderTemplate(id uint, req *dto.UpdateProvide
 	if req.Status != nil {
 		template.Status = *req.Status
 	}
-	if req.Variables != nil {
+	if senderdomain.IsSMSTemplate(template) {
+		template.ContentType = "text"
+		if req.TemplateContent != "" || (req.Status != nil && *req.Status == 1) {
+			if _, err := senderdomain.ParseProviderTemplate(template); err != nil {
+				return nil, err
+			}
+		}
+		template.Variables = "[]"
+	} else if req.Variables != nil {
 		if err := template.SetVariables(req.Variables); err != nil {
-			return nil, fmt.Errorf("failed to set variables: %w", err)
+			return nil, err
 		}
 	}
 
 	if err := s.providerTemplateDAO.Update(template); err != nil {
 		return nil, fmt.Errorf("failed to update provider template: %w", err)
 	}
-
+	s.invalidateTemplateBindings(id)
 	return s.buildProviderTemplateResponse(template)
 }
 
@@ -266,7 +292,11 @@ func (s *TemplateService) GetProviderTemplate(id uint) (*dto.ProviderTemplateRes
 
 // DeleteProviderTemplate 删除供应商模板
 func (s *TemplateService) DeleteProviderTemplate(id uint) error {
-	return s.providerTemplateDAO.Delete(id)
+	if err := s.providerTemplateDAO.Delete(id); err != nil {
+		return err
+	}
+	s.invalidateTemplateBindings(id)
+	return nil
 }
 
 // ListProviderTemplates 查询供应商模板列表
@@ -323,7 +353,7 @@ func (s *TemplateService) buildMessageTemplateResponse(template *model.MessageTe
 
 // buildProviderTemplateResponse 构建供应商模板响应
 func (s *TemplateService) buildProviderTemplateResponse(template *model.ProviderTemplate) (*dto.ProviderTemplateResponse, error) {
-	variables, err := template.GetVariables()
+	variables, err := senderdomain.ProviderTemplateVariables(template)
 	if err != nil {
 		variables = []string{}
 	}
@@ -335,20 +365,32 @@ func (s *TemplateService) buildProviderTemplateResponse(template *model.Provider
 	}
 
 	resp := &dto.ProviderTemplateResponse{
-		ID:              template.ID,
-		ProviderID:      template.ProviderID,
-		TemplateCode:    template.TemplateCode,
-		TemplateName:    template.TemplateName,
-		ContentType:     contentType,
-		TemplateContent: template.TemplateContent,
-		Variables:       variables,
-		Status:          template.Status,
-		Remark:          template.Remark,
-		CreatedAt:       timeutil.Normalize(template.CreatedAt),
-		UpdatedAt:       timeutil.Normalize(template.UpdatedAt),
+		ProviderResourceState: template.ProviderResourceState,
+		ContentVersion:        template.ContentVersion,
+		SystemContent:         template.TemplateContent,
+		Category:              template.Category,
+		ID:                    template.ID,
+		ProviderID:            template.ProviderID,
+		TemplateCode:          template.TemplateCode,
+		TemplateName:          template.TemplateName,
+		ContentType:           contentType,
+		TemplateContent:       template.TemplateContent,
+		Variables:             variables,
+		Status:                template.Status,
+		Remark:                template.Remark,
+		CreatedAt:             timeutil.Normalize(template.CreatedAt),
+		UpdatedAt:             timeutil.Normalize(template.UpdatedAt),
 	}
 
 	if template.ProviderAccount != nil {
+		if senderdomain.IsSMSTemplate(template) {
+			if parsed, err := senderdomain.ParseProviderTemplate(template); err == nil {
+				resp.NativeVariables = parsed.NativeVariables
+				resp.SystemContent = parsed.SystemContent
+			} else {
+				resp.ParseError = err.Error()
+			}
+		}
 		resp.ProviderAccount = &dto.SimpleProviderResponse{
 			ID:           template.ProviderAccount.ID,
 			AccountCode:  template.ProviderAccount.AccountCode,
@@ -359,4 +401,18 @@ func (s *TemplateService) buildProviderTemplateResponse(template *model.Provider
 	}
 
 	return resp, nil
+}
+
+func (s *TemplateService) invalidateTemplateBindings(id uint) {
+	selector, err := container.Get[channel.Selector]()
+	if err != nil {
+		return
+	} // Standalone template reads/tests need no selector.
+	ids, err := s.providerTemplateDAO.BindingChannelIDs(id)
+	if err != nil {
+		return
+	}
+	for _, channelID := range ids {
+		selector.InvalidateCacheForBinding(channelID)
+	}
 }

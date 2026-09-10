@@ -1,13 +1,20 @@
 package service
 
 import (
+	"errors"
+
+	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/internal/timeutil"
+	"cnb.cool/mliev/push/message-push/modules/template"
+	"gorm.io/gorm"
 )
 
 // AdminLogService 管理后台日志服务
 type AdminLogService struct {
+	messageDetails     *AdminMessageDetailService
+	pushTaskDAO        *dao.PushTaskDAO
 	logDAO             *dao.PushLogDAO
 	callbackLogDAO     *dao.CallbackLogDAO
 	webhookLogDAO      *dao.WebhookLogDAO
@@ -18,6 +25,8 @@ type AdminLogService struct {
 // NewAdminLogService 创建服务
 func NewAdminLogService() *AdminLogService {
 	return &AdminLogService{
+		messageDetails:     NewAdminMessageDetailService(helper.GetDatabase(), template.GetRenderer()),
+		pushTaskDAO:        dao.NewPushTaskDAO(),
 		logDAO:             dao.NewPushLogDAO(),
 		callbackLogDAO:     dao.NewCallbackLogDAO(),
 		webhookLogDAO:      dao.NewWebhookLogDAO(),
@@ -131,6 +140,11 @@ func (s *AdminLogService) GetLogsByTaskID(taskID string) (*dto.TaskLogsResponse,
 		return nil, err
 	}
 
+	task, err := s.pushTaskDAO.GetByTaskID(taskID)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+	details := s.messageDetails.ForLogs(task, logs)
 	items := make([]*dto.LogItem, 0, len(logs))
 
 	// 预加载缓存
@@ -163,6 +177,7 @@ func (s *AdminLogService) GetLogsByTaskID(taskID string) (*dto.TaskLogsResponse,
 		}
 
 		items = append(items, &dto.LogItem{
+			MessageDetail:     details[log.ID],
 			ID:                log.ID,
 			TaskID:            log.TaskID,
 			AppID:             log.AppID,
@@ -191,6 +206,7 @@ func (s *AdminLogService) GetCallbackLogsByTaskID(taskID string) (*dto.TaskCallb
 	items := make([]*dto.CallbackLogItem, 0, len(logs))
 	for _, log := range logs {
 		items = append(items, &dto.CallbackLogItem{
+			ProviderAccountID: log.ProviderAccountID, Source: log.Source, Attribution: log.Attribution,
 			ID:             log.ID,
 			TaskID:         log.TaskID,
 			AppID:          log.AppID,

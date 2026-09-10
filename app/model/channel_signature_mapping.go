@@ -6,11 +6,11 @@ import (
 	"gorm.io/gorm"
 )
 
-// ChannelSignatureMapping 通道签名映射表
+// ChannelSignatureMapping 通道签名/标题映射表
 type ChannelSignatureMapping struct {
 	ID                  uint               `gorm:"primaryKey;autoIncrement" json:"id"`
 	ChannelID           uint               `gorm:"not null;index:idx_channel;comment:通道ID（关联channels表）" json:"channel_id"`
-	SignatureName       string             `gorm:"type:varchar(100);not null;comment:用户自定义签名名称" json:"signature_name"`
+	SignatureName       string             `gorm:"type:varchar(100);not null;comment:签名或标题映射别名" json:"signature_name"`
 	ProviderSignatureID uint               `gorm:"not null;comment:供应商签名ID（关联provider_signatures表）" json:"provider_signature_id"`
 	ProviderID          uint               `gorm:"not null;index:idx_provider;comment:供应商账号ID（冗余字段，便于查询）" json:"provider_id"`
 	Status              int8               `gorm:"default:1;comment:状态：1=启用 0=禁用" json:"status"`

@@ -108,8 +108,17 @@ func TestBuildParamsFromMapping(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := s.buildParamsFromMapping(tt.template, tt.params)
-			if !reflect.DeepEqual(got, tt.want) {
+			got, err := s.buildParamsFromMapping(tt.template, tt.params)
+			if tt.name == "missing param becomes empty" || tt.name == "no params returns nil" {
+				if err == nil {
+					t.Fatal("missing parameter accepted")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(got) != len(tt.want) || (len(got) > 0 && !reflect.DeepEqual(got, tt.want)) {
 				t.Errorf("buildParamsFromMapping() = %v, want %v", got, tt.want)
 			}
 		})
@@ -211,8 +220,12 @@ func TestNeteaseBatchSendSharesRealSendID(t *testing.T) {
 	defer func() { neteaseSendTemplateURL = old }()
 
 	s := NewNeteaseSMSSender()
+	account, binding := confirmedSMSBinding(constants.ProviderNeteaseSMS, "验证码{code}")
+	account.Config = `{"app_key":"ak","app_secret":"sk"}`
 	req := &domain.BatchSendRequest{
-		ProviderAccount: &model.ProviderAccount{Config: `{"app_key":"ak","app_secret":"sk"}`},
+		ProviderAccount:        account,
+		ChannelTemplateBinding: binding,
+		MappedParams:           map[string]string{"code": "123456"},
 		Tasks: []*model.PushTask{
 			{TaskID: "t1", Receiver: "13800000001", TemplateCode: "27194667"},
 			{TaskID: "t2", Receiver: "13800000002", TemplateCode: "27194667"},

@@ -7,6 +7,7 @@ import (
 
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/modules/sender"
+	"cnb.cool/mliev/push/message-push/modules/template"
 	"gorm.io/gorm"
 )
 
@@ -108,7 +109,7 @@ func TestSameNameTemplateParamsOnlyIncludesProviderVariables(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := sameNameTemplateParams(tt.templateParams, tt.providerVariables)
+			got := template.SameNameParams(tt.templateParams, tt.providerVariables)
 			if len(got) != len(tt.want) {
 				t.Fatalf("mapped params = %v, want %v", got, tt.want)
 			}

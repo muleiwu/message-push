@@ -54,6 +54,8 @@ func NewActionExecutor() *ActionExecutor {
 
 // ExecuteContext 执行上下文
 type ExecuteContext struct {
+	DeferAlert        func(string, []byte) error // Persist an alert inside the caller's transaction instead of sending it inline.
+	SendSnapshot      *model.SendSnapshot
 	Task              *model.PushTask
 	ProviderAccountID uint
 	ProviderCode      string
@@ -147,6 +149,7 @@ func (e *ActionExecutor) executeRetry(ctx context.Context, result *ruleengine.Ev
 	task.Status = constants.TaskStatusPending
 	if err := e.taskDAO.Update(task); err != nil {
 		e.logger.Error(fmt.Sprintf("failed to update task retry count: %v", err))
+		return &ExecuteResult{Action: model.RuleActionRetry, Err: err}
 	}
 
 	// 记录重试日志
@@ -157,12 +160,14 @@ func (e *ActionExecutor) executeRetry(ctx context.Context, result *ruleengine.Ev
 		Status:            "retry",
 		RequestData:       sanitizeJSONData(execCtx.RequestData),
 		ResponseData:      sanitizeJSONData(execCtx.ResponseData),
+		SendSnapshot:      execCtx.SendSnapshot.JSON(),
 		ErrorMessage:      execCtx.ErrorMessage,
 	})
 
 	// 延迟投递走定时有序集合（崩溃安全）；goroutine 内 sleep 后 Push 会在进程退出时丢失重试
 	if err := e.producer.PushDelayed(ctx, task, timeutil.Now().Add(delay)); err != nil {
 		e.logger.Error(fmt.Sprintf("failed to push task to queue for retry task_id=%s: %v", task.TaskID, err))
+		return &ExecuteResult{Action: model.RuleActionRetry, Err: err}
 	}
 
 	e.logger.Info(fmt.Sprintf("task scheduled for retry task_id=%s retry_count=%d delay=%v",
@@ -218,6 +223,7 @@ func (e *ActionExecutor) executeSwitchProvider(ctx context.Context, result *rule
 	task.Status = constants.TaskStatusPending
 	if err := e.taskDAO.Update(task); err != nil {
 		e.logger.Error(fmt.Sprintf("failed to update task for switch provider: %v", err))
+		return &ExecuteResult{Action: model.RuleActionSwitchProvider, Err: err}
 	}
 
 	// 记录切换供应商日志
@@ -228,6 +234,7 @@ func (e *ActionExecutor) executeSwitchProvider(ctx context.Context, result *rule
 		Status:            "switch_provider",
 		RequestData:       sanitizeJSONData(execCtx.RequestData),
 		ResponseData:      sanitizeJSONData(execCtx.ResponseData),
+		SendSnapshot:      execCtx.SendSnapshot.JSON(),
 		ErrorMessage:      fmt.Sprintf("switching provider, exclude current: %v, excluded providers: %v", config.ExcludeCurrent, task.GetExcludeProviderIDs()),
 	})
 
@@ -235,6 +242,7 @@ func (e *ActionExecutor) executeSwitchProvider(ctx context.Context, result *rule
 	// 同步推送避免 goroutine 延迟窗口内进程退出丢失切换重试
 	if err := e.producer.Push(ctx, task); err != nil {
 		e.logger.Error(fmt.Sprintf("failed to push task to queue for switch provider task_id=%s: %v", task.TaskID, err))
+		return &ExecuteResult{Action: model.RuleActionSwitchProvider, Err: err}
 	}
 
 	e.logger.Info(fmt.Sprintf("task scheduled for switch provider retry task_id=%s exclude_current=%v excluded_providers=%v",
@@ -251,6 +259,20 @@ func (e *ActionExecutor) executeSwitchProvider(ctx context.Context, result *rule
 // executeFail 执行失败动作
 func (e *ActionExecutor) executeFail(ctx context.Context, result *ruleengine.EvaluateResult, execCtx *ExecuteContext) *ExecuteResult {
 	task := execCtx.Task
+
+	// 记录失败日志
+	if execCtx.ProviderAccountID > 0 {
+		e.logDAO.Create(&model.PushLog{
+			TaskID:            task.TaskID,
+			AppID:             task.AppID,
+			ProviderAccountID: execCtx.ProviderAccountID,
+			Status:            "failed",
+			RequestData:       sanitizeJSONData(execCtx.RequestData),
+			ResponseData:      sanitizeJSONData(execCtx.ResponseData),
+			SendSnapshot:      execCtx.SendSnapshot.JSON(),
+			ErrorMessage:      execCtx.ErrorMessage,
+		})
+	}
 
 	event := execCtx.TerminalEvent
 	if event == "" {
@@ -282,19 +304,6 @@ func (e *ActionExecutor) executeFail(ctx context.Context, result *ruleengine.Eva
 		}
 	}
 	task.Status = constants.TaskStatusFailed
-
-	// 记录失败日志
-	if execCtx.ProviderAccountID > 0 {
-		e.logDAO.Create(&model.PushLog{
-			TaskID:            task.TaskID,
-			AppID:             task.AppID,
-			ProviderAccountID: execCtx.ProviderAccountID,
-			Status:            "failed",
-			RequestData:       sanitizeJSONData(execCtx.RequestData),
-			ResponseData:      sanitizeJSONData(execCtx.ResponseData),
-			ErrorMessage:      execCtx.ErrorMessage,
-		})
-	}
 
 	ruleName := "default"
 	if result.MatchedRule != nil {
@@ -345,6 +354,9 @@ func (e *ActionExecutor) executeAlert(ctx context.Context, result *ruleengine.Ev
 		err := e.sendAlertWebhook(ctx, config, execCtx)
 		if err != nil {
 			e.logger.Error(fmt.Sprintf("failed to send alert webhook: %v", err))
+			if execCtx.DeferAlert != nil {
+				return &ExecuteResult{Action: model.RuleActionAlert, Err: err}
+			}
 		} else {
 			alertSent = true
 		}
@@ -360,6 +372,7 @@ func (e *ActionExecutor) executeAlert(ctx context.Context, result *ruleengine.Ev
 		Status:            "alert",
 		RequestData:       sanitizeJSONData(execCtx.RequestData),
 		ResponseData:      sanitizeJSONData(execCtx.ResponseData),
+		SendSnapshot:      execCtx.SendSnapshot.JSON(),
 		ErrorMessage:      fmt.Sprintf("alert sent: %v, level: %s, error: %s", alertSent, config.AlertLevel, execCtx.ErrorMessage),
 	})
 
@@ -429,6 +442,9 @@ func (e *ActionExecutor) sendAlertWebhook(ctx context.Context, config *model.Ale
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("failed to marshal alert payload: %w", err)
+	}
+	if execCtx.DeferAlert != nil {
+		return execCtx.DeferAlert(config.WebhookURL, body)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, config.WebhookURL, bytes.NewBuffer(body))

@@ -305,7 +305,7 @@ func ValidateBinding(channelType string, systemVariables []string, binding *mode
 	if providerTemplate == nil {
 		return append(issues, constants.ReadinessBlockerProviderTemplateMissing)
 	}
-	if providerTemplate.Status != 1 {
+	if !providerTemplate.Usable() {
 		issues = append(issues, constants.ReadinessBlockerProviderTemplateDisabled)
 	}
 	if strings.TrimSpace(providerTemplate.TemplateCode) == "" {
@@ -315,7 +315,7 @@ func ValidateBinding(channelType string, systemVariables []string, binding *mode
 		issues = append(issues, constants.ReadinessBlockerProviderAccountMismatch)
 	}
 
-	providerVariables, err := providerTemplate.GetVariables()
+	providerVariables, err := registry.ProviderTemplateVariables(providerTemplate)
 	providerVariablesValid := err == nil && ProviderTemplateVariablesValid(providerTemplate)
 	if !providerVariablesValid {
 		issues = append(issues, constants.ReadinessBlockerProviderTemplateVariablesInvalid)
@@ -342,6 +342,9 @@ func ValidateBinding(channelType string, systemVariables []string, binding *mode
 		}
 	}
 
+	if !registry.MappingConfirmed(binding) {
+		issues = append(issues, constants.ReadinessBlockerMappingUnconfirmed)
+	}
 	if providerVariablesValid {
 		mappingIssues := validateParamMapping(systemVariables, providerVariables, binding)
 		issues = append(issues, mappingIssues...)
@@ -356,7 +359,7 @@ func ValidateBindingParamMapping(systemVariables []string, binding *model.Channe
 	if binding == nil || binding.ProviderTemplate == nil {
 		return []string{constants.ReadinessBlockerProviderTemplateMissing}
 	}
-	providerVariables, err := binding.ProviderTemplate.GetVariables()
+	providerVariables, err := registry.ProviderTemplateVariables(binding.ProviderTemplate)
 	if err != nil || !ProviderTemplateVariablesValid(binding.ProviderTemplate) {
 		return []string{constants.ReadinessBlockerProviderTemplateVariablesInvalid}
 	}
@@ -379,6 +382,9 @@ func validateParamMapping(systemVariables, providerVariables []string, binding *
 	}
 
 	if len(mapping) == 0 {
+		if registry.IsSMSTemplate(binding.ProviderTemplate) {
+			return []string{constants.ReadinessBlockerParamMappingIncomplete}
+		}
 		for _, providerVariable := range providerVariables {
 			if _, ok := systemSet[providerVariable]; !ok {
 				return []string{constants.ReadinessBlockerParamMappingIncomplete}
@@ -473,7 +479,7 @@ func evaluateRequiredSignatures(response *dto.ChannelReadinessResponse, channelI
 
 		signature := mapping.ProviderSignature
 		alias := strings.TrimSpace(mapping.SignatureName)
-		if signature == nil || signature.Status != 1 ||
+		if !signature.Usable() ||
 			signature.ProviderAccountID != mapping.ProviderID ||
 			alias == "" || strings.TrimSpace(signature.SignatureCode) == "" {
 			// A stale redundant mapping does not remove an otherwise valid route.
@@ -605,8 +611,11 @@ func ProviderTemplateVariablesValid(providerTemplate *model.ProviderTemplate) bo
 	if providerTemplate == nil {
 		return false
 	}
-	variables, err := providerTemplate.GetVariables()
-	return err == nil && validVariableNames(variables)
+	variables, err := registry.ProviderTemplateVariables(providerTemplate)
+	if err != nil || !validVariableNames(variables) {
+		return false
+	}
+	return true
 }
 
 func stringSet(values []string) map[string]struct{} {

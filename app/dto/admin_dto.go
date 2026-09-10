@@ -1,5 +1,7 @@
 package dto
 
+import "cnb.cool/mliev/push/message-push/modules/sender/domain"
+
 // ParamMappingType 参数映射类型
 type ParamMappingType string
 
@@ -133,11 +135,12 @@ type ProviderAccountListResponse struct {
 
 // AvailableProviderResponse 可用服务商响应
 type AvailableProviderResponse struct {
-	Code         string                `json:"code"`
-	Name         string                `json:"name"`
-	Type         string                `json:"type"`
-	Description  string                `json:"description"`
-	ConfigFields []ConfigFieldResponse `json:"config_fields"`
+	Resources    map[domain.ResourceKind]domain.ResourceCapability `json:"resources"`
+	Code         string                                            `json:"code"`
+	Name         string                                            `json:"name"`
+	Type         string                                            `json:"type"`
+	Description  string                                            `json:"description"`
+	ConfigFields []ConfigFieldResponse                             `json:"config_fields"`
 	// 能力声明
 	SupportsSend      bool `json:"supports_send"`
 	SupportsBatchSend bool `json:"supports_batch_send"`
@@ -223,48 +226,56 @@ type ChannelListResponse struct {
 
 // ChannelBindingResponse 通道绑定配置响应
 type ChannelBindingResponse struct {
-	ID                   uint               `json:"id"`
-	ProviderTemplateID   uint               `json:"provider_template_id"`
-	ProviderTemplateName string             `json:"provider_template_name"`
-	ProviderID           uint               `json:"provider_id"`
-	ProviderName         string             `json:"provider_name"`
-	ProviderType         string             `json:"provider_type"`
-	ParamMapping         []ParamMappingItem `json:"param_mapping"`
-	Weight               int                `json:"weight"`
-	Priority             int                `json:"priority"`
-	Status               int8               `json:"status"`
-	IsActive             int8               `json:"is_active"`
-	AutoDisableOnFail    bool               `json:"auto_disable_on_fail"`
-	AutoDisableThreshold int                `json:"auto_disable_threshold"`
-	CreatedAt            string             `json:"created_at"`
+	TemplateContentVersion uint64             `json:"template_content_version"`
+	MappedContentVersion   uint64             `json:"mapped_content_version"`
+	MappingRequired        bool               `json:"mapping_required"`
+	ID                     uint               `json:"id"`
+	ProviderTemplateID     uint               `json:"provider_template_id"`
+	ProviderTemplateName   string             `json:"provider_template_name"`
+	ProviderID             uint               `json:"provider_id"`
+	ProviderName           string             `json:"provider_name"`
+	ProviderType           string             `json:"provider_type"`
+	ParamMapping           []ParamMappingItem `json:"param_mapping"`
+	Weight                 int                `json:"weight"`
+	Priority               int                `json:"priority"`
+	Status                 int8               `json:"status"`
+	IsActive               int8               `json:"is_active"`
+	AutoDisableOnFail      bool               `json:"auto_disable_on_fail"`
+	AutoDisableThreshold   int                `json:"auto_disable_threshold"`
+	CreatedAt              string             `json:"created_at"`
 }
 
 // CreateChannelBindingRequest 创建通道绑定配置请求
 type CreateChannelBindingRequest struct {
-	ProviderTemplateID   uint               `json:"provider_template_id" binding:"required"`
-	ProviderID           uint               `json:"provider_id" binding:"required"`
-	ParamMapping         []ParamMappingItem `json:"param_mapping"`
-	Weight               *int               `json:"weight" binding:"omitempty,min=1,max=100"`
-	Priority             *int               `json:"priority" binding:"omitempty,min=0,max=1000"`
-	Status               *int8              `json:"status" binding:"omitempty,oneof=0 1 2"`
-	IsActive             *int8              `json:"is_active" binding:"omitempty,oneof=0 1 2"`
-	AutoDisableOnFail    *bool              `json:"auto_disable_on_fail"`
-	AutoDisableThreshold *int               `json:"auto_disable_threshold" binding:"omitempty,min=1,max=100"`
+	TemplateContentVersion *uint64            `json:"template_content_version"`
+	ProviderTemplateID     uint               `json:"provider_template_id" binding:"required"`
+	ProviderID             uint               `json:"provider_id" binding:"required"`
+	ParamMapping           []ParamMappingItem `json:"param_mapping"`
+	Weight                 *int               `json:"weight" binding:"omitempty,min=1,max=100"`
+	Priority               *int               `json:"priority" binding:"omitempty,min=0,max=1000"`
+	Status                 *int8              `json:"status" binding:"omitempty,oneof=0 1 2"`
+	IsActive               *int8              `json:"is_active" binding:"omitempty,oneof=0 1 2"`
+	AutoDisableOnFail      *bool              `json:"auto_disable_on_fail"`
+	AutoDisableThreshold   *int               `json:"auto_disable_threshold" binding:"omitempty,min=1,max=100"`
 }
 
 // UpdateChannelBindingRequest 更新通道绑定配置请求
 type UpdateChannelBindingRequest struct {
-	ParamMapping         []ParamMappingItem `json:"param_mapping"`
-	Weight               *int               `json:"weight" binding:"omitempty,min=1,max=100"`
-	Priority             *int               `json:"priority" binding:"omitempty,min=0,max=1000"`
-	Status               *int8              `json:"status" binding:"omitempty,oneof=0 1 2"`
-	IsActive             *int8              `json:"is_active" binding:"omitempty,oneof=0 1 2"`
-	AutoDisableOnFail    *bool              `json:"auto_disable_on_fail"`
-	AutoDisableThreshold *int               `json:"auto_disable_threshold" binding:"omitempty,min=1,max=100"`
+	TemplateContentVersion *uint64            `json:"template_content_version"`
+	ParamMapping           []ParamMappingItem `json:"param_mapping"`
+	Weight                 *int               `json:"weight" binding:"omitempty,min=1,max=100"`
+	Priority               *int               `json:"priority" binding:"omitempty,min=0,max=1000"`
+	Status                 *int8              `json:"status" binding:"omitempty,oneof=0 1 2"`
+	IsActive               *int8              `json:"is_active" binding:"omitempty,oneof=0 1 2"`
+	AutoDisableOnFail      *bool              `json:"auto_disable_on_fail"`
+	AutoDisableThreshold   *int               `json:"auto_disable_threshold" binding:"omitempty,min=1,max=100"`
 }
 
 // AvailableProviderTemplateResponse 可用供应商模板响应（用于通道绑定）
 type AvailableProviderTemplateResponse struct {
+	ContentVersion      uint64   `json:"content_version"`
+	NativeVariables     []string `json:"native_variables"`
+	ParseError          string   `json:"parse_error,omitempty"`
 	ID                  uint     `json:"id"`
 	TemplateCode        string   `json:"template_code"`
 	TemplateName        string   `json:"template_name"`
@@ -363,9 +374,10 @@ type ActiveItem struct {
 
 // TestProviderRequest 测试服务商配置请求
 type TestProviderRequest struct {
-	Phone   string `json:"phone"`
-	Email   string `json:"email"`
-	Message string `json:"message"`
+	Phone       string                   `json:"phone"`
+	Email       string                   `json:"email"`
+	Message     string                   `json:"message"`
+	Attachments []EmailAttachmentRequest `json:"attachments,omitempty"`
 }
 
 // TestProviderResponse 测试结果

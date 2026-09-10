@@ -22,3 +22,9 @@ type Producer interface {
 	// PushBatch 批量推送任务到队列
 	PushBatch(ctx context.Context, tasks []*model.PushTask) error
 }
+
+// IdempotentProducer dispatches durable inbox effects without enqueueing the
+// same event twice if the caller crashes after Redis accepted the operation.
+type IdempotentProducer interface {
+	PushDelayedOnce(context.Context, *model.PushTask, time.Time, string) error
+}

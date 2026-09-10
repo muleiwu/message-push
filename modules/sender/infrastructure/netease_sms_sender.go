@@ -11,7 +11,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -40,11 +39,12 @@ const (
 
 func init() {
 	// 注册网易云信短信服务商
-	domain.Register(&domain.ProviderMeta{
-		Code:        constants.ProviderNeteaseSMS,
-		Name:        "网易云信短信",
-		Type:        constants.MessageTypeSMS,
-		Description: "网易云信短信服务，支持通知短信与验证码短信发送、回执抄送。注意：短信签名已内嵌在已审核的模板内容中，无需在「签名管理」中单独配置",
+	if err := domain.Register(&domain.ProviderMeta{
+		TemplateCodec: NativeTemplateCodec{ID: "netease-native-v1", AllowNamed: true, AllowAnonymous: true, NeteaseModes: true},
+		Code:          constants.ProviderNeteaseSMS,
+		Name:          "网易云信短信",
+		Type:          constants.MessageTypeSMS,
+		Description:   "网易云信短信服务，支持通知短信与验证码短信发送、回执抄送。短信签名需在网易云信控制台单独提交审核，并在本系统的「签名管理」中配置",
 		ConfigFields: []domain.ConfigField{
 			{
 				Key:         "app_key",
@@ -83,6 +83,7 @@ func init() {
 		SupportsSend:      true,
 		SupportsBatchSend: true,
 		SupportsCallback:  true,
+		RequiresSignature: true,
 		// 扩展信息
 		Website: "https://yunxin.163.com",
 		// 使用仓库内置的通用图标，避免服务商列表请求不存在的静态文件。
@@ -93,7 +94,9 @@ func init() {
 		Tags:       []string{"国内"},
 		Regions:    []string{"中国大陆"},
 		Deprecated: false,
-	})
+	}); err != nil {
+		panic(err)
+	}
 }
 
 // NeteaseSMSSender 网易云信短信发送器
@@ -164,14 +167,11 @@ func (s *NeteaseSMSSender) extractAppConfig(account interface {
 	return appKey, appSecret, sendType, nil
 }
 
-// resolveTemplateCode 从绑定/任务中解析模板编号与模板内容
-func resolveNeteaseTemplate(binding *model.ChannelTemplateBinding, fallbackCode string) (templateCode, templateContent string) {
+// resolveNeteaseTemplate reads identity and native content from the selected binding.
+func resolveNeteaseTemplate(binding *model.ChannelTemplateBinding) (templateCode, templateContent string) {
 	if binding != nil && binding.ProviderTemplate != nil {
 		templateCode = binding.ProviderTemplate.TemplateCode
 		templateContent = binding.ProviderTemplate.TemplateContent
-	}
-	if templateCode == "" {
-		templateCode = fallbackCode
 	}
 	return templateCode, templateContent
 }
@@ -195,37 +195,21 @@ func formatNeteaseMobile(region, countryCode, nationalNumber, raw string) string
 	return fmt.Sprintf("+%s-%s", countryCode, nationalNumber)
 }
 
-// buildParamsFromMapping 从模板内容解析占位符顺序，按序从映射参数取值，返回有序字符串切片
-// 用于模板短信（sendtemplate.action）的 params 数组参数
-func (s *NeteaseSMSSender) buildParamsFromMapping(templateContent string, params map[string]string) []string {
-	if len(params) == 0 {
-		return nil
+// buildParamsFromMapping uses the same registered grammar as manual templates.
+func (s *NeteaseSMSSender) buildParamsFromMapping(content string, params map[string]string) ([]string, error) {
+	meta, err := domain.GetByCode(s.GetProviderCode())
+	if err != nil {
+		return nil, err
 	}
-
-	// 没有模板内容时，按 map 顺序返回所有值
-	if templateContent == "" {
-		values := make([]string, 0, len(params))
-		for _, v := range params {
-			values = append(values, v)
-		}
-		return values
+	parsed, err := meta.TemplateCodec.Parse(content, nil)
+	if err != nil {
+		return nil, err
 	}
-
-	// 从模板内容中按出现顺序提取占位符 {name}
-	re := regexp.MustCompile(`\{(\w+)\}`)
-	matches := re.FindAllStringSubmatch(templateContent, -1)
-	if len(matches) == 0 {
-		return nil
+	bound, err := parsed.Bind(params)
+	if err != nil {
+		return nil, err
 	}
-
-	values := make([]string, 0, len(matches))
-	for _, match := range matches {
-		if len(match) < 2 {
-			continue
-		}
-		values = append(values, params[match[1]]) // 缺失则为空字符串
-	}
-	return values
+	return bound.Ordered, nil
 }
 
 // postForm 发送表单请求并解析网易标准响应 {code,msg,obj}
@@ -310,8 +294,14 @@ func (s *NeteaseSMSSender) Send(ctx context.Context, req *domain.SendRequest) (*
 		return nil, err
 	}
 
-	// 2. 获取模板编号与内容（网易签名内嵌于模板，忽略 req.Signature）
-	templateCode, templateContent := resolveNeteaseTemplate(req.ChannelTemplateBinding, req.Task.TemplateCode)
+	bound, err := smsTemplateParameters(req.ProviderAccount, req.ChannelTemplateBinding, req.MappedParams)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. 获取模板编号与内容。网易发送接口通过模板编号使用其关联的已审核签名，
+	// 不提供逐次传入签名的参数；req.Signature 用于本系统发送前的签名映射与就绪校验。
+	templateCode, templateContent := resolveNeteaseTemplate(req.ChannelTemplateBinding)
 	if templateCode == "" {
 		return nil, fmt.Errorf("missing template_code")
 	}
@@ -321,15 +311,18 @@ func (s *NeteaseSMSSender) Send(ctx context.Context, req *domain.SendRequest) (*
 
 	// 4. 按发送类型分流
 	if sendType == neteaseSendTypeCode {
-		return s.sendCodeOne(ctx, appKey, appSecret, templateCode, mobile, req.Task, req.MappedParams), nil
+		return s.sendCodeOne(ctx, appKey, appSecret, templateCode, mobile, req.Task, bound.Named), nil
 	}
-	return s.sendTemplateOne(ctx, appKey, appSecret, templateCode, templateContent, mobile, req.Task, req.MappedParams), nil
+	return s.sendTemplateOne(ctx, appKey, appSecret, templateCode, templateContent, mobile, req.Task, bound.Named), nil
 }
 
 // sendTemplateOne 通过 sendtemplate.action 发送单条模板短信
 func (s *NeteaseSMSSender) sendTemplateOne(ctx context.Context, appKey, appSecret, templateCode, templateContent, mobile string, task *model.PushTask, mappedParams map[string]string) *domain.SendResponse {
 	mobiles := []string{mobile}
-	params := s.buildParamsFromMapping(templateContent, mappedParams)
+	params, err := s.buildParamsFromMapping(templateContent, mappedParams)
+	if err != nil {
+		return &domain.SendResponse{TaskID: task.TaskID, ErrorMessage: err.Error()}
+	}
 
 	form := s.buildTemplateForm(templateCode, mobiles, params)
 	requestData, _ := json.Marshal(map[string]interface{}{
@@ -401,8 +394,13 @@ func (s *NeteaseSMSSender) BatchSend(ctx context.Context, req *domain.BatchSendR
 		return nil, err
 	}
 
+	bound, err := smsTemplateParameters(req.ProviderAccount, req.ChannelTemplateBinding, req.MappedParams)
+	if err != nil {
+		return nil, err
+	}
+
 	// 2. 获取模板编号与内容
-	templateCode, templateContent := resolveNeteaseTemplate(req.ChannelTemplateBinding, req.Tasks[0].TemplateCode)
+	templateCode, _ := resolveNeteaseTemplate(req.ChannelTemplateBinding)
 	if templateCode == "" {
 		return nil, fmt.Errorf("missing template_code")
 	}
@@ -413,13 +411,13 @@ func (s *NeteaseSMSSender) BatchSend(ctx context.Context, req *domain.BatchSendR
 		results := make([]*domain.SendResponse, len(req.Tasks))
 		for i, task := range req.Tasks {
 			mobile := formatNeteaseMobile("", "", "", task.Receiver)
-			results[i] = s.sendCodeOne(ctx, appKey, appSecret, templateCode, mobile, task, req.MappedParams)
+			results[i] = s.sendCodeOne(ctx, appKey, appSecret, templateCode, mobile, task, bound.Named)
 		}
 		return &domain.BatchSendResponse{Results: results}, nil
 	}
 
 	// 4. 模板短信支持 mobiles 数组批量，网易单次最多 100 个手机号，超出需分批
-	params := s.buildParamsFromMapping(templateContent, req.MappedParams)
+	params := bound.Ordered
 	results := make([]*domain.SendResponse, 0, len(req.Tasks))
 	for start := 0; start < len(req.Tasks); start += maxBatchSizeNeteaseSMS {
 		end := start + maxBatchSizeNeteaseSMS

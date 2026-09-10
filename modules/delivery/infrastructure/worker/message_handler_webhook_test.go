@@ -44,6 +44,7 @@ func TestHandleEarlyFailureCreatesTerminalWebhookOutbox(t *testing.T) {
 			locked_until DATETIME, lease_token TEXT, created_at DATETIME, updated_at DATETIME
 		)`,
 		`CREATE TABLE push_logs (
+			send_snapshot TEXT,
 			id INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT NOT NULL, app_id TEXT NOT NULL,
 			provider_account_id INTEGER NOT NULL, provider_msg_id TEXT, request_data TEXT,
 			response_data TEXT, status TEXT NOT NULL, error_message TEXT, cost_time INTEGER,
@@ -79,10 +80,11 @@ func TestHandleEarlyFailureCreatesTerminalWebhookOutbox(t *testing.T) {
 
 	handler := &MessageHandler{
 		logger:          noopLogger{},
+		logDao:          dao.NewPushLogDAOWithDB(db),
 		taskDao:         dao.NewPushTaskDAOWithDB(db),
 		terminalService: service.NewTaskTerminalServiceWithDB(db),
 	}
-	handler.handleEarlyFailure(task, 0, "provider unavailable")
+	handler.handleEarlyFailure(task, 0, "provider unavailable", newSendSnapshot(task))
 
 	var outboxCount int64
 	if err := db.Model(&model.WebhookLog{}).
@@ -121,7 +123,7 @@ func TestHandleSuccessCreatesOutboxOnlyForTerminalStatus(t *testing.T) {
 		Success:    true,
 		ProviderID: "provider-success",
 		Status:     constants.TaskStatusSuccess,
-	}); err != nil {
+	}, newSendSnapshot(terminalTask)); err != nil {
 		t.Fatalf("handle terminal success: %v", err)
 	}
 	nonTerminalTask := createWorkerWebhookTask(t, db, "worker-sent", "app-worker-success")
@@ -129,7 +131,7 @@ func TestHandleSuccessCreatesOutboxOnlyForTerminalStatus(t *testing.T) {
 		Success:    true,
 		ProviderID: "provider-sent",
 		Status:     constants.TaskStatusSent,
-	}); err != nil {
+	}, newSendSnapshot(nonTerminalTask)); err != nil {
 		t.Fatalf("handle non-terminal success: %v", err)
 	}
 
@@ -203,6 +205,7 @@ var workerWebhookTestSchema = []string{
 		locked_until DATETIME, lease_token TEXT, created_at DATETIME, updated_at DATETIME
 	)`,
 	`CREATE TABLE push_logs (
+			send_snapshot TEXT,
 		id INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT NOT NULL, app_id TEXT NOT NULL,
 		provider_account_id INTEGER NOT NULL, provider_msg_id TEXT, request_data TEXT,
 		response_data TEXT, status TEXT NOT NULL, error_message TEXT, cost_time INTEGER,

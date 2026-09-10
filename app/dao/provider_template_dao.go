@@ -1,9 +1,12 @@
 package dao
 
 import (
+	"fmt"
+
 	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // ProviderTemplateDAO 供应商模板数据访问对象
@@ -39,7 +42,34 @@ func (d *ProviderTemplateDAO) GetByProviderAndCode(providerID uint, templateCode
 
 // Update 更新供应商模板
 func (d *ProviderTemplateDAO) Update(template *model.ProviderTemplate) error {
-	return d.db.Save(template).Error
+	return d.db.Transaction(func(tx *gorm.DB) error {
+		current, err := LockProviderTemplate(tx, template.ID)
+		if err != nil {
+			return err
+		}
+		if current.DeletedAt.Valid {
+			return gorm.ErrRecordNotFound
+		}
+		if current.SyncedAt != nil && (current.TemplateContent != template.TemplateContent || current.ContentType != template.ContentType) {
+			return fmt.Errorf("已同步模板的正文请通过供应商操作修改")
+		}
+		var account model.ProviderAccount
+		if err := tx.First(&account, current.ProviderID).Error; err != nil {
+			return err
+		}
+		if account.ProviderType == "sms" {
+			if err := SetTemplateContent(tx, current, template.TemplateContent); err != nil {
+				return err
+			}
+			template.Variables = "[]"
+		}
+		template.ContentVersion = current.ContentVersion
+		return tx.Model(current).Updates(map[string]any{
+			"template_name": template.TemplateName, "content_type": template.ContentType,
+			"template_content": template.TemplateContent, "variables": template.Variables,
+			"status": template.Status, "remark": template.Remark, "content_version": current.ContentVersion,
+		}).Error
+	})
 }
 
 // Delete 删除供应商模板（软删除）
@@ -76,7 +106,7 @@ func (d *ProviderTemplateDAO) List(providerID *uint, status *int8, page, pageSiz
 // GetActiveByProvider 获取供应商的所有启用模板
 func (d *ProviderTemplateDAO) GetActiveByProvider(providerID uint) ([]*model.ProviderTemplate, error) {
 	var templates []*model.ProviderTemplate
-	err := d.db.Where("provider_id = ? AND status = 1", providerID).Find(&templates).Error
+	err := d.db.Preload("ProviderAccount").Where("provider_id = ? AND status = 1", providerID).Where(model.ResourceUsableSQL("provider_templates")).Find(&templates).Error
 	return templates, err
 }
 
@@ -89,4 +119,37 @@ func (d *ProviderTemplateDAO) ExistsByProviderAndCode(providerID uint, templateC
 	}
 	err := query.Count(&count).Error
 	return count > 0, err
+}
+
+// LockProviderTemplate serializes content changes with mapping confirmation.
+func LockProviderTemplate(tx *gorm.DB, id uint) (*model.ProviderTemplate, error) {
+	var t model.ProviderTemplate
+	err := tx.Unscoped().Clauses(clause.Locking{Strength: "UPDATE"}).First(&t, id).Error
+	return &t, err
+}
+
+func ResetTemplateBindings(tx *gorm.DB, id uint) error {
+	return tx.Unscoped().Model(&model.ChannelTemplateBinding{}).Where("provider_template_id = ?", id).
+		Updates(map[string]any{"param_mapping": "[]", "mapped_content_version": 0}).Error
+}
+
+// SetTemplateContent must run in the same transaction as saving the template.
+func SetTemplateContent(tx *gorm.DB, t *model.ProviderTemplate, content string) error {
+	if t.ID != 0 && t.TemplateContent != content {
+		if err := ResetTemplateBindings(tx, t.ID); err != nil {
+			return err
+		}
+		t.ContentVersion++
+	}
+	if t.ContentVersion == 0 {
+		t.ContentVersion = 1
+	}
+	t.TemplateContent = content
+	return nil
+}
+
+func (d *ProviderTemplateDAO) BindingChannelIDs(id uint) ([]uint, error) {
+	var ids []uint
+	err := d.db.Unscoped().Model(&model.ChannelTemplateBinding{}).Where("provider_template_id = ?", id).Distinct("channel_id").Pluck("channel_id", &ids).Error
+	return ids, err
 }

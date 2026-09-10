@@ -43,14 +43,16 @@ func (s *AdminProviderSignatureService) GetSignatureList(providerAccountID uint,
 	responses := make([]dto.ProviderSignatureResponse, 0, len(signatures))
 	for _, sig := range signatures {
 		item := dto.ProviderSignatureResponse{
-			ID:                sig.ID,
-			ProviderAccountID: sig.ProviderAccountID,
-			SignatureCode:     sig.SignatureCode,
-			SignatureName:     sig.SignatureName,
-			Status:            sig.Status,
-			Remark:            sig.Remark,
-			CreatedAt:         timeutil.FormatRFC3339(sig.CreatedAt),
-			UpdatedAt:         timeutil.FormatRFC3339(sig.UpdatedAt),
+			ProviderResourceState: sig.ProviderResourceState,
+			RemoteID:              sig.RemoteID,
+			ID:                    sig.ID,
+			ProviderAccountID:     sig.ProviderAccountID,
+			SignatureCode:         sig.SignatureCode,
+			SignatureName:         sig.SignatureName,
+			Status:                sig.Status,
+			Remark:                sig.Remark,
+			CreatedAt:             timeutil.FormatRFC3339(sig.CreatedAt),
+			UpdatedAt:             timeutil.FormatRFC3339(sig.UpdatedAt),
 		}
 		applySignatureProviderPolicy(&item, account)
 		responses = append(responses, item)
@@ -84,14 +86,16 @@ func (s *AdminProviderSignatureService) GetGlobalSignatureList(req *dto.Provider
 	items := make([]*dto.ProviderSignatureResponse, 0, len(signatures))
 	for _, sig := range signatures {
 		item := &dto.ProviderSignatureResponse{
-			ID:                sig.ID,
-			ProviderAccountID: sig.ProviderAccountID,
-			SignatureCode:     sig.SignatureCode,
-			SignatureName:     sig.SignatureName,
-			Status:            sig.Status,
-			Remark:            sig.Remark,
-			CreatedAt:         timeutil.FormatRFC3339(sig.CreatedAt),
-			UpdatedAt:         timeutil.FormatRFC3339(sig.UpdatedAt),
+			ProviderResourceState: sig.ProviderResourceState,
+			RemoteID:              sig.RemoteID,
+			ID:                    sig.ID,
+			ProviderAccountID:     sig.ProviderAccountID,
+			SignatureCode:         sig.SignatureCode,
+			SignatureName:         sig.SignatureName,
+			Status:                sig.Status,
+			Remark:                sig.Remark,
+			CreatedAt:             timeutil.FormatRFC3339(sig.CreatedAt),
+			UpdatedAt:             timeutil.FormatRFC3339(sig.UpdatedAt),
 		}
 		if sig.ProviderAccount != nil {
 			applySignatureProviderPolicy(item, sig.ProviderAccount)
@@ -141,14 +145,16 @@ func (s *AdminProviderSignatureService) CreateSignature(providerAccountID uint, 
 	}
 
 	response := &dto.ProviderSignatureResponse{
-		ID:                signature.ID,
-		ProviderAccountID: signature.ProviderAccountID,
-		SignatureCode:     signature.SignatureCode,
-		SignatureName:     signature.SignatureName,
-		Status:            signature.Status,
-		Remark:            signature.Remark,
-		CreatedAt:         timeutil.FormatRFC3339(signature.CreatedAt),
-		UpdatedAt:         timeutil.FormatRFC3339(signature.UpdatedAt),
+		ProviderResourceState: signature.ProviderResourceState,
+		RemoteID:              signature.RemoteID,
+		ID:                    signature.ID,
+		ProviderAccountID:     signature.ProviderAccountID,
+		SignatureCode:         signature.SignatureCode,
+		SignatureName:         signature.SignatureName,
+		Status:                signature.Status,
+		Remark:                signature.Remark,
+		CreatedAt:             timeutil.FormatRFC3339(signature.CreatedAt),
+		UpdatedAt:             timeutil.FormatRFC3339(signature.UpdatedAt),
 	}
 	applySignatureProviderPolicy(response, account)
 	return response, nil
@@ -163,6 +169,9 @@ func (s *AdminProviderSignatureService) UpdateSignature(id uint, req *dto.Update
 	}
 	if err := ensureSignatureWritable(signature.ProviderAccount); err != nil {
 		return err
+	}
+	if signature.RemoteID != "" && signature.SignatureCode != req.SignatureCode {
+		return fmt.Errorf("已关联资源的签名内容请通过供应商操作修改")
 	}
 
 	// 检查签名代码是否与其他签名冲突
@@ -205,14 +214,16 @@ func (s *AdminProviderSignatureService) GetSignatureByID(id uint) (*dto.Provider
 	}
 
 	response := &dto.ProviderSignatureResponse{
-		ID:                signature.ID,
-		ProviderAccountID: signature.ProviderAccountID,
-		SignatureCode:     signature.SignatureCode,
-		SignatureName:     signature.SignatureName,
-		Status:            signature.Status,
-		Remark:            signature.Remark,
-		CreatedAt:         timeutil.FormatRFC3339(signature.CreatedAt),
-		UpdatedAt:         timeutil.FormatRFC3339(signature.UpdatedAt),
+		ProviderResourceState: signature.ProviderResourceState,
+		RemoteID:              signature.RemoteID,
+		ID:                    signature.ID,
+		ProviderAccountID:     signature.ProviderAccountID,
+		SignatureCode:         signature.SignatureCode,
+		SignatureName:         signature.SignatureName,
+		Status:                signature.Status,
+		Remark:                signature.Remark,
+		CreatedAt:             timeutil.FormatRFC3339(signature.CreatedAt),
+		UpdatedAt:             timeutil.FormatRFC3339(signature.UpdatedAt),
 	}
 	applySignatureProviderPolicy(response, signature.ProviderAccount)
 	return response, nil

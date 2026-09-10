@@ -10,9 +10,20 @@ import (
 )
 
 type (
-	Selector    = domain.Selector
-	ChannelNode = domain.ChannelNode
+	Selector       = domain.Selector
+	ChannelNode    = domain.ChannelNode
+	CatalogService = domain.CatalogService
 )
+
+var (
+	ErrInvalidCatalogRequest  = domain.ErrInvalidCatalogRequest
+	ErrCatalogChannelNotFound = domain.ErrCatalogChannelNotFound
+)
+
+// GetCatalogService resolves the read-only configuration catalog.
+func GetCatalogService() CatalogService {
+	return container.MustGet[domain.CatalogService]()
+}
 
 // GetSelector 从 DI 容器解析通道选择器（domain.Selector）。
 // 由 modules/channel/assembly 在装配阶段注册到容器。

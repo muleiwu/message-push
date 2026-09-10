@@ -96,9 +96,26 @@ func TestSQLiteMigrationsSmoke(t *testing.T) {
 	assertNoColumn(t, sqlDB, "message_templates", "message_type")
 	assertHasColumn(t, sqlDB, "message_templates", "content_type")
 	assertHasColumn(t, sqlDB, "provider_templates", "content_type")
+	for _, table := range []string{"provider_templates", "provider_signatures"} {
+		for _, column := range []string{"audit_status", "audit_reply", "synced_at", "remote_deleted"} {
+			assertHasColumn(t, sqlDB, table, column)
+		}
+	}
+	for _, column := range []string{"remote_id", "native_content", "variable_slots", "codec_version"} {
+		assertNoColumn(t, sqlDB, "provider_templates", column)
+	}
+
+	assertHasColumn(t, sqlDB, "provider_templates", "content_version")
+	assertHasColumn(t, sqlDB, "channel_template_bindings", "mapped_content_version")
+	assertHasColumn(t, sqlDB, "provider_signatures", "remote_id")
 	assertHasColumn(t, sqlDB, "push_logs", "provider_msg_id")
+	assertHasColumn(t, sqlDB, "push_logs", "send_snapshot")
 	assertHasColumn(t, sqlDB, "push_tasks", "provider_account_id")
+	assertHasColumn(t, sqlDB, "push_tasks", "attachment_group_id")
+	assertHasColumn(t, sqlDB, "email_attachments", "content")
+	assertHasColumn(t, sqlDB, "email_attachments", "purged_at")
 	assertHasIndex(t, sqlDB, "push_tasks", "idx_push_tasks_provider_account")
+	assertHasIndex(t, sqlDB, "push_tasks", "idx_push_tasks_attachment_group")
 	assertLastProvider(t, sqlDB, "provider-backfill", 2)
 	assertHasColumn(t, sqlDB, "callback_logs", "type")
 	assertHasColumn(t, sqlDB, "callback_logs", "mobile")

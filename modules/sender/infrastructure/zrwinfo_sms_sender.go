@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
 	"time"
 
@@ -16,7 +15,6 @@ import (
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	"cnb.cool/mliev/push/message-push/modules/sender/domain"
-
 	"github.com/nyaruka/phonenumbers"
 )
 
@@ -29,12 +27,14 @@ const (
 
 func init() {
 	// 注册掌榕网短信服务商
-	domain.Register(&domain.ProviderMeta{
+	if err := domain.Register(&domain.ProviderMeta{
+		TemplateCodec:     NativeTemplateCodec{ID: "zrwinfo-native-v1", AllowNamed: true, AllowNumeric: true},
 		Code:              constants.ProviderZrwinfoSMS,
 		Name:              "掌榕网短信",
 		Type:              constants.MessageTypeSMS,
 		Description:       "掌榕网融合通信产品，提供国内短信、语音、5G智慧短信等服务。注意：当前仅支持国内短信发送，接收者必须为中国大陆手机号；短信签名需在「签名管理」中单独配置",
 		RequiresSignature: true,
+		Resources:         zrwinfoResourceDefinitions(),
 		ConfigFields: []domain.ConfigField{
 			{
 				Key:         "accesskey",
@@ -69,7 +69,9 @@ func init() {
 		Tags:       []string{"国内"},
 		Regions:    []string{"中国大陆"},
 		Deprecated: false,
-	})
+	}); err != nil {
+		panic(err)
+	}
 }
 
 // ZrwinfoSMSSender 掌榕网短信发送器
@@ -174,12 +176,10 @@ func (s *ZrwinfoSMSSender) Send(ctx context.Context, req *domain.SendRequest) (*
 	// 2. 获取签名和模板
 	signName := ""
 	templateCode := ""
-	templateContent := ""
 
 	// 从 ChannelTemplateBinding 获取模板信息
 	if req.ChannelTemplateBinding != nil && req.ChannelTemplateBinding.ProviderTemplate != nil {
 		templateCode = req.ChannelTemplateBinding.ProviderTemplate.TemplateCode
-		templateContent = req.ChannelTemplateBinding.ProviderTemplate.TemplateContent
 	}
 
 	// 从 Signature 获取签名
@@ -190,11 +190,6 @@ func (s *ZrwinfoSMSSender) Send(ctx context.Context, req *domain.SendRequest) (*
 	// 确保签名格式为【xxx】
 	if signName != "" && !strings.HasPrefix(signName, "【") {
 		signName = "【" + signName + "】"
-	}
-
-	// 兜底：从任务获取模板代码
-	if templateCode == "" {
-		templateCode = req.Task.TemplateCode
 	}
 
 	if templateCode == "" {
@@ -216,7 +211,10 @@ func (s *ZrwinfoSMSSender) Send(ctx context.Context, req *domain.SendRequest) (*
 	}
 
 	// 4. 转换模板参数
-	content := s.buildContentFromMapping(templateContent, req.MappedParams)
+	content, err := s.buildResourceContent(req.ChannelTemplateBinding, req.ProviderAccount, req.MappedParams)
+	if err != nil {
+		return nil, err
+	}
 
 	// 5. 构造请求参数
 	params := url.Values{}
@@ -303,47 +301,6 @@ func (s *ZrwinfoSMSSender) Send(ctx context.Context, req *domain.SendRequest) (*
 	}, nil
 }
 
-// buildContentFromMapping 从映射后的参数构建内容
-// 从模板内容解析占位符顺序，然后按顺序从 MappedParamsMap 中取值，用 ## 拼接
-func (s *ZrwinfoSMSSender) buildContentFromMapping(templateContent string, params map[string]string) string {
-	if len(params) == 0 {
-		return ""
-	}
-
-	// 如果没有模板内容，直接按 map 顺序拼接
-	if templateContent == "" {
-		var values []string
-		for _, v := range params {
-			values = append(values, v)
-		}
-		return strings.Join(values, "##")
-	}
-
-	// 从模板内容中提取占位符顺序
-	re := regexp.MustCompile(`\{(\w+)\}`)
-	matches := re.FindAllStringSubmatch(templateContent, -1)
-
-	if len(matches) == 0 {
-		return ""
-	}
-
-	// 按占位符出现顺序提取参数值
-	var values []string
-	for _, match := range matches {
-		if len(match) < 2 {
-			continue
-		}
-		key := match[1]
-		if v, ok := params[key]; ok {
-			values = append(values, v)
-		} else {
-			values = append(values, "")
-		}
-	}
-
-	return strings.Join(values, "##")
-}
-
 // ==================== BatchSender 接口实现 ====================
 
 // SupportsBatchSend 是否支持批量发送
@@ -373,12 +330,10 @@ func (s *ZrwinfoSMSSender) BatchSend(ctx context.Context, req *domain.BatchSendR
 	// 2. 获取签名和模板
 	signName := ""
 	templateCode := ""
-	templateContent := ""
 
 	// 从 ChannelTemplateBinding 获取模板信息
 	if req.ChannelTemplateBinding != nil && req.ChannelTemplateBinding.ProviderTemplate != nil {
 		templateCode = req.ChannelTemplateBinding.ProviderTemplate.TemplateCode
-		templateContent = req.ChannelTemplateBinding.ProviderTemplate.TemplateContent
 	}
 
 	// 从 Signature 获取签名
@@ -386,21 +341,16 @@ func (s *ZrwinfoSMSSender) BatchSend(ctx context.Context, req *domain.BatchSendR
 		signName = req.Signature.SignatureCode
 	}
 
-	// 兜底：从第一个任务获取模板代码
-	if templateCode == "" && len(req.Tasks) > 0 {
-		templateCode = req.Tasks[0].TemplateCode
-	}
-
 	if templateCode == "" {
 		return nil, fmt.Errorf("missing template_code")
 	}
 
 	// 3. 批量发送使用 MappedParams（所有任务共用相同参数）
-	return s.batchSendSameContent(ctx, req, accesskey, secret, signName, templateCode, templateContent)
+	return s.batchSendSameContent(ctx, req, accesskey, secret, signName, templateCode)
 }
 
 // batchSendSameContent 批量发送相同内容的短信
-func (s *ZrwinfoSMSSender) batchSendSameContent(ctx context.Context, req *domain.BatchSendRequest, accesskey, secret, signName, templateCode, templateContent string) (*domain.BatchSendResponse, error) {
+func (s *ZrwinfoSMSSender) batchSendSameContent(ctx context.Context, req *domain.BatchSendRequest, accesskey, secret, signName, templateCode string) (*domain.BatchSendResponse, error) {
 	// 结果与 req.Tasks 一一对应
 	results := make([]*domain.SendResponse, len(req.Tasks))
 
@@ -431,7 +381,10 @@ func (s *ZrwinfoSMSSender) batchSendSameContent(ctx context.Context, req *domain
 	}
 
 	// 转换模板参数
-	content := s.buildContentFromMapping(templateContent, req.MappedParams)
+	content, err := s.buildResourceContent(req.ChannelTemplateBinding, req.ProviderAccount, req.MappedParams)
+	if err != nil {
+		return nil, err
+	}
 
 	// 构造请求参数
 	params := url.Values{}
