@@ -92,10 +92,11 @@ type RemoteResource struct {
 
 // RemoteResourceError distinguishes a rejected request from an uncertain write.
 type RemoteResourceError struct {
-	Code      string `json:"code"`
-	Message   string `json:"message"`
-	Uncertain bool   `json:"uncertain"`
-	RequestID string `json:"request_id,omitempty"`
+	Code       string             `json:"code"`
+	Message    string             `json:"message"`
+	Uncertain  bool               `json:"uncertain"`
+	RequestID  string             `json:"request_id,omitempty"`
+	Diagnostic ResourceDiagnostic `json:"-"` // Sanitized server-side diagnostics, never exposed in API responses.
 }
 
 func (e *RemoteResourceError) Error() string {
@@ -155,7 +156,22 @@ func (d *ResourceDefinition) Execute(ctx context.Context, account *model.Provide
 	if err := d.ValidateInput(action, input); err != nil {
 		return nil, err
 	}
-	return d.Operations[action].Handler(ctx, account, input)
+	op := d.Operations[action]
+	rows, err := op.Handler(ctx, account, input)
+	var remote *RemoteResourceError
+	if errors.As(err, &remote) {
+		copy := *remote
+		copy.Diagnostic.Operation = action
+		copy.Diagnostic.API = op.Protocol.Path
+		copy.Diagnostic.ResourceID = input.ID
+		if account != nil {
+			copy.Diagnostic.ProviderCode = account.ProviderCode
+			copy.Diagnostic.AccountID = account.ID
+		}
+		redactResourceError(&copy, account, op.Fields, input)
+		err = &copy
+	}
+	return rows, err
 }
 
 // ValidateInput performs all form/capability validation before a write can suspend bindings.
