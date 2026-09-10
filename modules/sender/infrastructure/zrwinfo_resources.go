@@ -121,17 +121,22 @@ func executeZrwinfoResource(ctx context.Context, client *http.Client, baseURL st
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded;charset=utf-8")
 	uncertain := action != domain.ResourceQuery
+	diagnostic := domain.ResourceDiagnostic{URL: baseURL + path, Method: method}
 	failure := func(code, message string, unknown bool) error {
 		message = strings.ReplaceAll(strings.ReplaceAll(message, key, "[redacted]"), secret, "[redacted]")
-		return &domain.RemoteResourceError{Code: code, Message: message, Uncertain: unknown}
+		return &domain.RemoteResourceError{Code: code, Message: message, Uncertain: unknown, Diagnostic: diagnostic}
 	}
 	resp, err := client.Do(req)
 	if err != nil {
+		diagnostic.Cause = err.Error()
 		return nil, failure("TRANSPORT_ERROR", "供应商请求未完成，请查询资源确认执行结果", uncertain)
 	}
 	defer resp.Body.Close()
+	diagnostic.HTTPStatus = resp.StatusCode
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	diagnostic.ResponseBody = string(raw)
 	if err != nil {
+		diagnostic.Cause = err.Error()
 		return nil, failure("INVALID_RESPONSE", "读取供应商响应失败", uncertain)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -139,6 +144,7 @@ func executeZrwinfoResource(ctx context.Context, client *http.Client, baseURL st
 	}
 	var envelope map[string]json.RawMessage
 	if err = json.Unmarshal(raw, &envelope); err != nil {
+		diagnostic.Cause = err.Error()
 		return nil, failure("INVALID_RESPONSE", "供应商返回无效 JSON", uncertain)
 	}
 	code, err := resourceScalar(envelope[p.SuccessField])

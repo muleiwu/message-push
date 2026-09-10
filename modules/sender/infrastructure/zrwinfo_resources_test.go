@@ -142,3 +142,44 @@ func TestZrwinfoMutationDoesNotRetryUncertainWrites(t *testing.T) {
 		t.Fatalf("uncertain mutation: %v, calls=%d", err, transport.calls)
 	}
 }
+
+func TestZrwinfoFailuresRetainSafeUpstreamDiagnostics(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		status     int
+		body, code string
+	}{
+		{"rate limit", 200, `{"code":9006,"msg":"超频"}`, "9006"},
+		{"HTTP failure", 503, `<html>upstream unavailable test-secret</html>`, "HTTP_ERROR"},
+		{"malformed JSON", 200, `{"broken":"test-key"`, "INVALID_RESPONSE"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(test.status); fmt.Fprint(w, test.body) }))
+			defer server.Close()
+			account := resourceAccount()
+			account.ID = 1
+			account.ProviderCode = "zrwinfo_sms"
+			_, err := newZrwinfoResourceDefinitions(server.Client(), server.URL)[domain.ResourceTemplates].Execute(context.Background(), account, domain.ResourceQuery, domain.ResourceInput{})
+			var remote *domain.RemoteResourceError
+			if !errors.As(err, &remote) || remote.Code != test.code {
+				t.Fatalf("failure: %v", err)
+			}
+			diag := remote.Diagnostic
+			if diag.HTTPStatus != test.status || diag.Method != "POST" || diag.URL != server.URL+"/query/templatelist" || diag.API != "/query/templatelist" || diag.ResponseBody == "" || diag.ProviderCode != "zrwinfo_sms" || diag.AccountID != 1 {
+				t.Fatalf("missing upstream diagnostic: %+v", diag)
+			}
+			if strings.Contains(diag.ResponseBody, "test-key") || strings.Contains(diag.ResponseBody, "test-secret") {
+				t.Fatal("response leaked credentials")
+			}
+		})
+	}
+	transport := &resourceFailTransport{}
+	account := resourceAccount()
+	account.ID = 1
+	account.ProviderCode = "zrwinfo_sms"
+	_, err := newZrwinfoResourceDefinitions(&http.Client{Transport: transport}, "https://provider.invalid")[domain.ResourceTemplates].Execute(context.Background(), account, domain.ResourceQuery, domain.ResourceInput{ID: "11"})
+	var remote *domain.RemoteResourceError
+	if !errors.As(err, &remote) || remote.Diagnostic.HTTPStatus != 0 || remote.Diagnostic.Cause == "" || strings.Contains(remote.Diagnostic.URL, "?") || strings.Contains(remote.Diagnostic.Cause, "test-secret") {
+		t.Fatalf("transport diagnostic: %+v", remote)
+	}
+}

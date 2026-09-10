@@ -3,13 +3,16 @@ package admin
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
+	"cnb.cool/mliev/open/go-web/pkg/helper"
 	httpInterfaces "cnb.cool/mliev/open/go-web/pkg/server/http_server/interfaces"
 	"cnb.cool/mliev/push/message-push/app/controller"
 	"cnb.cool/mliev/push/message-push/app/service"
 	"cnb.cool/mliev/push/message-push/modules/sender/domain"
+	"github.com/muleiwu/golog"
 )
 
 type ProviderResourceController struct{}
@@ -24,13 +27,37 @@ func resourceControllerContext(c httpInterfaces.RouterContextInterface) (context
 	return ctx, cancel, uint(id), true
 }
 
-func resourceControllerError(c httpInterfaces.RouterContextInterface, err error) {
+func resourceControllerError(c httpInterfaces.RouterContextInterface, err error, kinds ...domain.ResourceKind) {
 	status := 400
 	if errors.Is(err, service.ErrResourceConflict) {
 		status = 409
 	}
 	var remote *domain.RemoteResourceError
 	if errors.As(err, &remote) {
+		diagnostic := remote.Diagnostic
+		accountID := diagnostic.AccountID
+		if accountID == 0 {
+			value, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+			accountID = uint(value)
+		}
+		kind := c.Param("kind")
+		if len(kinds) > 0 {
+			kind = string(kinds[0])
+		}
+		// Register the sanitized failure with Gin as well: the framework's
+		// request summary reads this private error list into its "errors" field.
+		c.Error(fmt.Errorf("供应商资源请求失败: provider=%s account=%d operation=%s code=%s: %s", diagnostic.ProviderCode, accountID, diagnostic.Operation, domain.LimitResourceDiagnostic(remote.Code), domain.LimitResourceDiagnostic(remote.Error())))
+		helper.GetLogger().Error("供应商资源请求失败",
+			golog.Field("traceId", c.GetString("traceId")),
+			golog.Field("method", c.Request().Method), golog.Field("path", c.Request().URL.Path),
+			golog.Field("provider_code", diagnostic.ProviderCode), golog.Field("provider_account_id", accountID),
+			golog.Field("resource_kind", kind), golog.Field("operation", diagnostic.Operation), golog.Field("resource_id", domain.LimitResourceDiagnostic(diagnostic.ResourceID)),
+			golog.Field("upstream_api", diagnostic.API), golog.Field("upstream_url", diagnostic.URL),
+			golog.Field("upstream_method", diagnostic.Method), golog.Field("upstream_status", diagnostic.HTTPStatus),
+			golog.Field("provider_error_code", domain.LimitResourceDiagnostic(remote.Code)), golog.Field("provider_error_message", domain.LimitResourceDiagnostic(remote.Message)),
+			golog.Field("provider_request_id", domain.LimitResourceDiagnostic(remote.RequestID)), golog.Field("uncertain", remote.Uncertain),
+			golog.Field("response_body", diagnostic.ResponseBody), golog.Field("cause", diagnostic.Cause),
+		)
 		status = 502
 		message := remote.Error()
 		if remote.Uncertain {
@@ -66,12 +93,12 @@ func (ProviderResourceController) Preview(c httpInterfaces.RouterContextInterfac
 		Kind domain.ResourceKind `json:"kind"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		resourceControllerError(c, err)
+		resourceControllerError(c, err, req.Kind)
 		return
 	}
 	items, err := service.NewAdminProviderResourceService().Workspace(ctx, id, req.Kind)
 	if err != nil {
-		resourceControllerError(c, err)
+		resourceControllerError(c, err, req.Kind)
 		return
 	}
 	controller.SuccessResponse(c, map[string]any{"items": items})
@@ -106,12 +133,12 @@ func (ProviderResourceController) Import(c httpInterfaces.RouterContextInterface
 	defer cancel()
 	var req service.ResourceImportRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		resourceControllerError(c, err)
+		resourceControllerError(c, err, req.Kind)
 		return
 	}
 	result, err := service.NewAdminProviderResourceService().Import(ctx, id, req)
 	if err != nil {
-		resourceControllerError(c, err)
+		resourceControllerError(c, err, req.Kind)
 		return
 	}
 	controller.SuccessResponse(c, result)
