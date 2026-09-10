@@ -13,9 +13,10 @@ import (
 
 func TestChannelBindingValidationErrorPreservesReadinessCodes(t *testing.T) {
 	status := int8(1)
-	binding := &model.ChannelTemplateBinding{
+	binding := &model.ChannelTemplateBinding{MappedContentVersion: 1,
 		Status: 1, IsActive: 1, Weight: 10, ProviderID: 1,
 		ProviderTemplate: &model.ProviderTemplate{
+			TemplateContent: "code={code}", ContentVersion: 1,
 			ProviderResourceState: model.ProviderResourceState{AuditStatus: &status},
 			Status:                1, ProviderID: 1, TemplateCode: "3344803", Variables: `["host_name"]`,
 			ProviderAccount: &model.ProviderAccount{ID: 1, ProviderCode: constants.ProviderZrwinfoSMS, ProviderType: "sms", Status: 1},

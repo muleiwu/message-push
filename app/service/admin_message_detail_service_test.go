@@ -17,12 +17,12 @@ func newMessageDetailTestService(t *testing.T) (*AdminMessageDetailService, *gor
 	db := newAdminTaskTestDB(t)
 	for _, sql := range []string{
 		`CREATE TABLE callback_logs (id INTEGER PRIMARY KEY, task_id TEXT, raw_data TEXT)`,
-		`CREATE TABLE provider_templates (id INTEGER PRIMARY KEY, provider_id INTEGER, template_code TEXT, template_name TEXT, template_content TEXT, content_type TEXT, variables TEXT, deleted_at DATETIME)`,
-		`CREATE TABLE channel_template_bindings (id INTEGER PRIMARY KEY, channel_id INTEGER, provider_id INTEGER, provider_template_id INTEGER, param_mapping TEXT, deleted_at DATETIME)`,
+		`CREATE TABLE provider_templates (content_version INTEGER NOT NULL DEFAULT 1, id INTEGER PRIMARY KEY, provider_id INTEGER, template_code TEXT, template_name TEXT, template_content TEXT, content_type TEXT, variables TEXT, deleted_at DATETIME)`,
+		`CREATE TABLE channel_template_bindings (mapped_content_version INTEGER NOT NULL DEFAULT 0, id INTEGER PRIMARY KEY, channel_id INTEGER, provider_id INTEGER, provider_template_id INTEGER, param_mapping TEXT, deleted_at DATETIME)`,
 		`INSERT INTO provider_accounts (id, account_name, provider_code) VALUES (7, '旧供应商', 'netease_sms')`,
 		`INSERT INTO channels (id, name) VALUES (1, '验证码通道')`,
-		`INSERT INTO provider_templates VALUES (10, 7, '16021', '验证码模板', '您的验证码为{var1}，{ttl}分钟内有效。', 'text', '["var1","ttl"]', NULL)`,
-		`INSERT INTO channel_template_bindings VALUES (3, 1, 7, 10, '[{"type":"mapping","provider_var":"var1","system_var":"code"},{"type":"fixed","provider_var":"ttl","value":"5"}]', NULL)`,
+		`INSERT INTO provider_templates (id, provider_id, template_code, template_name, template_content, content_type, variables, deleted_at) VALUES (10, 7, '16021', '验证码模板', '您的验证码为{var1}，{ttl}分钟内有效。', 'text', '["var1","ttl"]', NULL)`,
+		`INSERT INTO channel_template_bindings (id, channel_id, provider_id, provider_template_id, param_mapping, deleted_at) VALUES (3, 1, 7, 10, '[{"type":"mapping","provider_var":"var1","system_var":"code"},{"type":"fixed","provider_var":"ttl","value":"5"}]', NULL)`,
 		`INSERT INTO push_tasks (id, task_id, app_id, channel_id, provider_account_id, message_type, receiver, template_params, status) VALUES (1, 'detail-task', 'app', 1, 7, 'sms', '13800138000', '{"code":"086697"}', 'success')`,
 	} {
 		if err := db.Exec(sql).Error; err != nil {
@@ -65,8 +65,8 @@ func TestLegacyMessageDetailOnlyPreviewsUniqueCurrentTemplate(t *testing.T) {
 	}
 	// A second template on the same provider must not be chosen by priority.
 	for _, sql := range []string{
-		`INSERT INTO provider_templates VALUES (11, 7, 'another', '另一个模板', '另一内容{code}', 'text', '["code"]', NULL)`,
-		`INSERT INTO channel_template_bindings VALUES (4, 1, 7, 11, '[]', NULL)`,
+		`INSERT INTO provider_templates (id, provider_id, template_code, template_name, template_content, content_type, variables, deleted_at) VALUES (11, 7, 'another', '另一个模板', '另一内容{code}', 'text', '["code"]', NULL)`,
+		`INSERT INTO channel_template_bindings (id, channel_id, provider_id, provider_template_id, param_mapping, deleted_at) VALUES (4, 1, 7, 11, '[]', NULL)`,
 	} {
 		if err := db.Exec(sql).Error; err != nil {
 			t.Fatal(err)

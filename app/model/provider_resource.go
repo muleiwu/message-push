@@ -5,7 +5,6 @@ import "time"
 // ProviderResourceState is independent of the local administrator's status switch.
 // NULL audit status denotes an existing manually maintained resource.
 type ProviderResourceState struct {
-	RemoteID      string     `gorm:"type:varchar(100);default:''" json:"remote_id"`
 	AuditStatus   *int8      `json:"audit_status"`
 	AuditReply    string     `gorm:"type:text" json:"audit_reply"`
 	RemoteDeleted bool       `gorm:"not null;default:false" json:"remote_deleted"`

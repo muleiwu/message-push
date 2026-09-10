@@ -7,12 +7,13 @@ import (
 
 // ProviderMeta 服务商元信息
 type ProviderMeta struct {
-	Code         string                               `json:"code"`          // 服务商代码（唯一标识）
-	Name         string                               `json:"name"`          // 服务商名称
-	Type         string                               `json:"type"`          // 消息类型：sms, email, wechat_work, dingtalk, webhook, push
-	Description  string                               `json:"description"`   // 服务商描述
-	ConfigFields []ConfigField                        `json:"config_fields"` // 配置参数定义
-	Resources    map[ResourceKind]*ResourceDefinition `json:"-"`             // Registered remote operations and template codecs.
+	Code          string                               `json:"code"`          // 服务商代码（唯一标识）
+	Name          string                               `json:"name"`          // 服务商名称
+	Type          string                               `json:"type"`          // 消息类型：sms, email, wechat_work, dingtalk, webhook, push
+	Description   string                               `json:"description"`   // 服务商描述
+	ConfigFields  []ConfigField                        `json:"config_fields"` // 配置参数定义
+	Resources     map[ResourceKind]*ResourceDefinition `json:"-"`             // Registered remote operations and template codecs.
+	TemplateCodec TemplateCodec                        `json:"-"`             // Native template grammar, independent of remote CRUD.
 
 	// 能力声明
 	SupportsSend        bool `json:"supports_send"`         // 是否支持单条发送
@@ -70,9 +71,15 @@ func (r *ProviderRegistry) Register(meta *ProviderMeta) error {
 		return fmt.Errorf("provider type cannot be empty")
 	}
 	for kind, definition := range meta.Resources {
+		if kind == ResourceTemplates && (meta.TemplateCodec == nil || meta.TemplateCodec.Version() == "") {
+			return fmt.Errorf("provider %s: template resource requires a native codec", meta.Code)
+		}
 		if err := definition.Validate(kind); err != nil {
 			return fmt.Errorf("provider %s: %w", meta.Code, err)
 		}
+	}
+	if meta.Type == "sms" && meta.SupportsSend && (meta.TemplateCodec == nil || meta.TemplateCodec.Version() == "") {
+		return fmt.Errorf("provider %s: SMS delivery requires a versioned native codec", meta.Code)
 	}
 
 	r.mu.Lock()

@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -96,7 +95,7 @@ func TestResourceLiteralDollarTemplateCanBeImported(t *testing.T) {
 	if err != nil || len(rows) != 1 {
 		t.Fatalf("preview: %+v %v", rows, err)
 	}
-	if rows[0].Error != "" || rows[0].Compiled == nil {
+	if rows[0].Error != "" || rows[0].Parsed == nil {
 		t.Fatalf("valid original was rejected: %+v", rows[0])
 	}
 	if rows[0].Remote.Content != original {
@@ -110,7 +109,7 @@ func TestResourceLiteralDollarTemplateCanBeImported(t *testing.T) {
 	if err = f.s.db.Preload("ProviderAccount").Where("provider_id = ? AND template_code = ?", f.account.ID, "11").First(&record).Error; err != nil {
 		t.Fatal(err)
 	}
-	if record.NativeContent != original || record.TemplateContent != original || !record.Usable() || !readiness.ProviderTemplateVariablesValid(&record) {
+	if record.TemplateContent != original || !record.Usable() || !readiness.ProviderTemplateVariablesValid(&record) {
 		t.Fatalf("imported resource is not usable: %+v", record)
 	}
 }
@@ -125,7 +124,7 @@ func TestResourceNamedTemplatePreviewImportReadinessAndSendOrder(t *testing.T) {
 	if err != nil || len(rows) != 1 || rows[0].Error != "" {
 		t.Fatalf("named preview rejected: %+v %v", rows, err)
 	}
-	if rows[0].Remote.Content != original || !reflect.DeepEqual(rows[0].Compiled.NativeVariables, []string{"{host_name}", "{rule_name}"}) {
+	if rows[0].Remote.Content != original || !reflect.DeepEqual(rows[0].Parsed.NativeVariables, []string{"{host_name}", "{rule_name}"}) {
 		t.Fatalf("original changed: %+v", rows[0])
 	}
 	_, err = f.s.Import(ctx, f.account.ID, ResourceImportRequest{Kind: kind, Selections: []ResourceSelection{resourceSelection(rows[0], "create")}})
@@ -136,26 +135,27 @@ func TestResourceNamedTemplatePreviewImportReadinessAndSendOrder(t *testing.T) {
 	if err = f.s.db.Preload("ProviderAccount").Where("provider_id = ? AND template_code = ?", f.account.ID, "3344800").First(&record).Error; err != nil {
 		t.Fatal(err)
 	}
-	if record.NativeContent != original || record.TemplateContent != original || record.CodecVersion != "positional-v1" || !record.Usable() || !readiness.ProviderTemplateVariablesValid(&record) {
+	if record.TemplateContent != original || !record.Usable() || !readiness.ProviderTemplateVariablesValid(&record) {
 		t.Fatalf("imported named resource not usable: %+v", record)
 	}
-	bindings := &model.ChannelTemplateBinding{ProviderID: f.account.ID, ProviderTemplateID: record.ID, ProviderTemplate: &record, Status: 1, IsActive: 1, Weight: 1}
+	bindings := &model.ChannelTemplateBinding{ProviderID: f.account.ID, ProviderTemplateID: record.ID, ProviderTemplate: &record, MappedContentVersion: record.ContentVersion, Status: 1, IsActive: 1, Weight: 1}
 	if err = bindings.SetParamMapping([]model.ParamMappingItem{{Type: model.ParamMappingTypeMapping, ProviderVar: "host_name", SystemVar: "host"}, {Type: model.ParamMappingTypeMapping, ProviderVar: "rule_name", SystemVar: "rule"}}); err != nil {
 		t.Fatal(err)
 	}
 	if issues := readiness.ValidateBinding("sms", []string{"host", "rule"}, bindings); len(issues) > 0 {
 		t.Fatalf("binding rejected named variables: %v", issues)
 	}
-	var slots []domain.VariableSlot
-	if err = json.Unmarshal([]byte(record.VariableSlots), &slots); err != nil {
+	parsed, err := domain.ParseProviderTemplate(&record)
+	if err != nil {
 		t.Fatal(err)
 	}
-	meta, _ := f.s.lookup(f.account.ProviderCode)
-	values, err := meta.Resources[kind].Codec.Bind(slots, map[string]string{"host_name": "server01", "rule_name": "health"})
-	if err != nil || !reflect.DeepEqual(values, []string{"server01", "health", "server01"}) {
-		t.Fatalf("wrong send order: %v %v", values, err)
+	values, err := parsed.Bind(map[string]string{"host_name": "server01", "rule_name": "health"})
+	if err != nil || !reflect.DeepEqual(values.Ordered, []string{"server01", "health", "server01"}) {
+		t.Fatalf("wrong send order: %+v %v", values, err)
 	}
-	before, _ := bindings.GetParamMapping()
+	if err := f.s.db.Omit("ProviderTemplate").Create(bindings).Error; err != nil {
+		t.Fatal(err)
+	}
 	updated := f.rows[kind]["3344800"]
 	updated.Content = "规则{rule_name}，主机{host_name}。"
 	f.rows[kind]["3344800"] = updated
@@ -170,13 +170,16 @@ func TestResourceNamedTemplatePreviewImportReadinessAndSendOrder(t *testing.T) {
 	if err = f.s.db.Preload("ProviderAccount").First(&record, record.ID).Error; err != nil {
 		t.Fatal(err)
 	}
+	if err := f.s.db.First(bindings, bindings.ID).Error; err != nil {
+		t.Fatal(err)
+	}
 	bindings.ProviderTemplate = &record
-	if issues := readiness.ValidateBinding("sms", []string{"host", "rule"}, bindings); len(issues) > 0 {
-		t.Fatalf("reordering should preserve name-based mappings: %v", issues)
+	if issues := readiness.ValidateBinding("sms", []string{"host", "rule"}, bindings); len(issues) == 0 {
+		t.Fatal("changed body retained eligible binding")
 	}
 	after, _ := bindings.GetParamMapping()
-	if !reflect.DeepEqual(before, after) {
-		t.Fatal("logical parameter mapping changed")
+	if len(after) != 0 || bindings.MappedContentVersion != 0 || record.ContentVersion != 2 {
+		t.Fatalf("mapping not reset: %+v %+v", bindings, record)
 	}
 }
 
@@ -202,7 +205,7 @@ func TestResourcePreviewImportConflictAndLocalPolicy(t *testing.T) {
 	if err = f.s.db.First(&local).Error; err != nil {
 		t.Fatal(err)
 	}
-	if local.TemplateCode != "11" || local.TemplateContent != "验证码{var1}" || local.Usable() {
+	if local.TemplateCode != "11" || local.TemplateContent != "验证码{1}" || local.Usable() {
 		t.Fatalf("wrong mirror: %+v", local)
 	}
 	id := local.ID
@@ -222,7 +225,7 @@ func TestResourcePreviewImportConflictAndLocalPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.s.db.First(&local, id)
-	if local.ID != id || local.TemplateName != "本地名称" || local.Remark != "本地备注" || local.Status != 0 || *local.AuditStatus != 2 || local.TemplateContent != "验证码{var1}，有效期{var2}" {
+	if local.ID != id || local.TemplateName != "本地名称" || local.Remark != "本地备注" || local.Status != 0 || *local.AuditStatus != 2 || local.TemplateContent != "验证码{1}，有效期{2}" {
 		t.Fatalf("local preferences changed: %+v", local)
 	}
 	f.s.db.Delete(&local)
@@ -327,7 +330,7 @@ func TestResourceMutationMirrorAndRemoteSuccessLocalFailure(t *testing.T) {
 	kind := domain.ResourceTemplates
 	req := ResourceMutationRequest{ResourceInput: domain.ResourceInput{Name: "模板", Content: "验证码{code}", Category: "1", Description: "登录"}}
 	result, err := f.s.Mutate(ctx, f.account.ID, kind, domain.ResourceCreate, req)
-	if err != nil || result.LocalID == 0 || f.lastInput.Content != "验证码{1}" {
+	if err != nil || result.LocalID == 0 || f.lastInput.Content != "验证码{code}" {
 		t.Fatalf("create: %+v %v, request=%+v", result, err, f.lastInput)
 	}
 	var local model.ProviderTemplate
@@ -358,7 +361,7 @@ func TestResourceMutationMirrorAndRemoteSuccessLocalFailure(t *testing.T) {
 	if !local.RemoteDeleted || local.Usable() {
 		t.Fatal("deleted resource still usable")
 	}
-	if len(invalidated) != 1 || invalidated[0] != linkedChannel.ID {
+	if len(invalidated) != 2 || invalidated[0] != linkedChannel.ID || invalidated[1] != linkedChannel.ID {
 		t.Fatalf("cache invalidation: %v", invalidated)
 	}
 	// A provider write cannot be rolled back by a failing local transaction.
@@ -440,5 +443,163 @@ func TestResourceMatchingPrefersLiveCopiesAndBlocksAmbiguousDeletion(t *testing.
 	_, err = f.s.Mutate(ctx, f.account.ID, kind, domain.ResourceDelete, ResourceMutationRequest{ResourceInput: domain.ResourceInput{ID: "11"}, Version: items[0].Version, ConfirmImpact: true})
 	if err == nil || f.writes != 0 {
 		t.Fatal("ambiguous deletion executed")
+	}
+}
+
+func TestNativeTemplateManualIdentityAndExactBodyReset(t *testing.T) {
+	f := newResourceServiceFixture(t)
+	ctx := context.Background()
+	local := &model.ProviderTemplate{ProviderID: f.account.ID, TemplateCode: "manual-code", TemplateName: "本地名称", TemplateContent: "主机{host}", Status: 1, ContentVersion: 1}
+	if err := f.s.db.Create(local).Error; err != nil {
+		t.Fatal(err)
+	}
+	binding := &model.ChannelTemplateBinding{ChannelID: 1, ProviderID: f.account.ID, ProviderTemplateID: local.ID, ParamMapping: `[{"type":"fixed","provider_var":"host","value":"server"}]`, MappedContentVersion: 1, Status: 1, IsActive: 1, Weight: 1}
+	if err := f.s.db.Create(binding).Error; err != nil {
+		t.Fatal(err)
+	}
+	kind := domain.ResourceTemplates
+	f.rows[kind][local.TemplateCode] = domain.RemoteResource{ResourceInput: domain.ResourceInput{ID: local.TemplateCode, Content: local.TemplateContent}, AuditStatus: 2}
+	importAction := func(action string) {
+		t.Helper()
+		rows, err := f.s.Preview(ctx, f.account.ID, kind, local.TemplateCode)
+		if err != nil || len(rows) != 1 || rows[0].LocalID != local.ID {
+			t.Fatalf("identity match: %+v %v", rows, err)
+		}
+		if _, err = f.s.Import(ctx, f.account.ID, ResourceImportRequest{Kind: kind, Selections: []ResourceSelection{resourceSelection(rows[0], action)}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	importAction("update")
+	var saved model.ProviderTemplate
+	f.s.db.First(&saved, local.ID)
+	f.s.db.First(binding, binding.ID)
+	if saved.ContentVersion != 1 || binding.MappedContentVersion != 1 || binding.ParamMapping == "[]" {
+		t.Fatal("same body reset mappings")
+	}
+	remote := f.rows[kind][local.TemplateCode]
+	remote.Content += "。"
+	f.rows[kind][local.TemplateCode] = remote
+	importAction("skip")
+	f.s.db.First(&saved, local.ID)
+	f.s.db.First(binding, binding.ID)
+	if saved.ContentVersion != 1 || binding.MappedContentVersion != 1 {
+		t.Fatal("preview/skip mutated state")
+	}
+	importAction("update")
+	f.s.db.First(&saved, local.ID)
+	f.s.db.First(binding, binding.ID)
+	if saved.ID != local.ID || saved.TemplateName != "本地名称" || saved.ContentVersion != 2 || saved.TemplateContent != remote.Content || binding.MappedContentVersion != 0 || binding.ParamMapping != "[]" {
+		t.Fatalf("body change did not reset: %+v %+v", saved, binding)
+	}
+	importAction("update")
+	f.s.db.First(&saved, local.ID)
+	if saved.ContentVersion != 2 {
+		t.Fatal("repeated import incremented version")
+	}
+}
+
+func TestResourceUncertainUpdateStopsExistingMirror(t *testing.T) {
+	f := newResourceServiceFixture(t)
+	ctx := context.Background()
+	kind := domain.ResourceTemplates
+	f.rows[kind]["11"] = domain.RemoteResource{ResourceInput: domain.ResourceInput{ID: "11", Name: "测试", Content: "主机{host}"}, AuditStatus: 2}
+	rows, _ := f.s.Preview(ctx, f.account.ID, kind, "")
+	if _, err := f.s.Import(ctx, f.account.ID, ResourceImportRequest{Kind: kind, Selections: []ResourceSelection{resourceSelection(rows[0], "create")}}); err != nil {
+		t.Fatal(err)
+	}
+	var local model.ProviderTemplate
+	f.s.db.First(&local)
+	binding := model.ChannelTemplateBinding{ChannelID: 1, ProviderID: f.account.ID, ProviderTemplateID: local.ID, Status: 1, IsActive: 1, Weight: 1, MappedContentVersion: 1, ParamMapping: `[{"type":"fixed","provider_var":"host","value":"server"}]`}
+	if err := f.s.db.Create(&binding).Error; err != nil {
+		t.Fatal(err)
+	}
+	meta, _ := f.s.lookup(f.account.ProviderCode)
+	calls := 0
+	meta.Resources[kind].Operations[domain.ResourceUpdate].Handler = func(context.Context, *model.ProviderAccount, domain.ResourceInput) ([]domain.RemoteResource, error) {
+		calls++
+		return nil, &domain.RemoteResourceError{Code: "TIMEOUT", Message: "结果不确定", Uncertain: true}
+	}
+	rows, _ = f.s.Preview(ctx, f.account.ID, kind, "11")
+	_, err := f.s.Mutate(ctx, f.account.ID, kind, domain.ResourceUpdate, ResourceMutationRequest{ResourceInput: domain.ResourceInput{ID: "11", Name: "测试", Content: "新正文{host}", Description: "通知"}, Version: rows[0].Version, ConfirmImpact: true})
+	if err == nil || calls != 1 {
+		t.Fatalf("uncertain request repeated: %v %d", err, calls)
+	}
+	f.s.db.First(&local, local.ID)
+	f.s.db.First(&binding, binding.ID)
+	if local.Usable() || binding.MappedContentVersion != 0 || binding.ParamMapping != "[]" {
+		t.Fatal("old configuration remained usable after uncertain write")
+	}
+}
+
+func TestTemplateParsingDoesNotRequireRemoteCRUD(t *testing.T) {
+	f := newResourceServiceFixture(t)
+	account := &model.ProviderAccount{AccountCode: "aliyun-local", AccountName: "本地", ProviderCode: constants.ProviderAliyunSMS, ProviderType: "sms", Config: "{}", Status: 1}
+	if err := f.s.db.Create(account).Error; err != nil {
+		t.Fatal(err)
+	}
+	f.s.lookup = domain.GetByCode
+	parsed, err := f.s.Parse(context.Background(), account.ID, "验证码${code}")
+	if err != nil || parsed.SystemContent != "验证码{code}" || len(parsed.Variables) != 1 || parsed.Variables[0] != "code" {
+		t.Fatalf("parse-only provider: %+v %v", parsed, err)
+	}
+	if f.writes != 0 {
+		t.Fatal("local parsing called upstream")
+	}
+}
+
+func TestResourceValidationAndMirrorFailurePreserveSendingBoundary(t *testing.T) {
+	f := newResourceServiceFixture(t)
+	ctx := context.Background()
+	kind := domain.ResourceTemplates
+	f.rows[kind]["11"] = domain.RemoteResource{ResourceInput: domain.ResourceInput{ID: "11", Name: "测试", Content: "主机{host}"}, AuditStatus: 2}
+	rows, _ := f.s.Preview(ctx, f.account.ID, kind, "")
+	if _, err := f.s.Import(ctx, f.account.ID, ResourceImportRequest{Kind: kind, Selections: []ResourceSelection{resourceSelection(rows[0], "create")}}); err != nil {
+		t.Fatal(err)
+	}
+	var local model.ProviderTemplate
+	f.s.db.First(&local)
+	binding := model.ChannelTemplateBinding{ChannelID: 1, ProviderID: f.account.ID, ProviderTemplateID: local.ID, Status: 1, IsActive: 1, Weight: 1, MappedContentVersion: 1, ParamMapping: `[{"type":"fixed","provider_var":"host","value":"server"}]`}
+	if err := f.s.db.Create(&binding).Error; err != nil {
+		t.Fatal(err)
+	}
+	rows, _ = f.s.Preview(ctx, f.account.ID, kind, "11")
+	req := ResourceMutationRequest{ResourceInput: domain.ResourceInput{ID: "11", Content: "新正文{host}", Description: "通知"}, Version: rows[0].Version, ConfirmImpact: true}
+	if _, err := f.s.Mutate(ctx, f.account.ID, kind, domain.ResourceUpdate, req); err == nil {
+		t.Fatal("invalid form accepted")
+	}
+	f.s.db.First(&local, local.ID)
+	f.s.db.First(&binding, binding.ID)
+	if !local.Usable() || binding.MappedContentVersion != 1 || f.writes != 0 {
+		t.Fatal("invalid form suspended delivery")
+	}
+	req.Name = "测试"
+	if err := f.s.db.Callback().Update().Before("gorm:update").Register("fail_mirror_body", func(tx *gorm.DB) {
+		if updates, ok := tx.Statement.Dest.(map[string]any); ok && tx.Statement.Table == "provider_templates" {
+			if _, changingBody := updates["template_content"]; changingBody {
+				tx.AddError(errors.New("mirror save failed"))
+			}
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	result, err := f.s.Mutate(ctx, f.account.ID, kind, domain.ResourceUpdate, req)
+	if err != nil || result == nil || !result.PendingSync || result.RemoteID != "11" || f.writes != 1 {
+		t.Fatalf("partial success: %+v %v", result, err)
+	}
+	f.s.db.First(&local, local.ID)
+	f.s.db.First(&binding, binding.ID)
+	if local.Usable() || local.TemplateContent != "主机{host}" || binding.MappedContentVersion != 0 || binding.ParamMapping != "[]" {
+		t.Fatal("old mapping survived failed mirror save")
+	}
+	if err := f.s.db.Callback().Update().Remove("fail_mirror_body"); err != nil {
+		t.Fatal(err)
+	}
+	rows, _ = f.s.Preview(ctx, f.account.ID, kind, "11")
+	if _, err = f.s.Import(ctx, f.account.ID, ResourceImportRequest{Kind: kind, Selections: []ResourceSelection{resourceSelection(rows[0], "update")}}); err != nil {
+		t.Fatal(err)
+	}
+	f.s.db.First(&local, local.ID)
+	if local.ContentVersion != 2 || local.TemplateContent != "新正文{host}" {
+		t.Fatal("query did not recover mirror")
 	}
 }

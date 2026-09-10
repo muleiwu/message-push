@@ -97,14 +97,17 @@ func TestSQLiteMigrationsSmoke(t *testing.T) {
 	assertHasColumn(t, sqlDB, "message_templates", "content_type")
 	assertHasColumn(t, sqlDB, "provider_templates", "content_type")
 	for _, table := range []string{"provider_templates", "provider_signatures"} {
-		for _, column := range []string{"remote_id", "audit_status", "audit_reply", "synced_at", "remote_deleted"} {
+		for _, column := range []string{"audit_status", "audit_reply", "synced_at", "remote_deleted"} {
 			assertHasColumn(t, sqlDB, table, column)
 		}
 	}
-	for _, column := range []string{"native_content", "variable_slots", "codec_version"} {
-		assertHasColumn(t, sqlDB, "provider_templates", column)
+	for _, column := range []string{"remote_id", "native_content", "variable_slots", "codec_version"} {
+		assertNoColumn(t, sqlDB, "provider_templates", column)
 	}
 
+	assertHasColumn(t, sqlDB, "provider_templates", "content_version")
+	assertHasColumn(t, sqlDB, "channel_template_bindings", "mapped_content_version")
+	assertHasColumn(t, sqlDB, "provider_signatures", "remote_id")
 	assertHasColumn(t, sqlDB, "push_logs", "provider_msg_id")
 	assertHasColumn(t, sqlDB, "push_logs", "send_snapshot")
 	assertHasColumn(t, sqlDB, "push_tasks", "provider_account_id")

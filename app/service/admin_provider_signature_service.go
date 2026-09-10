@@ -44,6 +44,7 @@ func (s *AdminProviderSignatureService) GetSignatureList(providerAccountID uint,
 	for _, sig := range signatures {
 		item := dto.ProviderSignatureResponse{
 			ProviderResourceState: sig.ProviderResourceState,
+			RemoteID:              sig.RemoteID,
 			ID:                    sig.ID,
 			ProviderAccountID:     sig.ProviderAccountID,
 			SignatureCode:         sig.SignatureCode,
@@ -86,6 +87,7 @@ func (s *AdminProviderSignatureService) GetGlobalSignatureList(req *dto.Provider
 	for _, sig := range signatures {
 		item := &dto.ProviderSignatureResponse{
 			ProviderResourceState: sig.ProviderResourceState,
+			RemoteID:              sig.RemoteID,
 			ID:                    sig.ID,
 			ProviderAccountID:     sig.ProviderAccountID,
 			SignatureCode:         sig.SignatureCode,
@@ -144,6 +146,7 @@ func (s *AdminProviderSignatureService) CreateSignature(providerAccountID uint, 
 
 	response := &dto.ProviderSignatureResponse{
 		ProviderResourceState: signature.ProviderResourceState,
+		RemoteID:              signature.RemoteID,
 		ID:                    signature.ID,
 		ProviderAccountID:     signature.ProviderAccountID,
 		SignatureCode:         signature.SignatureCode,
@@ -212,6 +215,7 @@ func (s *AdminProviderSignatureService) GetSignatureByID(id uint) (*dto.Provider
 
 	response := &dto.ProviderSignatureResponse{
 		ProviderResourceState: signature.ProviderResourceState,
+		RemoteID:              signature.RemoteID,
 		ID:                    signature.ID,
 		ProviderAccountID:     signature.ProviderAccountID,
 		SignatureCode:         signature.SignatureCode,

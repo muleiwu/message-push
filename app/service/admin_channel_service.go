@@ -16,6 +16,7 @@ import (
 	"cnb.cool/mliev/push/message-push/modules/messaging"
 	registry "cnb.cool/mliev/push/message-push/modules/sender/domain"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // convertModelParamMappingToDTO 将 model.ParamMappingItem 转换为 dto.ParamMappingItem
@@ -321,6 +322,9 @@ func (s *AdminChannelService) GetChannelBindings(channelID uint) ([]*dto.Channel
 		}
 
 		if b.ProviderTemplate != nil {
+			item.TemplateContentVersion = b.ProviderTemplate.ContentVersion
+			item.MappedContentVersion = b.MappedContentVersion
+			item.MappingRequired = !registry.MappingConfirmed(b)
 			item.ProviderTemplateName = b.ProviderTemplate.TemplateName
 
 			if b.ProviderTemplate.ProviderAccount != nil {
@@ -337,80 +341,69 @@ func (s *AdminChannelService) GetChannelBindings(channelID uint) ([]*dto.Channel
 
 // UpdateChannelBinding 更新通道绑定配置
 func (s *AdminChannelService) UpdateChannelBinding(channelID, bindingID uint, req *dto.UpdateChannelBindingRequest) error {
-	// 检查绑定是否存在
-	binding, err := s.bindingDAO.GetByID(bindingID)
-	if err != nil {
-		return fmt.Errorf("binding not found: %w", err)
-	}
-	if binding.ChannelID != channelID {
-		return fmt.Errorf("binding does not belong to channel")
-	}
-
-	updates := make(map[string]interface{})
-	candidate := *binding
-
-	if req.ParamMapping != nil {
-		if err := candidate.SetParamMapping(convertDTOParamMappingToModel(req.ParamMapping)); err != nil {
-			return fmt.Errorf("failed to set param mapping: %w", err)
-		}
-		updates["param_mapping"] = candidate.ParamMapping
-	}
-	if req.Weight != nil {
-		updates["weight"] = *req.Weight
-		candidate.Weight = *req.Weight
-	}
-	if req.Priority != nil {
-		updates["priority"] = *req.Priority
-		candidate.Priority = *req.Priority
-	}
-	if req.Status != nil {
-		status := constants.NormalizeResourceStatus(int(*req.Status))
-		updates["status"] = status
-		candidate.Status = status
-	}
-	if req.IsActive != nil {
-		isActive := constants.NormalizeResourceStatus(int(*req.IsActive))
-		updates["is_active"] = isActive
-		candidate.IsActive = isActive
-	}
-	if req.AutoDisableOnFail != nil {
-		updates["auto_disable_on_fail"] = *req.AutoDisableOnFail
-		candidate.AutoDisableOnFail = *req.AutoDisableOnFail
-	}
-	if req.AutoDisableThreshold != nil {
-		updates["auto_disable_threshold"] = *req.AutoDisableThreshold
-		candidate.AutoDisableThreshold = *req.AutoDisableThreshold
-	}
-
-	if candidate.Channel == nil || candidate.Channel.MessageTemplate == nil {
-		return fmt.Errorf("channel message template not found")
-	}
-	systemVariables, err := candidate.Channel.MessageTemplate.GetVariables()
-	if err != nil {
-		return fmt.Errorf("invalid message template variables: %w", err)
-	}
-	var issues []string
-	if candidate.Status == 1 && candidate.IsActive == 1 {
-		issues = readiness.ValidateBinding(candidate.Channel.Type, systemVariables, &candidate)
-	} else if req.ParamMapping != nil {
-		issues = readiness.ValidateBindingParamMapping(systemVariables, &candidate)
-	}
-	if len(issues) > 0 {
-		return newChannelBindingValidationError(&candidate, issues)
-	}
-
-	if len(updates) == 0 {
-		return nil
-	}
-
-	if err := s.bindingDAO.Update(bindingID, updates); err != nil {
+	db := helper.GetDatabase()
+	var target model.ChannelTemplateBinding
+	if err := db.Where("id = ? AND channel_id = ?", bindingID, channelID).First(&target).Error; err != nil {
 		return err
 	}
-
-	// 清除通道缓存和权重状态，确保配置变更立即生效
-	s.invalidateChannelCache(binding.ChannelID)
-
-	return nil
+	err := db.Transaction(func(tx *gorm.DB) error {
+		// Lock order is template then binding, shared with resource imports.
+		t, err := dao.LockProviderTemplate(tx, target.ProviderTemplateID)
+		if err != nil {
+			return err
+		}
+		var candidate model.ChannelTemplateBinding
+		if err := tx.Preload("Channel.MessageTemplate").Preload("ProviderTemplate.ProviderAccount").
+			Where("id = ? AND channel_id = ?", bindingID, channelID).First(&candidate).Error; err != nil {
+			return err
+		}
+		if candidate.ProviderTemplateID != t.ID {
+			return ErrBindingContentConflict
+		}
+		updates := map[string]any{}
+		if req.ParamMapping != nil {
+			if err := candidate.SetParamMapping(convertDTOParamMappingToModel(req.ParamMapping)); err != nil {
+				return err
+			}
+			if err := confirmBindingContent(&candidate, req.TemplateContentVersion); err != nil {
+				return err
+			}
+			updates["param_mapping"] = candidate.ParamMapping
+			updates["mapped_content_version"] = candidate.MappedContentVersion
+		}
+		if req.Weight != nil {
+			candidate.Weight = *req.Weight
+			updates["weight"] = *req.Weight
+		}
+		if req.Priority != nil {
+			candidate.Priority = *req.Priority
+			updates["priority"] = *req.Priority
+		}
+		if req.Status != nil {
+			candidate.Status = constants.NormalizeResourceStatus(int(*req.Status))
+			updates["status"] = candidate.Status
+		}
+		if req.IsActive != nil {
+			candidate.IsActive = constants.NormalizeResourceStatus(int(*req.IsActive))
+			updates["is_active"] = candidate.IsActive
+		}
+		if req.AutoDisableOnFail != nil {
+			updates["auto_disable_on_fail"] = *req.AutoDisableOnFail
+		}
+		if req.AutoDisableThreshold != nil {
+			updates["auto_disable_threshold"] = *req.AutoDisableThreshold
+		}
+		if req.ParamMapping != nil || (candidate.Status == 1 && candidate.IsActive == 1 && (req.Status != nil || req.IsActive != nil)) {
+			if err := validateBindingCandidate(&candidate); err != nil {
+				return err
+			}
+		}
+		return tx.Model(&candidate).Updates(updates).Error
+	})
+	if err == nil {
+		s.invalidateChannelCache(channelID)
+	}
+	return err
 }
 
 // DeleteChannelBinding 删除通道绑定配置
@@ -482,6 +475,9 @@ func (s *AdminChannelService) GetChannelBinding(channelID, bindingID uint) (*dto
 	}
 
 	if binding.ProviderTemplate != nil {
+		item.TemplateContentVersion = binding.ProviderTemplate.ContentVersion
+		item.MappedContentVersion = binding.MappedContentVersion
+		item.MappingRequired = !registry.MappingConfirmed(binding)
 		item.ProviderTemplateName = binding.ProviderTemplate.TemplateName
 
 		if binding.ProviderTemplate.ProviderAccount != nil {
@@ -588,26 +584,34 @@ func (s *AdminChannelService) CreateChannelBinding(channelID uint, req *dto.Crea
 		}
 	}
 
-	systemVariables, err := channel.MessageTemplate.GetVariables()
-	if err != nil {
-		return nil, fmt.Errorf("invalid message template variables: %w", err)
-	}
-	var issues []string
-	if binding.Status == 1 && binding.IsActive == 1 {
-		issues = readiness.ValidateBinding(channel.Type, systemVariables, binding)
-	} else {
-		issues = readiness.ValidateBindingParamMapping(systemVariables, binding)
-	}
-	if len(issues) > 0 {
-		return nil, newChannelBindingValidationError(binding, issues)
-	}
-	// Associations were attached only for validation; persist foreign keys only.
-	binding.ProviderTemplate = nil
-	binding.Channel = nil
-
-	if err := db.Create(binding).Error; err != nil {
-		logger.Error("创建通道绑定配置失败")
-		return nil, fmt.Errorf("failed to create channel binding: %w", err)
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		if _, err := dao.LockProviderTemplate(tx, binding.ProviderTemplateID); err != nil {
+			return err
+		}
+		var fresh model.ProviderTemplate
+		if err := tx.Preload("ProviderAccount").First(&fresh, binding.ProviderTemplateID).Error; err != nil {
+			return err
+		}
+		binding.ProviderTemplate = &fresh
+		if err := confirmBindingContent(binding, req.TemplateContentVersion); err != nil {
+			return err
+		}
+		if registry.IsSMSTemplate(&fresh) && req.ParamMapping == nil {
+			return &ChannelBindingValidationError{Codes: []string{constants.ReadinessBlockerParamMappingInvalid}, Message: "请显式提交短信参数映射，无变量模板请提交空数组"}
+		}
+		if err := validateBindingCandidate(binding); err != nil {
+			return err
+		}
+		var count int64
+		if err := tx.Model(&model.ChannelTemplateBinding{}).Where("channel_id = ? AND provider_template_id = ?", channelID, fresh.ID).Count(&count).Error; err != nil {
+			return err
+		}
+		if count != 0 {
+			return fmt.Errorf("binding already exists for this provider template")
+		}
+		return tx.Omit(clause.Associations).Create(binding).Error
+	}); err != nil {
+		return nil, err
 	}
 
 	// 预加载关联数据
@@ -634,6 +638,9 @@ func (s *AdminChannelService) CreateChannelBinding(channelID uint, req *dto.Crea
 	}
 
 	if binding.ProviderTemplate != nil {
+		response.TemplateContentVersion = binding.ProviderTemplate.ContentVersion
+		response.MappedContentVersion = binding.MappedContentVersion
+		response.MappingRequired = !registry.MappingConfirmed(binding)
 		response.ProviderTemplateName = binding.ProviderTemplate.TemplateName
 
 		if binding.ProviderTemplate.ProviderAccount != nil {
@@ -689,16 +696,24 @@ func (s *AdminChannelService) GetAvailableTemplateBindings(channelID uint) ([]*d
 		}
 
 		// 解析变量列表
-		variables, _ := pt.GetVariables()
+		variables, parseErr := registry.ProviderTemplateVariables(pt)
 
 		item := &dto.AvailableProviderTemplateResponse{
 			ID:              pt.ID,
 			TemplateCode:    pt.TemplateCode,
 			TemplateName:    pt.TemplateName,
 			TemplateContent: pt.TemplateContent,
+			ContentVersion:  pt.ContentVersion,
 			Variables:       variables,
 			ProviderID:      pt.ProviderID,
 			Status:          pt.Status,
+		}
+
+		if parseErr != nil {
+			item.ParseError = parseErr.Error()
+		}
+		if parsed, err := registry.ParseProviderTemplate(pt); err == nil {
+			item.NativeVariables = parsed.NativeVariables
 		}
 
 		if pt.ProviderAccount != nil {
@@ -1001,6 +1016,7 @@ func (s *AdminChannelService) GetAvailableProviderSignatures(channelID uint) ([]
 	for _, sig := range signatures {
 		item := &dto.ProviderSignatureResponse{
 			ProviderResourceState: sig.ProviderResourceState,
+			RemoteID:              sig.RemoteID,
 			ID:                    sig.ID,
 			SignatureCode:         sig.SignatureCode,
 			SignatureName:         sig.SignatureName,

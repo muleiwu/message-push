@@ -15,7 +15,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/readiness"
 	"cnb.cool/mliev/push/message-push/modules/channel/domain"
 	registry "cnb.cool/mliev/push/message-push/modules/sender/domain"
-	_ "cnb.cool/mliev/push/message-push/modules/sender/infrastructure"
+	senderinfra "cnb.cool/mliev/push/message-push/modules/sender/infrastructure"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -52,9 +52,18 @@ func addCatalogProvider(t *testing.T, db *gorm.DB, channel *model.Channel, provi
 	t.Helper()
 	account := &model.ProviderAccount{AccountCode: uuid.NewString(), AccountName: "internal-account", ProviderCode: provider, ProviderType: channel.Type, Status: 1, Config: `{"secret":"private-account-secret"}`}
 	insertCatalog(t, db, account)
-	template := &model.ProviderTemplate{ProviderID: account.ID, TemplateCode: "private-template-code", TemplateName: "provider-template", Variables: `["code"]`, Status: 1}
+	template := &model.ProviderTemplate{TemplateContent: "code={code}", ContentVersion: 1, ProviderID: account.ID, TemplateCode: "private-template-code", TemplateName: "provider-template", Variables: `["code"]`, Status: 1}
+	if provider == constants.ProviderAliyunSMS {
+		template.TemplateContent = "code=${code}"
+	}
+	if provider == constants.ProviderTencentSMS {
+		template.TemplateContent = "code={1}"
+	}
 	insertCatalog(t, db, template)
-	binding := &model.ChannelTemplateBinding{ChannelID: channel.ID, ProviderID: account.ID, ProviderTemplateID: template.ID, Weight: 10, Priority: 100, Status: 1, IsActive: 1}
+	binding := &model.ChannelTemplateBinding{MappedContentVersion: 1, ParamMapping: `[{"type":"mapping","provider_var":"code","system_var":"code"}]`, ChannelID: channel.ID, ProviderID: account.ID, ProviderTemplateID: template.ID, Weight: 10, Priority: 100, Status: 1, IsActive: 1}
+	if provider == constants.ProviderTencentSMS {
+		binding.ParamMapping = `[{"type":"mapping","provider_var":"1","system_var":"code"}]`
+	}
 	insertCatalog(t, db, binding)
 	return account, binding
 }
@@ -163,7 +172,8 @@ func TestCatalogTemplateProjection(t *testing.T) {
 		}, wantType: "markdown", wantVars: []string{"code", "expire"}},
 		{name: "no variables", mutate: func(t *testing.T, db *gorm.DB, f catalogFixture) {
 			updateCatalog(t, db, f.template, "variables", "")
-			updateCatalog(t, db, &model.ProviderTemplate{ID: f.binding.ProviderTemplateID}, "variables", "[]")
+			updateCatalog(t, db, &model.ProviderTemplate{ID: f.binding.ProviderTemplateID}, "template_content", "静态通知")
+			updateCatalog(t, db, f.binding, "param_mapping", "[]")
 		}, wantType: "text", wantVars: []string{}},
 		{name: "missing", mutate: func(t *testing.T, db *gorm.DB, f catalogFixture) {
 			updateCatalog(t, db, f.channel, "message_template_id", 99999)
@@ -224,7 +234,7 @@ func TestCatalogTemplateProjection(t *testing.T) {
 func TestCatalogSignatureOptionsMatchSendValidation(t *testing.T) {
 	const plainProvider = "catalog_test_sms_plain"
 	if !registry.GetRegistry().Exists(plainProvider) {
-		if err := registry.Register(&registry.ProviderMeta{Code: plainProvider, Name: "plain test provider", Type: "sms"}); err != nil {
+		if err := registry.Register(&registry.ProviderMeta{Code: plainProvider, TemplateCodec: senderinfra.NativeTemplateCodec{ID: "fixture-native", AllowNamed: true, AllowNumeric: true}, Name: "plain test provider", Type: "sms"}); err != nil {
 			t.Fatal(err)
 		}
 	}

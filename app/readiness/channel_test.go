@@ -11,6 +11,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/model"
 	registry "cnb.cool/mliev/push/message-push/modules/sender/domain"
 	_ "cnb.cool/mliev/push/message-push/modules/sender/infrastructure"
+	senderinfra "cnb.cool/mliev/push/message-push/modules/sender/infrastructure"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 )
@@ -416,8 +417,8 @@ func newReadinessTestDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE message_templates (id INTEGER PRIMARY KEY AUTOINCREMENT, template_name TEXT NOT NULL, content_type TEXT, content TEXT, variables TEXT, description TEXT, status INTEGER, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE channels (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, type TEXT NOT NULL, message_template_id INTEGER, status INTEGER, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE provider_accounts (id INTEGER PRIMARY KEY AUTOINCREMENT, account_code TEXT NOT NULL UNIQUE, account_name TEXT NOT NULL, provider_code TEXT NOT NULL, provider_type TEXT NOT NULL, config TEXT, status INTEGER, remark TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
-		`CREATE TABLE provider_templates (remote_id TEXT DEFAULT '', audit_status INTEGER, audit_reply TEXT, remote_deleted INTEGER NOT NULL DEFAULT 0, synced_at DATETIME, remote_description TEXT, native_content TEXT, variable_slots TEXT, codec_version TEXT DEFAULT '', remote_name TEXT DEFAULT '', category TEXT DEFAULT '', id INTEGER PRIMARY KEY AUTOINCREMENT, provider_id INTEGER NOT NULL, template_code TEXT NOT NULL, template_name TEXT NOT NULL, content_type TEXT, template_content TEXT, variables TEXT, status INTEGER, remark TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
-		`CREATE TABLE channel_template_bindings (id INTEGER PRIMARY KEY AUTOINCREMENT, channel_id INTEGER NOT NULL, provider_template_id INTEGER NOT NULL, provider_id INTEGER NOT NULL, param_mapping TEXT, weight INTEGER, priority INTEGER, status INTEGER, is_active INTEGER, auto_disable_on_fail INTEGER, auto_disable_threshold INTEGER, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
+		`CREATE TABLE provider_templates (content_version INTEGER NOT NULL DEFAULT 1, audit_status INTEGER, audit_reply TEXT, remote_deleted INTEGER NOT NULL DEFAULT 0, synced_at DATETIME, remote_description TEXT, remote_name TEXT DEFAULT '', category TEXT DEFAULT '', id INTEGER PRIMARY KEY AUTOINCREMENT, provider_id INTEGER NOT NULL, template_code TEXT NOT NULL, template_name TEXT NOT NULL, content_type TEXT, template_content TEXT, variables TEXT, status INTEGER, remark TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
+		`CREATE TABLE channel_template_bindings (mapped_content_version INTEGER NOT NULL DEFAULT 0, id INTEGER PRIMARY KEY AUTOINCREMENT, channel_id INTEGER NOT NULL, provider_template_id INTEGER NOT NULL, provider_id INTEGER NOT NULL, param_mapping TEXT, weight INTEGER, priority INTEGER, status INTEGER, is_active INTEGER, auto_disable_on_fail INTEGER, auto_disable_threshold INTEGER, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE provider_signatures (remote_id TEXT DEFAULT '', audit_status INTEGER, audit_reply TEXT, remote_deleted INTEGER NOT NULL DEFAULT 0, synced_at DATETIME, remote_description TEXT, id INTEGER PRIMARY KEY AUTOINCREMENT, provider_account_id INTEGER NOT NULL, signature_code TEXT NOT NULL, signature_name TEXT NOT NULL, status INTEGER, remark TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE channel_signature_mappings (id INTEGER PRIMARY KEY AUTOINCREMENT, channel_id INTEGER NOT NULL, signature_name TEXT NOT NULL, provider_signature_id INTEGER NOT NULL, provider_id INTEGER NOT NULL, status INTEGER, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 	}
@@ -439,6 +440,9 @@ func registerReadinessTestProviders(t *testing.T) {
 		{Code: testProviderDingTalkPlain, Name: "DingTalk plain", Type: constants.MessageTypeDingTalk},
 	}
 	for _, provider := range providers {
+		if provider.Type == "sms" {
+			provider.TemplateCodec = senderinfra.NativeTemplateCodec{ID: "fixture-native", AllowNamed: true}
+		}
 		if err := registry.Register(provider); err != nil && !stringsContains(err.Error(), "already registered") {
 			t.Fatalf("register provider %s: %v", provider.Code, err)
 		}
@@ -482,6 +486,7 @@ func createProviderPath(t *testing.T, db *gorm.DB, channelID uint, messageType, 
 		t.Fatal(err)
 	}
 	providerTemplate := &model.ProviderTemplate{
+		TemplateContent: "code={code}", ContentVersion: 1,
 		ProviderID:   account.ID,
 		TemplateCode: fmt.Sprintf("tpl-%d", account.ID),
 		TemplateName: "provider",
@@ -493,21 +498,22 @@ func createProviderPath(t *testing.T, db *gorm.DB, channelID uint, messageType, 
 	if err := db.Create(providerTemplate).Error; err != nil {
 		t.Fatal(err)
 	}
-	binding := createBinding(t, db, channelID, providerTemplate.ID, account.ID, 1, 1, "")
+	binding := createBinding(t, db, channelID, providerTemplate.ID, account.ID, 1, 1, `[{"type":"mapping","provider_var":"code","system_var":"code"}]`)
 	return account, providerTemplate, binding
 }
 
 func createBinding(t *testing.T, db *gorm.DB, channelID, providerTemplateID, accountID uint, status, active int8, mapping string) *model.ChannelTemplateBinding {
 	t.Helper()
 	binding := &model.ChannelTemplateBinding{
-		ChannelID:          channelID,
-		ProviderTemplateID: providerTemplateID,
-		ProviderID:         accountID,
-		ParamMapping:       mapping,
-		Weight:             10,
-		Priority:           100,
-		Status:             status,
-		IsActive:           active,
+		MappedContentVersion: 1,
+		ChannelID:            channelID,
+		ProviderTemplateID:   providerTemplateID,
+		ProviderID:           accountID,
+		ParamMapping:         mapping,
+		Weight:               10,
+		Priority:             100,
+		Status:               status,
+		IsActive:             active,
 	}
 	if err := db.Create(binding).Error; err != nil {
 		t.Fatal(err)

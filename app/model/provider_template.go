@@ -10,9 +10,7 @@ import (
 // ProviderTemplate 供应商模板表
 type ProviderTemplate struct {
 	ProviderResourceState
-	NativeContent     string           `gorm:"type:text" json:"native_content"`
-	VariableSlots     string           `gorm:"type:text" json:"variable_slots"`
-	CodecVersion      string           `gorm:"type:varchar(100);default:''" json:"codec_version"`
+	ContentVersion    uint64           `gorm:"not null;default:1" json:"content_version"`
 	RemoteName        string           `gorm:"type:varchar(200);default:''" json:"remote_name"`
 	Category          string           `gorm:"type:varchar(20);default:''" json:"category"`
 	RemoteDescription string           `gorm:"type:text" json:"remote_description"`
@@ -21,8 +19,8 @@ type ProviderTemplate struct {
 	TemplateCode      string           `gorm:"type:varchar(100);not null;comment:供应商模板代码（如阿里云SMS_123456789）" json:"template_code"`
 	TemplateName      string           `gorm:"type:varchar(200);not null;comment:供应商模板名称" json:"template_name"`
 	ContentType       string           `gorm:"type:varchar(20);default:text;comment:内容类型：text=纯文本, html=HTML富文本, markdown=Markdown" json:"content_type"`
-	TemplateContent   string           `gorm:"type:text;comment:供应商模板内容（如：验证码{code}）" json:"template_content"`
-	Variables         string           `gorm:"type:json;comment:供应商模板变量列表，JSON数组格式" json:"variables"`
+	TemplateContent   string           `gorm:"type:text;comment:供应商模板原文" json:"template_content"`
+	Variables         string           `gorm:"type:json;comment:非短信模板变量，短信从原文解析" json:"variables"`
 	Status            int8             `gorm:"default:1;index:idx_provider_status;comment:状态：1=启用 0=禁用" json:"status"`
 	Remark            string           `gorm:"type:text;comment:备注说明" json:"remark"`
 	CreatedAt         time.Time        `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`

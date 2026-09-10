@@ -12,6 +12,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/readiness"
 	channelDomain "cnb.cool/mliev/push/message-push/modules/channel/domain"
 	registry "cnb.cool/mliev/push/message-push/modules/sender/domain"
+	senderinfra "cnb.cool/mliev/push/message-push/modules/sender/infrastructure"
 	"github.com/glebarez/sqlite"
 	"github.com/muleiwu/gsr"
 	"gorm.io/gorm"
@@ -21,9 +22,10 @@ const testSelectorReadinessProvider = "selector_readiness_plain"
 
 func TestFilterEligibleNodesRevalidatesCachedNodeAfterHardStop(t *testing.T) {
 	if err := registry.Register(&registry.ProviderMeta{
-		Code: testSelectorReadinessProvider,
-		Name: "selector readiness",
-		Type: constants.MessageTypeSMS,
+		Code:          testSelectorReadinessProvider,
+		TemplateCodec: senderinfra.NativeTemplateCodec{ID: "fixture-native", AllowNamed: true},
+		Name:          "selector readiness",
+		Type:          constants.MessageTypeSMS,
 	}); err != nil && !strings.Contains(err.Error(), "already registered") {
 		t.Fatal(err)
 	}
@@ -51,14 +53,14 @@ func TestFilterEligibleNodesRevalidatesCachedNodeAfterHardStop(t *testing.T) {
 	if err := db.Create(account).Error; err != nil {
 		t.Fatal(err)
 	}
-	providerTemplate := &model.ProviderTemplate{ProviderID: account.ID, TemplateCode: "provider-template", TemplateName: "provider", Status: 1}
+	providerTemplate := &model.ProviderTemplate{TemplateContent: "code={code}", ContentVersion: 1, ProviderID: account.ID, TemplateCode: "provider-template", TemplateName: "provider", Status: 1}
 	if err := providerTemplate.SetVariables([]string{"code"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Create(providerTemplate).Error; err != nil {
 		t.Fatal(err)
 	}
-	binding := &model.ChannelTemplateBinding{
+	binding := &model.ChannelTemplateBinding{MappedContentVersion: 1, ParamMapping: `[{"type":"mapping","provider_var":"code","system_var":"code"}]`,
 		ChannelID:          channel.ID,
 		ProviderTemplateID: providerTemplate.ID,
 		ProviderID:         account.ID,
@@ -136,8 +138,8 @@ func newSelectorReadinessDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE message_templates (id INTEGER PRIMARY KEY AUTOINCREMENT, template_name TEXT NOT NULL, content_type TEXT, content TEXT, variables TEXT, description TEXT, status INTEGER, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE channels (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, type TEXT NOT NULL, message_template_id INTEGER, status INTEGER, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE provider_accounts (id INTEGER PRIMARY KEY AUTOINCREMENT, account_code TEXT NOT NULL UNIQUE, account_name TEXT NOT NULL, provider_code TEXT NOT NULL, provider_type TEXT NOT NULL, config TEXT, status INTEGER, remark TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
-		`CREATE TABLE provider_templates (remote_id TEXT DEFAULT '', audit_status INTEGER, audit_reply TEXT, remote_deleted INTEGER NOT NULL DEFAULT 0, synced_at DATETIME, remote_description TEXT, native_content TEXT, variable_slots TEXT, codec_version TEXT DEFAULT '', remote_name TEXT DEFAULT '', category TEXT DEFAULT '', id INTEGER PRIMARY KEY AUTOINCREMENT, provider_id INTEGER NOT NULL, template_code TEXT NOT NULL, template_name TEXT NOT NULL, content_type TEXT, template_content TEXT, variables TEXT, status INTEGER, remark TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
-		`CREATE TABLE channel_template_bindings (id INTEGER PRIMARY KEY AUTOINCREMENT, channel_id INTEGER NOT NULL, provider_template_id INTEGER NOT NULL, provider_id INTEGER NOT NULL, param_mapping TEXT, weight INTEGER, priority INTEGER, status INTEGER, is_active INTEGER, auto_disable_on_fail INTEGER, auto_disable_threshold INTEGER, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
+		`CREATE TABLE provider_templates (content_version INTEGER NOT NULL DEFAULT 1, audit_status INTEGER, audit_reply TEXT, remote_deleted INTEGER NOT NULL DEFAULT 0, synced_at DATETIME, remote_description TEXT, remote_name TEXT DEFAULT '', category TEXT DEFAULT '', id INTEGER PRIMARY KEY AUTOINCREMENT, provider_id INTEGER NOT NULL, template_code TEXT NOT NULL, template_name TEXT NOT NULL, content_type TEXT, template_content TEXT, variables TEXT, status INTEGER, remark TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
+		`CREATE TABLE channel_template_bindings (mapped_content_version INTEGER NOT NULL DEFAULT 0, id INTEGER PRIMARY KEY AUTOINCREMENT, channel_id INTEGER NOT NULL, provider_template_id INTEGER NOT NULL, provider_id INTEGER NOT NULL, param_mapping TEXT, weight INTEGER, priority INTEGER, status INTEGER, is_active INTEGER, auto_disable_on_fail INTEGER, auto_disable_threshold INTEGER, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE provider_signatures (remote_id TEXT DEFAULT '', audit_status INTEGER, audit_reply TEXT, remote_deleted INTEGER NOT NULL DEFAULT 0, synced_at DATETIME, remote_description TEXT, id INTEGER PRIMARY KEY AUTOINCREMENT, provider_account_id INTEGER NOT NULL, signature_code TEXT NOT NULL, signature_name TEXT NOT NULL, status INTEGER, remark TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE channel_signature_mappings (id INTEGER PRIMARY KEY AUTOINCREMENT, channel_id INTEGER NOT NULL, signature_name TEXT NOT NULL, provider_signature_id INTEGER NOT NULL, provider_id INTEGER NOT NULL, status INTEGER, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 	} {

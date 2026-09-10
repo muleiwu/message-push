@@ -244,6 +244,10 @@ func (c ChannelController) CreateChannelBinding(ctx httpInterfaces.RouterContext
 }
 
 func writeChannelBindingError(ctx httpInterfaces.RouterContextInterface, err error, fallback string) {
+	if errors.Is(err, service.ErrBindingContentConflict) {
+		controller.ErrorResponse(ctx, 409, err.Error())
+		return
+	}
 	var validationErr *service.ChannelBindingValidationError
 	if errors.As(err, &validationErr) {
 		controller.ErrorResponse(ctx, 400, validationErr.Message)

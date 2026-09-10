@@ -3,7 +3,6 @@
 package readiness
 
 import (
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -316,7 +315,7 @@ func ValidateBinding(channelType string, systemVariables []string, binding *mode
 		issues = append(issues, constants.ReadinessBlockerProviderAccountMismatch)
 	}
 
-	providerVariables, err := providerTemplate.GetVariables()
+	providerVariables, err := registry.ProviderTemplateVariables(providerTemplate)
 	providerVariablesValid := err == nil && ProviderTemplateVariablesValid(providerTemplate)
 	if !providerVariablesValid {
 		issues = append(issues, constants.ReadinessBlockerProviderTemplateVariablesInvalid)
@@ -343,6 +342,9 @@ func ValidateBinding(channelType string, systemVariables []string, binding *mode
 		}
 	}
 
+	if !registry.MappingConfirmed(binding) {
+		issues = append(issues, constants.ReadinessBlockerMappingUnconfirmed)
+	}
 	if providerVariablesValid {
 		mappingIssues := validateParamMapping(systemVariables, providerVariables, binding)
 		issues = append(issues, mappingIssues...)
@@ -357,7 +359,7 @@ func ValidateBindingParamMapping(systemVariables []string, binding *model.Channe
 	if binding == nil || binding.ProviderTemplate == nil {
 		return []string{constants.ReadinessBlockerProviderTemplateMissing}
 	}
-	providerVariables, err := binding.ProviderTemplate.GetVariables()
+	providerVariables, err := registry.ProviderTemplateVariables(binding.ProviderTemplate)
 	if err != nil || !ProviderTemplateVariablesValid(binding.ProviderTemplate) {
 		return []string{constants.ReadinessBlockerProviderTemplateVariablesInvalid}
 	}
@@ -380,6 +382,9 @@ func validateParamMapping(systemVariables, providerVariables []string, binding *
 	}
 
 	if len(mapping) == 0 {
+		if registry.IsSMSTemplate(binding.ProviderTemplate) {
+			return []string{constants.ReadinessBlockerParamMappingIncomplete}
+		}
 		for _, providerVariable := range providerVariables {
 			if _, ok := systemSet[providerVariable]; !ok {
 				return []string{constants.ReadinessBlockerParamMappingIncomplete}
@@ -606,41 +611,9 @@ func ProviderTemplateVariablesValid(providerTemplate *model.ProviderTemplate) bo
 	if providerTemplate == nil {
 		return false
 	}
-	variables, err := providerTemplate.GetVariables()
+	variables, err := registry.ProviderTemplateVariables(providerTemplate)
 	if err != nil || !validVariableNames(variables) {
 		return false
-	}
-	if providerTemplate.CodecVersion == "" {
-		return true
-	}
-	if providerTemplate.ProviderAccount == nil {
-		return false
-	}
-	meta, err := registry.GetByCode(providerTemplate.ProviderAccount.ProviderCode)
-	if err != nil {
-		return false
-	}
-	definition := meta.Resources[registry.ResourceTemplates]
-	if definition == nil || definition.Codec == nil || definition.Codec.Version() != providerTemplate.CodecVersion {
-		return false
-	}
-	var slots []registry.VariableSlot
-	if json.Unmarshal([]byte(providerTemplate.VariableSlots), &slots) != nil {
-		return false
-	}
-	decoded, err := definition.Codec.Decode(providerTemplate.NativeContent, slots)
-	if err != nil || decoded.Content != providerTemplate.TemplateContent || len(decoded.Slots) != len(slots) || len(decoded.Variables) != len(variables) {
-		return false
-	}
-	for i, name := range variables {
-		if decoded.Variables[i] != name {
-			return false
-		}
-	}
-	for i, slot := range slots {
-		if slot != decoded.Slots[i] {
-			return false
-		}
 	}
 	return true
 }

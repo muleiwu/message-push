@@ -137,7 +137,7 @@ func (receiver Router) InitConfig() map[string]any {
 					providerAccounts.DELETE("/:id/remote-resources/:kind/:remoteId", admin.ProviderResourceController{}.Delete)
 					providerAccounts.POST("/:id/resource-sync/preview", admin.ProviderResourceController{}.Preview)
 					providerAccounts.POST("/:id/resource-sync/import", admin.ProviderResourceController{}.Import)
-					providerAccounts.POST("/:id/template-compile", admin.ProviderResourceController{}.Compile)
+					providerAccounts.POST("/:id/template-parse", admin.ProviderResourceController{}.Parse)
 
 					// 签名管理（嵌套在账号下）
 					providerAccounts.GET("/:id/signatures", admin.ProviderSignatureController{}.GetSignatureList)

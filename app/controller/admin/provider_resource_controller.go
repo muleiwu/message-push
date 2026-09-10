@@ -77,7 +77,7 @@ func (ProviderResourceController) Preview(c httpInterfaces.RouterContextInterfac
 	controller.SuccessResponse(c, map[string]any{"items": items})
 }
 
-func (ProviderResourceController) Compile(c httpInterfaces.RouterContextInterface) {
+func (ProviderResourceController) Parse(c httpInterfaces.RouterContextInterface) {
 	ctx, cancel, id, ok := resourceControllerContext(c)
 	if !ok {
 		return
@@ -90,7 +90,7 @@ func (ProviderResourceController) Compile(c httpInterfaces.RouterContextInterfac
 		resourceControllerError(c, err)
 		return
 	}
-	result, err := service.NewAdminProviderResourceService().Compile(ctx, id, req.Content)
+	result, err := service.NewAdminProviderResourceService().Parse(ctx, id, req.Content)
 	if err != nil {
 		resourceControllerError(c, err)
 		return

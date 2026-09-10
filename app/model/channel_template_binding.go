@@ -18,7 +18,7 @@ const (
 // ParamMappingItem 参数映射项
 type ParamMappingItem struct {
 	Type        ParamMappingType `json:"type"`         // 映射类型：fixed=固定值, mapping=映射系统变量
-	ProviderVar string           `json:"provider_var"` // 供应商模板变量名
+	ProviderVar string           `json:"provider_var"` // 原生变量键（名称或位置编号）
 	SystemVar   string           `json:"system_var"`   // 系统变量名（type=mapping时使用）
 	Value       string           `json:"value"`        // 固定值（type=fixed时使用）
 }
@@ -30,6 +30,7 @@ type ChannelTemplateBinding struct {
 	ProviderTemplateID   uint              `gorm:"not null;comment:供应商模板ID（关联provider_templates表）" json:"provider_template_id"`
 	ProviderID           uint              `gorm:"not null;index:idx_provider;comment:供应商账号ID（冗余字段，便于查询）" json:"provider_id"`
 	ParamMapping         string            `gorm:"type:json;comment:参数映射，JSON数组格式 [{type,provider_var,system_var,value}]" json:"param_mapping"`
+	MappedContentVersion uint64            `gorm:"not null;default:0" json:"mapped_content_version"`
 	Weight               int               `gorm:"type:int;default:10;comment:权重（同优先级下按权重分配流量）" json:"weight"`
 	Priority             int               `gorm:"type:int;default:100;comment:优先级（数字越小越优先）" json:"priority"`
 	Status               int8              `gorm:"default:1;comment:状态：1=启用 0=禁用" json:"status"`

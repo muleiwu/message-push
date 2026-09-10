@@ -63,6 +63,14 @@ func RunGooseMigrations(db *sql.DB, dialect string, logger Logger) error {
 
 	// 使用 UpByOne 循环执行，便于逐条记录
 	for {
+		// The native-template migration adds a live identity constraint. Report
+		// conflicts before any of its DDL (MySQL DDL is not transactional).
+		version, versionErr := goose.GetDBVersion(db)
+		if versionErr == nil && version == 20260910000001 {
+			if err := checkProviderTemplateIdentities(db); err != nil {
+				return err
+			}
+		}
 		err := goose.UpByOne(db, dir)
 		if err != nil {
 			if err == goose.ErrNoNextVersion {
@@ -79,6 +87,30 @@ func RunGooseMigrations(db *sql.DB, dialect string, logger Logger) error {
 		logger.Info("[db migration] goose 迁移已是最新版本")
 	}
 
+	return nil
+}
+
+func checkProviderTemplateIdentities(db *sql.DB) error {
+	rows, err := db.Query("SELECT provider_id, template_code, COUNT(*) FROM provider_templates WHERE deleted_at IS NULL GROUP BY provider_id, template_code HAVING COUNT(*) > 1")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	var conflicts []string
+	for rows.Next() {
+		var account, count int64
+		var code string
+		if err := rows.Scan(&account, &code, &count); err != nil {
+			return err
+		}
+		conflicts = append(conflicts, fmt.Sprintf("账号 %d / 模板 %s (%d 条)", account, code, count))
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if len(conflicts) != 0 {
+		return fmt.Errorf("供应商模板身份冲突，请处理重复记录后重试迁移：%v", conflicts)
+	}
 	return nil
 }
 

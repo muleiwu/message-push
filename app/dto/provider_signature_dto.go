@@ -41,6 +41,7 @@ type ProviderSignatureListResponse struct {
 // ProviderSignatureResponse 供应商签名/邮件标题资源响应
 type ProviderSignatureResponse struct {
 	model.ProviderResourceState
+	RemoteID            string `json:"remote_id"`
 	ID                  uint   `json:"id"`
 	ProviderAccountID   uint   `json:"provider_account_id"`
 	ProviderAccountName string `json:"provider_account_name,omitempty"`

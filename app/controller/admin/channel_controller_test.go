@@ -105,8 +105,8 @@ func newBindingControllerFixture(t *testing.T, update bool) *bindingControllerFi
 		`CREATE TABLE message_templates (id INTEGER PRIMARY KEY, template_name TEXT, content_type TEXT, content TEXT, variables TEXT, description TEXT, status INTEGER, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE channels (id INTEGER PRIMARY KEY, name TEXT, type TEXT, message_template_id INTEGER, status INTEGER, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE provider_accounts (id INTEGER PRIMARY KEY, account_code TEXT, account_name TEXT, provider_code TEXT, provider_type TEXT, config TEXT, status INTEGER, remark TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
-		`CREATE TABLE provider_templates (id INTEGER PRIMARY KEY, provider_id INTEGER, template_code TEXT, template_name TEXT, content_type TEXT, template_content TEXT, variables TEXT, status INTEGER, remark TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME, remote_id TEXT, audit_status INTEGER, audit_reply TEXT, remote_deleted INTEGER, synced_at DATETIME, remote_description TEXT, native_content TEXT, variable_slots TEXT, codec_version TEXT, remote_name TEXT, category TEXT)`,
-		`CREATE TABLE channel_template_bindings (id INTEGER PRIMARY KEY, channel_id INTEGER, provider_template_id INTEGER, provider_id INTEGER, param_mapping TEXT, weight INTEGER, priority INTEGER, status INTEGER, is_active INTEGER, auto_disable_on_fail INTEGER, auto_disable_threshold INTEGER, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
+		`CREATE TABLE provider_templates (content_version INTEGER NOT NULL DEFAULT 1, id INTEGER PRIMARY KEY, provider_id INTEGER, template_code TEXT, template_name TEXT, content_type TEXT, template_content TEXT, variables TEXT, status INTEGER, remark TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME, remote_id TEXT, audit_status INTEGER, audit_reply TEXT, remote_deleted INTEGER, synced_at DATETIME, remote_description TEXT, native_content TEXT, variable_slots TEXT, codec_version TEXT, remote_name TEXT, category TEXT)`,
+		`CREATE TABLE channel_template_bindings (mapped_content_version INTEGER NOT NULL DEFAULT 0, id INTEGER PRIMARY KEY, channel_id INTEGER, provider_template_id INTEGER, provider_id INTEGER, param_mapping TEXT, weight INTEGER, priority INTEGER, status INTEGER, is_active INTEGER, auto_disable_on_fail INTEGER, auto_disable_threshold INTEGER, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 	} {
 		if err := db.Exec(statement).Error; err != nil {
 			t.Fatal(err)
@@ -120,9 +120,7 @@ func newBindingControllerFixture(t *testing.T, update bool) *bindingControllerFi
 		&model.ProviderAccount{ID: 1, AccountCode: "binding-test", ProviderCode: "zrwinfo_sms", ProviderType: "sms", Status: 1, Config: "{}"},
 		&model.ProviderTemplate{
 			ID: 25, ProviderID: 1, TemplateCode: "3344803", TemplateName: "磁盘空间告警", Status: 1,
-			TemplateContent: content, Variables: variables, CodecVersion: "positional-v1",
-			NativeContent: "主机{1}的磁盘分区{2}发生空间告警，当前使用率{3}%，告警阈值{4}%，请及时处理。",
-			VariableSlots: `[{"native":"1","name":"host_name"},{"native":"2","name":"dimension"},{"native":"3","name":"value"},{"native":"4","name":"threshold"}]`,
+			TemplateContent: content, Variables: variables, ContentVersion: 1,
 		},
 	} {
 		if err := db.Create(record).Error; err != nil {
@@ -152,6 +150,7 @@ func (f *bindingControllerFixture) request(t *testing.T, update bool, fields map
 		payload["provider_id"] = 1
 		payload["provider_template_id"] = 25
 	}
+	payload["template_content_version"] = 1
 	for key, value := range fields {
 		payload[key] = value
 	}
@@ -183,8 +182,8 @@ func TestChannelBindingValidationResponses(t *testing.T) {
 		{"remote deleted", map[string]any{"remote_deleted": true}, "供应商模板已在远端删除，请更换模板"},
 		{"locally deleted", map[string]any{"deleted_at": "2026-09-10 01:00:00"}, "供应商模板不存在或已删除，请更换模板"},
 		{"missing code", map[string]any{"template_code": " "}, "供应商模板编号为空，请完善模板配置"},
-		{"invalid variables", map[string]any{"variables": `["host_name","host_name"]`}, "供应商模板变量定义异常，请修正配置或重新同步模板"},
-		{"invalid slots", map[string]any{"variable_slots": `[]`}, "供应商模板变量定义异常，请修正配置或重新同步模板"},
+		{"stored variables ignored", map[string]any{"variables": `["host_name","host_name"]`}, ""},
+		{"invalid native syntax", map[string]any{"template_content": `主机{host_name}规则{1}`}, "供应商模板变量定义异常，请修正配置或重新同步模板"},
 		{"multiple reasons", map[string]any{"status": 0, "audit_status": 1, "template_code": ""}, "供应商模板已禁用，请启用后重试；" + pendingTemplateMessage + "；供应商模板编号为空，请完善模板配置"},
 	}
 	for _, update := range []bool{false, true} {
@@ -245,7 +244,7 @@ func TestChannelBindingDisabledEditingKeepsExistingRules(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-				if err := f.db.Model(&model.ProviderTemplate{}).Where("id = ?", 25).Update("variables", `["host_name","host_name"]`).Error; err != nil {
+				if err := f.db.Model(&model.ProviderTemplate{}).Where("id = ?", 25).Update("template_content", `主机{host_name}规则{1}`).Error; err != nil {
 					t.Fatal(err)
 				}
 				ctx = f.request(t, update, map[string]any{field: 0})
@@ -339,4 +338,67 @@ func TestChannelBindingWrappedValidationErrorReturnsBadRequest(t *testing.T) {
 	if ctx.status != 400 || ctx.body.Code != 400 || ctx.body.Message != pendingTemplateMessage {
 		t.Fatalf("wrapped validation error response: %d %+v", ctx.status, ctx.body)
 	}
+}
+
+func TestBindingContentVersionConflictAndExplicitConfirmation(t *testing.T) {
+	f := newBindingControllerFixture(t, true)
+	// Same-name variables do not reactivate an unconfirmed binding.
+	ctx := f.request(t, true, map[string]any{"param_mapping": nil})
+	if ctx.status != 400 || !strings.Contains(ctx.body.Message, "重新配置") {
+		t.Fatalf("empty mapping activated: %+v", ctx.body)
+	}
+	ctx = f.request(t, true, map[string]any{"template_content_version": 0})
+	if ctx.status != 409 {
+		t.Fatalf("missing version: %+v", ctx.body)
+	}
+	if err := f.db.Model(&model.ProviderTemplate{}).Where("id=25").Updates(map[string]any{"template_content": "新正文{host_name}{dimension}{value}{threshold}", "content_version": 2}).Error; err != nil {
+		t.Fatal(err)
+	}
+	ctx = f.request(t, true, nil)
+	if ctx.status != 409 {
+		t.Fatalf("stale form accepted: %+v", ctx.body)
+	}
+	f.assertUnchanged(t, true)
+	ctx = f.request(t, true, map[string]any{"template_content_version": 2})
+	if ctx.status != 200 {
+		t.Fatalf("confirmation failed: %+v", ctx.body)
+	}
+	var saved model.ChannelTemplateBinding
+	if err := f.db.First(&saved, 29).Error; err != nil {
+		t.Fatal(err)
+	}
+	if saved.MappedContentVersion != 2 {
+		t.Fatalf("wrong confirmed version: %+v", saved)
+	}
+}
+
+func TestStaticSMSBodyStillRequiresConfirmation(t *testing.T) {
+	f := newBindingControllerFixture(t, true)
+	if err := f.db.Model(&model.ProviderTemplate{}).Where("id=25").Update("template_content", "固定通知").Error; err != nil {
+		t.Fatal(err)
+	}
+	ctx := f.request(t, true, map[string]any{"param_mapping": nil})
+	if ctx.status != 400 {
+		t.Fatal("static template enabled without confirmation")
+	}
+	ctx = f.request(t, true, map[string]any{"param_mapping": []any{}})
+	if ctx.status != 200 {
+		t.Fatalf("empty explicit mapping rejected: %+v", ctx.body)
+	}
+	var saved model.ChannelTemplateBinding
+	if err := f.db.First(&saved, 29).Error; err != nil {
+		t.Fatal(err)
+	}
+	if saved.MappedContentVersion != 1 {
+		t.Fatal("static body was not confirmed")
+	}
+}
+
+func TestSMSCreateRejectsMissingExplicitMappingAsClientError(t *testing.T) {
+	f := newBindingControllerFixture(t, false)
+	ctx := f.request(t, false, map[string]any{"param_mapping": nil})
+	if ctx.status != 400 {
+		t.Fatalf("missing mapping: %d %+v", ctx.status, ctx.body)
+	}
+	f.assertUnchanged(t, false)
 }

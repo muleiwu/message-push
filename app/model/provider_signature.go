@@ -9,6 +9,7 @@ import (
 // ProviderSignature 供应商映射资源表（短信签名或邮件标题）
 type ProviderSignature struct {
 	ProviderResourceState
+	RemoteID          string           `gorm:"type:varchar(100);default:''" json:"remote_id"`
 	RemoteDescription string           `gorm:"type:text" json:"remote_description"`
 	ID                uint             `gorm:"primaryKey;autoIncrement" json:"id"`
 	ProviderAccountID uint             `gorm:"not null;index:idx_provider_account;comment:供应商账号ID（关联provider_accounts表）" json:"provider_account_id"`

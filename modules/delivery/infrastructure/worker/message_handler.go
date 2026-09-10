@@ -12,6 +12,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
+	"cnb.cool/mliev/push/message-push/app/readiness"
 	"cnb.cool/mliev/push/message-push/app/service"
 	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	"cnb.cool/mliev/push/message-push/modules/channel"
@@ -42,6 +43,7 @@ type MessageHandler struct {
 	retryHelper         *helper.RetryHelper
 	signatureMappingDao *dao.ChannelSignatureMappingDAO
 	templateHelper      template.Renderer
+	loadBinding         func(uint) (*model.ChannelTemplateBinding, error)
 	ruleEngine          ruleengine.Engine
 	actionExecutor      *service.ActionExecutor
 	terminalService     *service.TaskTerminalService
@@ -67,6 +69,7 @@ func NewMessageHandler() *MessageHandler {
 		retryHelper:         helper.NewRetryHelper(),
 		signatureMappingDao: dao.NewChannelSignatureMappingDAO(internalHelper.GetDatabase()),
 		templateHelper:      template.GetRenderer(),
+		loadBinding:         dao.NewChannelTemplateBindingDAO().GetByID,
 		ruleEngine:          ruleengine.GetEngine(),
 		actionExecutor:      service.NewActionExecutor(),
 		terminalService:     service.NewTaskTerminalService(),
@@ -166,9 +169,46 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 		}
 	}
 
+	if task.MessageType == constants.MessageTypeSMS {
+		if node.ChannelTemplateBinding == nil {
+			err := fmt.Errorf("短信模板绑定不存在")
+			h.handleEarlyFailure(task, providerAccount.ID, err.Error(), snapshot)
+			return err
+		}
+		load := h.loadBinding
+		if load == nil {
+			load = dao.NewChannelTemplateBindingDAO().GetByID
+		}
+		fresh, err := load(node.ChannelTemplateBinding.ID)
+		if err == nil && (fresh == nil || fresh.ChannelID != task.ChannelID || fresh.Channel == nil || fresh.Channel.Type != task.MessageType || fresh.Channel.Status != 1 || fresh.Channel.MessageTemplate == nil || fresh.Channel.MessageTemplate.Status != 1 || fresh.ProviderID != providerAccount.ID) {
+			err = fmt.Errorf("短信通道配置已变化")
+		}
+		if err == nil {
+			if fresh.ProviderTemplate == nil || fresh.ProviderTemplate.ProviderAccount == nil || fresh.ProviderTemplate.ProviderAccount.ProviderCode != providerMeta.Code {
+				err = fmt.Errorf("短信供应商配置已变化")
+			}
+		}
+		if err == nil {
+			variables, variableErr := fresh.Channel.MessageTemplate.GetVariables()
+			if variableErr != nil || len(readiness.ValidateBinding(task.MessageType, variables, fresh)) != 0 {
+				err = fmt.Errorf("短信模板或参数映射不可用，请重新确认")
+			}
+		}
+		if err != nil {
+			h.handleEarlyFailure(task, providerAccount.ID, err.Error(), snapshot)
+			return err
+		}
+		node.ChannelTemplateBinding = fresh
+		providerAccount = fresh.ProviderTemplate.ProviderAccount
+	}
 	snapshot.MessageContent = template.PrepareContent(h.templateHelper, task.TemplateParams, node.ChannelTemplateBinding)
 	snapshot.CapturedAt = timeutil.FormatRFC3339(timeutil.Now())
 	if snapshot.UnavailableReason != "" {
+		if task.MessageType == constants.MessageTypeSMS {
+			err := fmt.Errorf("%s", snapshot.UnavailableReason)
+			h.handleEarlyFailure(task, providerAccount.ID, err.Error(), snapshot)
+			return err
+		}
 		h.logger.Warn(fmt.Sprintf("message content unavailable task_id=%s: %s", taskID, snapshot.UnavailableReason))
 	}
 

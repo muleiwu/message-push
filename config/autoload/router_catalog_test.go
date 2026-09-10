@@ -284,14 +284,14 @@ func newCatalogHTTPFixture(t *testing.T) (*gorm.DB, *model.Application, uint, st
 		}
 	}
 	channel := &model.Channel{Name: "验证码通道", Type: "sms", MessageTemplateID: systemTemplate.ID, Status: 1}
-	providerTemplate := &model.ProviderTemplate{ProviderID: account.ID, TemplateName: "provider template", TemplateCode: "SMS_TEST", Variables: `["code"]`, Status: 1}
+	providerTemplate := &model.ProviderTemplate{TemplateContent: "验证码${code}", ContentVersion: 1, ProviderID: account.ID, TemplateName: "provider template", TemplateCode: "SMS_TEST", Variables: `["code"]`, Status: 1}
 	signature := &model.ProviderSignature{ProviderAccountID: account.ID, SignatureCode: "实际签名", SignatureName: "internal name", Status: 1}
 	for _, record := range []any{channel, providerTemplate, signature} {
 		if err := db.Create(record).Error; err != nil {
 			t.Fatal(err)
 		}
 	}
-	binding := &model.ChannelTemplateBinding{ChannelID: channel.ID, ProviderID: account.ID, ProviderTemplateID: providerTemplate.ID, Weight: 10, Priority: 100, Status: 1, IsActive: 1}
+	binding := &model.ChannelTemplateBinding{MappedContentVersion: 1, ParamMapping: `[{"type":"mapping","provider_var":"code","system_var":"code"}]`, ChannelID: channel.ID, ProviderID: account.ID, ProviderTemplateID: providerTemplate.ID, Weight: 10, Priority: 100, Status: 1, IsActive: 1}
 	mapping := &model.ChannelSignatureMapping{ChannelID: channel.ID, ProviderID: account.ID, ProviderSignatureID: signature.ID, SignatureName: "验证码", Status: 1}
 	for _, record := range []any{binding, mapping} {
 		if err := db.Create(record).Error; err != nil {

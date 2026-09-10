@@ -43,3 +43,25 @@ func TestResourceRegistrationCapabilitiesAndMissingMappings(t *testing.T) {
 		t.Fatal("delete without identity mapping accepted")
 	}
 }
+
+type registrationCodec struct{ version string }
+
+func (c registrationCodec) Version() string { return c.version }
+func (c registrationCodec) Parse(content string, _ *model.ProviderAccount) (*ParsedTemplate, error) {
+	return &ParsedTemplate{Content: content}, nil
+}
+func TestNativeCodecRegistrationIsIndependentOfCRUD(t *testing.T) {
+	r := &ProviderRegistry{providers: map[string]*ProviderMeta{}}
+	meta := &ProviderMeta{Code: "parse-only", Name: "本地模板", Type: "sms", SupportsSend: true, TemplateCodec: registrationCodec{"v1"}}
+	if err := r.Register(meta); err != nil {
+		t.Fatal(err)
+	}
+	if len(meta.ResourceCapabilities()) != 0 {
+		t.Fatal("codec declared remote operations")
+	}
+	for i, codec := range []TemplateCodec{nil, registrationCodec{}} {
+		if err := r.Register(&ProviderMeta{Code: string(rune('a' + i)), Name: "incomplete", Type: "sms", SupportsSend: true, TemplateCodec: codec}); err == nil {
+			t.Fatal("incomplete SMS codec accepted")
+		}
+	}
+}

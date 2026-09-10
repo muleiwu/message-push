@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"cnb.cool/mliev/push/message-push/app/model"
+	senderdomain "cnb.cool/mliev/push/message-push/modules/sender/domain"
 )
 
 // PrepareContent is shared by delivery and the read-only legacy preview. Its
@@ -36,6 +37,10 @@ func PrepareContent(renderer Renderer, rawParams string, binding *model.ChannelT
 	result.TemplateContent = t.TemplateContent
 	if t.ContentType != "" {
 		result.ContentType = t.ContentType
+	}
+
+	if senderdomain.IsSMSTemplate(t) {
+		return prepareSMSContent(result, binding, paramsValid)
 	}
 
 	mapping, mappingErr := binding.GetParamMapping()
@@ -106,6 +111,72 @@ func SameNameParams(params map[string]string, variables []string) map[string]str
 		if value, exists := params[variable]; exists {
 			result[variable] = value
 		}
+	}
+	return result
+}
+
+// prepareSMSContent is strict: explicit business mappings are the only source
+// of native parameters, and the same parsed tokens drive both rendering and send order.
+func prepareSMSContent(result model.MessageContent, binding *model.ChannelTemplateBinding, paramsValid bool) model.MessageContent {
+	if !paramsValid {
+		return result
+	}
+	if !senderdomain.MappingConfirmed(binding) {
+		result.UnavailableReason = "模板参数映射尚未确认"
+		return result
+	}
+	parsed, err := senderdomain.ParseProviderTemplate(binding.ProviderTemplate)
+	if err != nil {
+		result.UnavailableReason = err.Error()
+		return result
+	}
+	mapping, err := binding.GetParamMapping()
+	if err != nil {
+		result.UnavailableReason = "参数映射配置无效"
+		return result
+	}
+	result.ParamMapping = append(result.ParamMapping, mapping...)
+	allowed := map[string]bool{}
+	for _, key := range parsed.Variables {
+		allowed[key] = true
+	}
+	result.MappedParams = map[string]string{}
+	for _, item := range mapping {
+		if !allowed[item.ProviderVar] {
+			result.UnavailableReason = "参数映射包含未知或重复变量"
+			return result
+		}
+		delete(allowed, item.ProviderVar)
+		row := model.ResolvedParamMapping{ProviderVar: item.ProviderVar, Type: string(item.Type), SystemVar: item.SystemVar, FixedValue: item.Value}
+		var value string
+		switch item.Type {
+		case model.ParamMappingTypeFixed:
+			value = item.Value
+		case model.ParamMappingTypeMapping:
+			var ok bool
+			value, ok = result.OriginalParams[item.SystemVar]
+			if !ok {
+				row.Missing = true
+				result.UnavailableReason = fmt.Sprintf("缺少来源参数：%s", item.SystemVar)
+			}
+		default:
+			result.UnavailableReason = "参数映射类型无效"
+		}
+		if !row.Missing {
+			row.Value = &value
+			result.MappedParams[item.ProviderVar] = value
+		}
+		result.MappingDetails = append(result.MappingDetails, row)
+	}
+	if len(allowed) > 0 {
+		result.UnavailableReason = "短信参数映射不完整"
+	}
+	if result.UnavailableReason != "" {
+		return result
+	}
+	result.Content, err = parsed.Render(result.MappedParams)
+	if err != nil {
+		result.UnavailableReason = err.Error()
 	}
 	return result
 }

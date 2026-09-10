@@ -33,6 +33,8 @@ func newChannelBindingValidationError(binding *model.ChannelTemplateBinding, cod
 		case constants.ReadinessBlockerProviderTemplateMissing:
 			// Several template failures deliberately share this stable public code.
 			descriptions = describeUnavailableBindingTemplate(binding)
+		case constants.ReadinessBlockerMappingUnconfirmed:
+			descriptions = []string{"模板正文已变化，请重新配置并确认参数映射"}
 		case constants.ReadinessBlockerParamMappingInvalid:
 			descriptions = []string{"参数映射无效或不完整，请检查供应商变量与系统变量的对应关系"}
 		case constants.ReadinessBlockerProviderAccountMissing:

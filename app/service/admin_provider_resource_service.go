@@ -7,12 +7,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 	"sync"
 	"time"
 	"unicode/utf8"
 
 	"cnb.cool/mliev/open/go-web/pkg/helper"
+	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/modules/channel"
 	"cnb.cool/mliev/push/message-push/modules/delivery/infrastructure/lock"
@@ -30,19 +30,19 @@ type ResourceImpact struct {
 }
 
 type ResourcePreviewItem struct {
-	Remote           domain.RemoteResource    `json:"remote"`
-	Compiled         *domain.CompiledTemplate `json:"compiled,omitempty"`
-	LocalID          uint                     `json:"local_id"`
-	LocalName        string                   `json:"local_name"`
-	LocalContent     string                   `json:"local_content"`
-	LocalVariables   []string                 `json:"local_variables"`
-	LocalStatus      int8                     `json:"local_status"`
-	LocalAuditStatus *int8                    `json:"local_audit_status"`
-	Deleted          bool                     `json:"deleted"`
-	Version          string                   `json:"version"`
-	Error            string                   `json:"error,omitempty"`
-	IdentityConflict bool                     `json:"identity_conflict"`
-	Impacts          []ResourceImpact         `json:"impacts"`
+	Remote           domain.RemoteResource  `json:"remote"`
+	Parsed           *domain.ParsedTemplate `json:"parsed,omitempty"`
+	LocalID          uint                   `json:"local_id"`
+	LocalName        string                 `json:"local_name"`
+	LocalContent     string                 `json:"local_content"`
+	LocalVariables   []string               `json:"local_variables"`
+	LocalStatus      int8                   `json:"local_status"`
+	LocalAuditStatus *int8                  `json:"local_audit_status"`
+	Deleted          bool                   `json:"deleted"`
+	Version          string                 `json:"version"`
+	Error            string                 `json:"error,omitempty"`
+	IdentityConflict bool                   `json:"identity_conflict"`
+	Impacts          []ResourceImpact       `json:"impacts"`
 	template         *model.ProviderTemplate
 	signature        *model.ProviderSignature
 }
@@ -136,15 +136,19 @@ func (s *AdminProviderResourceService) resolve(ctx context.Context, id uint, kin
 	return &account, definition, nil
 }
 
-func (s *AdminProviderResourceService) Compile(ctx context.Context, accountID uint, content string) (*domain.CompiledTemplate, error) {
-	_, definition, err := s.resolve(ctx, accountID, domain.ResourceTemplates)
+func (s *AdminProviderResourceService) Parse(ctx context.Context, accountID uint, content string) (*domain.ParsedTemplate, error) {
+	var account model.ProviderAccount
+	if err := s.db.WithContext(ctx).First(&account, accountID).Error; err != nil {
+		return nil, err
+	}
+	meta, err := s.lookup(account.ProviderCode)
 	if err != nil {
 		return nil, err
 	}
-	if definition.Codec == nil {
+	if meta.TemplateCodec == nil {
 		return nil, domain.ErrResourceUnsupported
 	}
-	return definition.Codec.Compile(content)
+	return meta.TemplateCodec.Parse(content, &account)
 }
 
 func (s *AdminProviderResourceService) Preview(ctx context.Context, accountID uint, kind domain.ResourceKind, id string) ([]*ResourcePreviewItem, error) {
@@ -193,9 +197,14 @@ func (s *AdminProviderResourceService) Workspace(ctx context.Context, accountID 
 }
 
 func (s *AdminProviderResourceService) localResourceFacts(ctx context.Context, accountID uint, kind domain.ResourceKind, id string) ([]domain.RemoteResource, error) {
-	db := s.db.WithContext(ctx).Where("remote_id <> ''")
+	db := s.db.WithContext(ctx)
+	identity := "remote_id"
+	if kind == domain.ResourceTemplates {
+		identity = "template_code"
+	}
+	db = db.Where(identity + " <> ''")
 	if id != "" {
-		db = db.Where("remote_id = ?", id)
+		db = db.Where(identity+" = ?", id)
 	}
 	result := []domain.RemoteResource{}
 	if kind == domain.ResourceTemplates {
@@ -208,7 +217,7 @@ func (s *AdminProviderResourceService) localResourceFacts(ctx context.Context, a
 			if row.AuditStatus != nil {
 				status = *row.AuditStatus
 			}
-			result = append(result, domain.RemoteResource{ResourceInput: domain.ResourceInput{ID: row.RemoteID, Name: row.RemoteName, Content: row.NativeContent, Category: row.Category, Description: row.RemoteDescription}, AuditStatus: status, AuditReply: row.AuditReply})
+			result = append(result, domain.RemoteResource{ResourceInput: domain.ResourceInput{ID: row.TemplateCode, Name: row.RemoteName, Content: row.TemplateContent, Category: row.Category, Description: row.RemoteDescription}, AuditStatus: status, AuditReply: row.AuditReply})
 		}
 	} else {
 		var rows []model.ProviderSignature
@@ -234,7 +243,7 @@ func (s *AdminProviderResourceService) previewItem(db *gorm.DB, accountID uint, 
 	var local any
 	if kind == domain.ResourceTemplates {
 		var candidates []model.ProviderTemplate
-		if err := db.Unscoped().Where("provider_id = ? AND (template_code = ? OR remote_id = ?)", accountID, resource.ID, resource.ID).Order("id DESC").Find(&candidates).Error; err != nil {
+		if err := db.Unscoped().Where("provider_id = ? AND template_code = ?", accountID, resource.ID).Order("id DESC").Find(&candidates).Error; err != nil {
 			return nil, err
 		}
 		candidates = preferLiveResources(candidates, func(t model.ProviderTemplate) bool { return t.DeletedAt.Valid })
@@ -242,14 +251,9 @@ func (s *AdminProviderResourceService) previewItem(db *gorm.DB, accountID uint, 
 			item.IdentityConflict = true
 			item.Error = "本地存在多个相同模板代码，请先处理重复记录"
 		}
-		previous := []domain.VariableSlot{}
 		if len(candidates) == 1 {
 			t := &candidates[0]
 			item.template = t
-			if t.RemoteID != "" && t.RemoteID != resource.ID {
-				item.IdentityConflict = true
-				item.Error = "模板已关联另一远端 ID，请先处理关联冲突"
-			}
 			local = t
 			item.LocalID = t.ID
 			item.LocalName = t.TemplateName
@@ -257,18 +261,12 @@ func (s *AdminProviderResourceService) previewItem(db *gorm.DB, accountID uint, 
 			item.LocalStatus = t.Status
 			item.LocalAuditStatus = t.AuditStatus
 			item.Deleted = t.DeletedAt.Valid
-			item.LocalVariables, _ = t.GetVariables()
-			if t.CodecVersion != "" {
-				if t.CodecVersion != definition.Codec.Version() || json.Unmarshal([]byte(t.VariableSlots), &previous) != nil {
-					item.Error = "本地模板转换版本或变量映射无效"
-				}
-			} else if legacy, err := definition.Codec.Compile(t.TemplateContent); err == nil && len(legacy.Slots) > 0 {
-				previous = legacy.Slots
-			} else {
-				for i, name := range item.LocalVariables {
-					previous = append(previous, domain.VariableSlot{Native: strconv.Itoa(i + 1), Name: name})
-				}
+			var account model.ProviderAccount
+			if err := db.First(&account, accountID).Error; err != nil {
+				return nil, err
 			}
+			t.ProviderAccount = &account
+			item.LocalVariables, _ = domain.ProviderTemplateVariables(t)
 			// List APIs may omit the name/description; retain known provider facts.
 			if item.Remote.Name == "" {
 				item.Remote.Name = t.RemoteName
@@ -277,11 +275,22 @@ func (s *AdminProviderResourceService) previewItem(db *gorm.DB, accountID uint, 
 				item.Remote.Description = t.RemoteDescription
 			}
 		}
-		compiled, err := definition.Codec.Decode(resource.Content, previous)
+		var account model.ProviderAccount
+		if err := db.First(&account, accountID).Error; err != nil {
+			return nil, err
+		}
+		meta, err := s.lookup(account.ProviderCode)
+		if err != nil {
+			return nil, err
+		}
+		if meta.TemplateCodec == nil {
+			return nil, domain.ErrResourceUnsupported
+		}
+		parsed, err := meta.TemplateCodec.Parse(resource.Content, &account)
 		if err != nil {
 			item.Error = err.Error()
 		} else {
-			item.Compiled = compiled
+			item.Parsed = parsed
 		}
 		if item.LocalID > 0 {
 			if err := db.Table("channel_template_bindings AS b").Select("DISTINCT c.id AS channel_id, c.name").Joins("JOIN channels c ON c.id = b.channel_id").Where("b.provider_template_id = ? AND b.deleted_at IS NULL AND c.deleted_at IS NULL", item.LocalID).Scan(&item.Impacts).Error; err != nil {
@@ -447,36 +456,36 @@ func (s *AdminProviderResourceService) Import(ctx context.Context, accountID uin
 func (s *AdminProviderResourceService) saveMirror(tx *gorm.DB, accountID uint, kind domain.ResourceKind, item *ResourcePreviewItem, restore bool) (uint, error) {
 	now := time.Now().UTC()
 	status := item.Remote.AuditStatus
-	state := model.ProviderResourceState{RemoteID: item.Remote.ID, AuditStatus: &status, AuditReply: item.Remote.AuditReply, SyncedAt: &now}
-	updates := map[string]any{"remote_id": state.RemoteID, "audit_status": status, "audit_reply": state.AuditReply, "remote_deleted": false, "synced_at": now, "remote_description": item.Remote.Description}
+	state := model.ProviderResourceState{AuditStatus: &status, AuditReply: item.Remote.AuditReply, SyncedAt: &now}
+	updates := map[string]any{"audit_status": status, "audit_reply": state.AuditReply, "remote_deleted": false, "synced_at": now, "remote_description": item.Remote.Description}
 	if restore {
 		updates["deleted_at"] = nil
 	}
 	if kind == domain.ResourceTemplates {
 		t := item.template
-		if t == nil {
+		if t != nil {
+			var err error
+			t, err = dao.LockProviderTemplate(tx, t.ID)
+			if err != nil {
+				return 0, err
+			}
+		} else {
 			name := item.Remote.Name
 			if name == "" {
 				name = "供应商模板 " + item.Remote.ID
 			}
-			t = &model.ProviderTemplate{ProviderID: accountID, TemplateCode: item.Remote.ID, TemplateName: truncateResourceName(name, 200), Status: 1}
+			t = &model.ProviderTemplate{ProviderID: accountID, TemplateCode: item.Remote.ID, TemplateName: truncateResourceName(name, 200), Status: 1, ContentVersion: 1}
 		}
-		if item.Compiled == nil {
-			return 0, fmt.Errorf("模板变量尚未转换")
+		if item.Parsed == nil {
+			return 0, fmt.Errorf("模板原文尚未解析")
+		}
+		if err := dao.SetTemplateContent(tx, t, item.Remote.Content); err != nil {
+			return 0, err
 		}
 		t.ProviderResourceState = state
 		t.ContentType = "text"
-		t.TemplateContent = item.Compiled.Content
-		t.NativeContent = item.Compiled.NativeContent
-		t.CodecVersion = item.Compiled.Version
-		encoded, err := json.Marshal(item.Compiled.Slots)
-		if err != nil {
-			return 0, err
-		}
-		t.VariableSlots = string(encoded)
-		if err = t.SetVariables(item.Compiled.Variables); err != nil {
-			return 0, err
-		}
+		t.Variables = "[]"
+		var err error
 		t.RemoteName = item.Remote.Name
 		t.Category = item.Remote.Category
 		t.RemoteDescription = item.Remote.Description
@@ -488,9 +497,7 @@ func (s *AdminProviderResourceService) saveMirror(tx *gorm.DB, accountID uint, k
 		} else {
 			updates["template_content"] = t.TemplateContent
 			updates["content_type"] = t.ContentType
-			updates["native_content"] = t.NativeContent
-			updates["codec_version"] = t.CodecVersion
-			updates["variable_slots"] = t.VariableSlots
+			updates["content_version"] = t.ContentVersion
 			updates["variables"] = t.Variables
 			updates["remote_name"] = t.RemoteName
 			updates["category"] = t.Category
@@ -503,6 +510,8 @@ func (s *AdminProviderResourceService) saveMirror(tx *gorm.DB, accountID uint, k
 		t = &model.ProviderSignature{ProviderAccountID: accountID, SignatureName: truncateResourceName(item.Remote.Content, 100), Status: 1}
 	}
 	t.ProviderResourceState = state
+	t.RemoteID = item.Remote.ID
+	updates["remote_id"] = t.RemoteID
 	t.SignatureCode = item.Remote.Content
 	t.RemoteDescription = item.Remote.Description
 	if restore {
@@ -569,24 +578,48 @@ func (s *AdminProviderResourceService) Mutate(ctx context.Context, accountID uin
 		if len(before.Impacts) > 0 && !req.ConfirmImpact {
 			return nil, fmt.Errorf("请确认受影响的通道后再提交")
 		}
-		if action == domain.ResourceUpdate && before.Error != "" {
-			return nil, fmt.Errorf("%s", before.Error)
-		}
 	}
 	input := req.ResourceInput
-	var compiled *domain.CompiledTemplate
+	var parsed *domain.ParsedTemplate
 	if action != domain.ResourceDelete {
 		if utf8.RuneCountInString(input.Name) > 200 {
 			return nil, fmt.Errorf("名称不得超过 200 字符")
 		}
 		if kind == domain.ResourceTemplates {
-			compiled, err = definition.Codec.Compile(input.Content)
+			meta, lookupErr := s.lookup(account.ProviderCode)
+			if lookupErr != nil {
+				return nil, lookupErr
+			}
+			parsed, err = meta.TemplateCodec.Parse(input.Content, account)
 			if err != nil {
 				return nil, err
 			}
-			input.Content = compiled.NativeContent
 		} else if utf8.RuneCountInString(input.Content) > 200 {
 			return nil, fmt.Errorf("签名不得超过 200 字符")
+		}
+	}
+	if err := definition.ValidateInput(action, input); err != nil {
+		return nil, err
+	}
+	// Persist the stop before the upstream request. An uncertain write or failed
+	// mirror save must not leave the previous configuration eligible for delivery.
+	if kind == domain.ResourceTemplates && before != nil && before.LocalID != 0 &&
+		(action == domain.ResourceDelete || (action == domain.ResourceUpdate && input.Content != before.template.TemplateContent)) {
+		err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			t, err := dao.LockProviderTemplate(tx, before.LocalID)
+			if err != nil {
+				return err
+			}
+			if err := dao.ResetTemplateBindings(tx, t.ID); err != nil {
+				return err
+			}
+			return tx.Unscoped().Model(t).Updates(map[string]any{"audit_status": 0, "synced_at": time.Now().UTC()}).Error
+		})
+		if err != nil {
+			return nil, err
+		}
+		for _, impact := range before.Impacts {
+			s.invalidate(impact.ChannelID)
 		}
 	}
 	// Writes are executed once. A transport ambiguity is surfaced to the UI.
@@ -632,8 +665,8 @@ func (s *AdminProviderResourceService) Mutate(ctx context.Context, accountID uin
 			result.Warning = "供应商操作成功，本地匹配冲突：" + item.Error
 			return result, nil
 		}
-		if compiled != nil {
-			item.Compiled = compiled
+		if parsed != nil {
+			item.Parsed = parsed
 		}
 	}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
