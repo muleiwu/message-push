@@ -58,6 +58,17 @@ func (dao *CallbackLogDAO) List(req *dto.CallbackListRequest) ([]*model.Callback
 	var total int64
 
 	query := dao.db.Model(&model.CallbackLog{})
+	if req.ProviderAccountID > 0 {
+		query = query.Where("provider_account_id = ?", req.ProviderAccountID)
+	}
+	if req.Source == "callback" {
+		query = query.Where("source = ? OR source = ? OR source IS NULL", "callback", "")
+	} else if req.Source != "" {
+		query = query.Where("source = ?", req.Source)
+	}
+	if req.Attribution != "" {
+		query = query.Where("attribution = ?", req.Attribution)
+	}
 	if req.Type != "" {
 		query = query.Where("type = ?", req.Type)
 	}

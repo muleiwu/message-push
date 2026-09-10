@@ -161,7 +161,8 @@ type StatusQueryResult struct {
 
 // StatusQueryResponse 状态查询响应
 type StatusQueryResponse struct {
-	Results []*StatusQueryResult
+	Results   []*StatusQueryResult
+	RequestID string
 }
 
 // StatusQuerier 单条状态查询接口（阿里云、腾讯云）

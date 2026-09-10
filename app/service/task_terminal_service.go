@@ -14,6 +14,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // TerminalTransition describes one final task state change and its public event.
@@ -36,12 +37,16 @@ type TerminalTransitionResult struct {
 
 // UpstreamEvent is persisted together with its callback log.
 type UpstreamEvent struct {
-	AppID        string
-	Mobile       string
-	Content      string
-	ProviderCode string
-	ReceiveTime  time.Time
-	RawData      string
+	ProviderAccountID uint
+	EventKey          string
+	Source            string
+	Attribution       string
+	AppID             string
+	Mobile            string
+	Content           string
+	ProviderCode      string
+	ReceiveTime       time.Time
+	RawData           string
 }
 
 // TaskTerminalService owns terminal task transitions and durable webhook events.
@@ -130,16 +135,26 @@ func (s *TaskTerminalService) RecordUpstream(ctx context.Context, event Upstream
 
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		callbackLog := &model.CallbackLog{
-			Type:         constants.CallbackTypeUpstream,
-			AppID:        event.AppID,
-			ProviderCode: event.ProviderCode,
-			Mobile:       event.Mobile,
-			Content:      event.Content,
-			RawData:      event.RawData,
-			CreatedAt:    event.ReceiveTime,
+			ProviderAccountID: event.ProviderAccountID,
+			Source:            event.Source,
+			Attribution:       event.Attribution,
+			Type:              constants.CallbackTypeUpstream,
+			AppID:             event.AppID,
+			ProviderCode:      event.ProviderCode,
+			Mobile:            event.Mobile,
+			Content:           event.Content,
+			RawData:           event.RawData,
+			CreatedAt:         event.ReceiveTime,
 		}
-		if err := tx.Create(callbackLog).Error; err != nil {
+		if event.EventKey != "" {
+			callbackLog.SMSEventKey = &event.EventKey
+		}
+		create := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "sms_event_key"}}, DoNothing: true}).Create(callbackLog)
+		if err := create.Error; err != nil {
 			return err
+		}
+		if create.RowsAffected == 0 {
+			return nil
 		}
 		if event.AppID == "" {
 			return nil

@@ -68,6 +68,7 @@ type ResourceMutationRequest struct {
 	ConfirmImpact bool   `json:"confirm_impact"`
 }
 type ResourceMutationResult struct {
+	RequestID   string `json:"request_id,omitempty"`
 	RemoteID    string `json:"remote_id"`
 	LocalID     uint   `json:"local_id"`
 	PendingSync bool   `json:"pending_sync"`
@@ -456,8 +457,15 @@ func (s *AdminProviderResourceService) Import(ctx context.Context, accountID uin
 func (s *AdminProviderResourceService) saveMirror(tx *gorm.DB, accountID uint, kind domain.ResourceKind, item *ResourcePreviewItem, restore bool) (uint, error) {
 	now := time.Now().UTC()
 	status := item.Remote.AuditStatus
-	state := model.ProviderResourceState{AuditStatus: &status, AuditReply: item.Remote.AuditReply, SyncedAt: &now}
+	state := model.ProviderResourceState{AuditStatus: &status, AuditReply: item.Remote.AuditReply, SyncedAt: &now, ProviderMetadata: item.Remote.ProviderMetadata}
 	updates := map[string]any{"audit_status": status, "audit_reply": state.AuditReply, "remote_deleted": false, "synced_at": now, "remote_description": item.Remote.Description}
+	if state.ProviderMetadata != nil {
+		metadata, err := json.Marshal(state.ProviderMetadata)
+		if err != nil {
+			return 0, err
+		}
+		updates["provider_metadata"] = string(metadata)
+	}
 	if restore {
 		updates["deleted_at"] = nil
 	}
@@ -622,6 +630,14 @@ func (s *AdminProviderResourceService) Mutate(ctx context.Context, accountID uin
 			s.invalidate(impact.ChannelID)
 		}
 	}
+	if account.ProviderCode == "tencent_sms" && kind == domain.ResourceSignatures && before != nil && before.LocalID != 0 {
+		if err := s.db.WithContext(ctx).Model(&model.ProviderSignature{}).Where("id = ? AND provider_account_id = ?", before.LocalID, accountID).Updates(map[string]any{"audit_status": 0, "synced_at": time.Now().UTC()}).Error; err != nil {
+			return nil, err
+		}
+		for _, impact := range before.Impacts {
+			s.invalidate(impact.ChannelID)
+		}
+	}
 	// Writes are executed once. A transport ambiguity is surfaced to the UI.
 	response, err := definition.Execute(ctx, account, action, input)
 	if err != nil {
@@ -631,12 +647,12 @@ func (s *AdminProviderResourceService) Mutate(ctx context.Context, accountID uin
 		return nil, &domain.RemoteResourceError{Code: "INVALID_RESPONSE", Message: "供应商未返回唯一资源 ID，请查询确认", Uncertain: true}
 	}
 	id := response[0].ID
-	result := &ResourceMutationResult{RemoteID: id}
+	result := &ResourceMutationResult{RemoteID: id, RequestID: response[0].RequestID}
 	var item *ResourcePreviewItem
 	if action == domain.ResourceDelete {
 		item = before
 	} else {
-		remote := domain.RemoteResource{ResourceInput: input}
+		remote := domain.RemoteResource{ResourceInput: input.PublicCopy(definition.Operations[action].Fields)}
 		remote.ID = id
 		if before != nil && remote.Category == "" {
 			remote.Category = before.Remote.Category
@@ -648,6 +664,7 @@ func (s *AdminProviderResourceService) Mutate(ctx context.Context, accountID uin
 			if fact.Content == input.Content {
 				remote.AuditStatus = fact.AuditStatus
 				remote.AuditReply = fact.AuditReply
+				remote.ProviderMetadata = fact.ProviderMetadata
 			} else {
 				result.Warning = "供应商查询尚未反映本次修改，请稍后刷新审核状态"
 			}

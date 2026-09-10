@@ -85,7 +85,7 @@ func TestNativeTemplateMigrationResetIdentityAndRollback(t *testing.T) {
 	if _, err := db.Exec(`INSERT INTO provider_templates(provider_id,template_code,template_name) VALUES(2,'11','other account')`); err != nil {
 		t.Fatal(err)
 	}
-	if err := goose.Down(db, "sqlite"); err != nil {
+	if err := goose.DownTo(db, "sqlite", 20260910000001); err != nil {
 		t.Fatal(err)
 	}
 	for id := 1; id <= 3; id++ {

@@ -8,12 +8,14 @@ import (
 	internalHelper "cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dao"
+	apphelper "cnb.cool/mliev/push/message-push/app/helper"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/app/service"
 	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	"cnb.cool/mliev/push/message-push/modules/callback/domain"
 	"cnb.cool/mliev/push/message-push/modules/ruleengine"
 	"cnb.cool/mliev/push/message-push/modules/sender"
+	senderdomain "cnb.cool/mliev/push/message-push/modules/sender/domain"
 	"github.com/muleiwu/gsr"
 )
 
@@ -26,6 +28,7 @@ type ruleActionExecutor interface {
 
 // CallbackService 回调服务
 type CallbackService struct {
+	smsInbox        *service.SMSEventService
 	logger          gsr.Logger
 	taskDao         *dao.PushTaskDAO
 	logDao          *dao.PushLogDAO
@@ -39,6 +42,7 @@ type CallbackService struct {
 // NewCallbackService 创建回调服务
 func NewCallbackService() *CallbackService {
 	return &CallbackService{
+		smsInbox:        service.NewSMSEventServiceWithDB(internalHelper.GetDatabase()),
 		logger:          internalHelper.GetLogger(),
 		taskDao:         dao.NewPushTaskDAO(),
 		logDao:          dao.NewPushLogDAO(),
@@ -76,6 +80,29 @@ func (s *CallbackService) HandleCallback(ctx context.Context, providerCode strin
 
 	// 3. 按类型分流处理：上行短信(用户回复) vs 下行投递回执
 	rawData := buildRawDataJSON(req)
+	if providerCode == constants.ProviderTencentSMS {
+		// Domestic receipts share the durable inbox with query/pull results.
+		events := make([]senderdomain.SMSEvent, 0, len(results))
+		remaining := make([]*sender.CallbackResult, 0)
+		for _, result := range results {
+			phone := apphelper.ParsePhoneNumber(result.Mobile)
+			if phone.Valid && phone.CountryCode != "86" {
+				remaining = append(remaining, result)
+				continue
+			}
+			events = append(events, senderdomain.SMSEvent{ProviderMsgID: result.ProviderID, Mobile: result.Mobile, Status: result.Status, ErrorCode: result.ErrorCode, ErrorMessage: result.ErrorMessage, OccurredAt: result.ReportTime, RawData: rawData})
+		}
+		if len(events) > 0 {
+			if s.smsInbox == nil {
+				return sender.CallbackResponse{StatusCode: 500, Body: `{"result":1,"errmsg":"inbox unavailable"}`}
+			}
+			if _, err := s.smsInbox.IngestCallback(ctx, req.ProviderAccountID, events); err != nil {
+				s.logger.Error("保存腾讯云回执失败：" + err.Error())
+				return sender.CallbackResponse{StatusCode: 500, Body: `{"result":1,"errmsg":"persist failed"}`}
+			}
+		}
+		results = remaining
+	}
 	for _, result := range results {
 		if result.Type == constants.CallbackTypeUpstream {
 			if err := s.processUpstreamResult(ctx, providerCode, req.ProviderAccountID, result, rawData); err != nil {

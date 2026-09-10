@@ -7,6 +7,7 @@ import (
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	"gorm.io/gorm"
+	"time"
 )
 
 // PushLogDAO 推送日志DAO
@@ -94,6 +95,24 @@ func (d *PushLogDAO) GetByProviderMsgIDAndReceiver(providerMsgID, receiver strin
 		return nil, err
 	}
 	return &log, nil
+}
+
+func (d *PushLogDAO) GetByAccountMsgIDAndReceiver(accountID uint, providerMsgID, receiver string) (*model.PushLog, error) {
+	var log model.PushLog
+	err := d.db.Joins("JOIN push_tasks ON push_tasks.task_id = push_logs.task_id").
+		Where("push_logs.provider_account_id = ? AND push_logs.provider_msg_id = ? AND push_tasks.receiver IN ?", accountID, providerMsgID, receiverCandidates(receiver)).
+		Order("push_logs.id DESC").First(&log).Error
+	return &log, err
+}
+
+// SMSReplyCandidates only returns actual send attempts in the reply's account,
+// phone and time window. Callers inspect immutable signatures before attribution.
+func (d *PushLogDAO) SMSReplyCandidates(accountID uint, receiver string, before time.Time, afterID uint) ([]model.PushLog, error) {
+	var logs []model.PushLog
+	err := d.db.Joins("JOIN push_tasks ON push_tasks.task_id = push_logs.task_id").
+		Where("push_logs.provider_account_id = ? AND push_logs.provider_msg_id <> ? AND push_tasks.receiver IN ? AND push_logs.created_at >= ? AND push_logs.created_at <= ? AND push_logs.id > ?", accountID, "", receiverCandidates(receiver), before.Add(-7*24*time.Hour), before, afterID).
+		Order("push_logs.id ASC").Limit(200).Find(&logs).Error
+	return logs, err
 }
 
 // receiverCandidates 生成同一手机号的等价书写格式集合，用于回执手机号与任务 receiver 的匹配。

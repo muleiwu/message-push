@@ -12,6 +12,7 @@ type SchedulerServer struct {
 	scanner           *scheduler.ScheduledTaskScanner
 	quotaSyncer       *scheduler.QuotaSyncer
 	smsTimeoutScanner *scheduler.SMSTimeoutScanner
+	smsPollScanner    *scheduler.SMSPollScanner
 	ctx               context.Context
 	cancel            context.CancelFunc
 }
@@ -44,6 +45,8 @@ func (receiver *SchedulerServer) Run() error {
 	if err := receiver.smsTimeoutScanner.Start(receiver.ctx); err != nil {
 		return err
 	}
+	receiver.smsPollScanner = scheduler.NewSMSPollScanner()
+	receiver.smsPollScanner.Start(receiver.ctx)
 
 	return nil
 }
@@ -61,6 +64,9 @@ func (receiver *SchedulerServer) Stop() error {
 	}
 	if receiver.smsTimeoutScanner != nil {
 		receiver.smsTimeoutScanner.Stop()
+	}
+	if receiver.smsPollScanner != nil {
+		receiver.smsPollScanner.Stop()
 	}
 	return nil
 }

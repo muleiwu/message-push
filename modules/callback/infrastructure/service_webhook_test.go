@@ -193,7 +193,7 @@ func newCallbackServiceTestDB(t *testing.T) *gorm.DB {
 			response_data TEXT, status TEXT NOT NULL, error_message TEXT, cost_time INTEGER,
 			created_at DATETIME
 		)`,
-		`CREATE TABLE callback_logs (
+		`CREATE TABLE callback_logs (provider_account_id INTEGER DEFAULT 0, source TEXT, sms_event_key TEXT UNIQUE, attribution TEXT,
 			id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT, task_id TEXT, app_id TEXT NOT NULL,
 			provider_code TEXT NOT NULL, provider_id TEXT, mobile TEXT, content TEXT,
 			callback_status TEXT, error_code TEXT, error_message TEXT, raw_data TEXT, created_at DATETIME

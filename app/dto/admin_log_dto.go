@@ -44,16 +44,19 @@ type TaskLogsResponse struct {
 
 // CallbackLogItem 回调日志项
 type CallbackLogItem struct {
-	ID             uint   `json:"id"`
-	TaskID         string `json:"task_id"`
-	AppID          string `json:"app_id"`
-	ProviderCode   string `json:"provider_code"`
-	ProviderID     string `json:"provider_id"`
-	CallbackStatus string `json:"callback_status"`
-	ErrorCode      string `json:"error_code"`
-	ErrorMessage   string `json:"error_message"`
-	RawData        string `json:"raw_data"`
-	CreatedAt      string `json:"created_at"`
+	ProviderAccountID uint   `json:"provider_account_id,omitempty"`
+	Source            string `json:"source,omitempty"`
+	Attribution       string `json:"attribution,omitempty"`
+	ID                uint   `json:"id"`
+	TaskID            string `json:"task_id"`
+	AppID             string `json:"app_id"`
+	ProviderCode      string `json:"provider_code"`
+	ProviderID        string `json:"provider_id"`
+	CallbackStatus    string `json:"callback_status"`
+	ErrorCode         string `json:"error_code"`
+	ErrorMessage      string `json:"error_message"`
+	RawData           string `json:"raw_data"`
+	CreatedAt         string `json:"created_at"`
 }
 
 // TaskCallbackLogsResponse 任务回调日志响应
