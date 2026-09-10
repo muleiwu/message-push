@@ -1,27 +1,31 @@
 package service
 
 import (
+	"cnb.cool/mliev/open/go-web/pkg/helper"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/dto"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/internal/timeutil"
+	"cnb.cool/mliev/push/message-push/modules/template"
 )
 
 // AdminTaskService 管理后台任务服务
 type AdminTaskService struct {
-	pushTaskDAO  *dao.PushTaskDAO
-	batchTaskDAO *dao.PushBatchTaskDAO
-	appDAO       *dao.ApplicationDAO
-	pushLogDAO   *dao.PushLogDAO
+	messageDetails *AdminMessageDetailService
+	pushTaskDAO    *dao.PushTaskDAO
+	batchTaskDAO   *dao.PushBatchTaskDAO
+	appDAO         *dao.ApplicationDAO
+	pushLogDAO     *dao.PushLogDAO
 }
 
 // NewAdminTaskService 创建服务
 func NewAdminTaskService() *AdminTaskService {
 	return &AdminTaskService{
-		pushTaskDAO:  dao.NewPushTaskDAO(),
-		batchTaskDAO: dao.NewPushBatchTaskDAO(),
-		appDAO:       dao.NewApplicationDAO(),
-		pushLogDAO:   dao.NewPushLogDAO(),
+		messageDetails: NewAdminMessageDetailService(helper.GetDatabase(), template.GetRenderer()),
+		pushTaskDAO:    dao.NewPushTaskDAO(),
+		batchTaskDAO:   dao.NewPushBatchTaskDAO(),
+		appDAO:         dao.NewApplicationDAO(),
+		pushLogDAO:     dao.NewPushLogDAO(),
 	}
 }
 
@@ -80,7 +84,13 @@ func (s *AdminTaskService) GetPushTask(id uint) (*dto.PushTaskItem, error) {
 		return nil, err
 	}
 
-	return s.convertPushTaskToItem(task), nil
+	item := s.convertPushTaskToItem(task)
+	logs, err := s.pushLogDAO.GetByTaskID(task.TaskID)
+	if err != nil {
+		return nil, err
+	}
+	item.MessageDetail = s.messageDetails.Latest(task, logs)
+	return item, nil
 }
 
 // GetPushBatchTaskList 获取批量任务列表
@@ -170,8 +180,8 @@ func (s *AdminTaskService) convertPushTaskToItem(task *model.PushTask) *dto.Push
 
 	// 从最新的 push_log 获取 ProviderMsgID
 	providerMsgID := ""
-	if logs, err := s.pushLogDAO.GetByTaskID(task.TaskID); err == nil && len(logs) > 0 {
-		providerMsgID = logs[0].ProviderMsgID // 最新的日志
+	if log, err := s.pushLogDAO.GetLatestSummary(task.TaskID); err == nil {
+		providerMsgID = log.ProviderMsgID
 	}
 
 	return &dto.PushTaskItem{
@@ -183,7 +193,7 @@ func (s *AdminTaskService) convertPushTaskToItem(task *model.PushTask) *dto.Push
 		ProviderMsgID:       providerMsgID,
 		MessageType:         task.MessageType,
 		Receiver:            task.Receiver,
-		Content:             "", // Content 字段已删除，前端可根据 TemplateParams 动态渲染
+		Content:             "", // 保留旧字段兼容性；详情正文由 MessageDetail 提供
 		TemplateCode:        task.TemplateCode,
 		TemplateParams:      task.TemplateParams,
 		Signature:           task.Signature,

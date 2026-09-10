@@ -41,6 +41,14 @@ func (d *PushLogDAO) GetByTaskID(taskID string) ([]*model.PushLog, error) {
 	return logs, nil
 }
 
+// GetLatestSummary avoids loading request bodies and snapshots on task lists.
+func (d *PushLogDAO) GetLatestSummary(taskID string) (*model.PushLog, error) {
+	var log model.PushLog
+	err := d.db.Select("id", "provider_msg_id").Where("task_id = ?", taskID).
+		Order("id DESC").First(&log).Error
+	return &log, err
+}
+
 // GetByID 根据ID获取日志
 func (d *PushLogDAO) GetByID(id uint) (*model.PushLog, error) {
 	var log model.PushLog
@@ -142,7 +150,7 @@ func (d *PushLogDAO) List(req *dto.LogListRequest) ([]*model.PushLog, int64, err
 
 	// 分页查询
 	offset := (req.Page - 1) * req.PageSize
-	err = query.Offset(offset).Limit(req.PageSize).
+	err = query.Omit("send_snapshot").Offset(offset).Limit(req.PageSize).
 		Order("created_at DESC").
 		Find(&logs).Error
 

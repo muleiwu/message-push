@@ -106,6 +106,7 @@ func TestSQLiteMigrationsSmoke(t *testing.T) {
 	}
 
 	assertHasColumn(t, sqlDB, "push_logs", "provider_msg_id")
+	assertHasColumn(t, sqlDB, "push_logs", "send_snapshot")
 	assertHasColumn(t, sqlDB, "push_tasks", "provider_account_id")
 	assertHasColumn(t, sqlDB, "push_tasks", "attachment_group_id")
 	assertHasColumn(t, sqlDB, "email_attachments", "content")

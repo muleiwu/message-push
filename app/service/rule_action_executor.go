@@ -54,6 +54,7 @@ func NewActionExecutor() *ActionExecutor {
 
 // ExecuteContext 执行上下文
 type ExecuteContext struct {
+	SendSnapshot      *model.SendSnapshot
 	Task              *model.PushTask
 	ProviderAccountID uint
 	ProviderCode      string
@@ -157,6 +158,7 @@ func (e *ActionExecutor) executeRetry(ctx context.Context, result *ruleengine.Ev
 		Status:            "retry",
 		RequestData:       sanitizeJSONData(execCtx.RequestData),
 		ResponseData:      sanitizeJSONData(execCtx.ResponseData),
+		SendSnapshot:      execCtx.SendSnapshot.JSON(),
 		ErrorMessage:      execCtx.ErrorMessage,
 	})
 
@@ -228,6 +230,7 @@ func (e *ActionExecutor) executeSwitchProvider(ctx context.Context, result *rule
 		Status:            "switch_provider",
 		RequestData:       sanitizeJSONData(execCtx.RequestData),
 		ResponseData:      sanitizeJSONData(execCtx.ResponseData),
+		SendSnapshot:      execCtx.SendSnapshot.JSON(),
 		ErrorMessage:      fmt.Sprintf("switching provider, exclude current: %v, excluded providers: %v", config.ExcludeCurrent, task.GetExcludeProviderIDs()),
 	})
 
@@ -251,6 +254,20 @@ func (e *ActionExecutor) executeSwitchProvider(ctx context.Context, result *rule
 // executeFail 执行失败动作
 func (e *ActionExecutor) executeFail(ctx context.Context, result *ruleengine.EvaluateResult, execCtx *ExecuteContext) *ExecuteResult {
 	task := execCtx.Task
+
+	// 记录失败日志
+	if execCtx.ProviderAccountID > 0 {
+		e.logDAO.Create(&model.PushLog{
+			TaskID:            task.TaskID,
+			AppID:             task.AppID,
+			ProviderAccountID: execCtx.ProviderAccountID,
+			Status:            "failed",
+			RequestData:       sanitizeJSONData(execCtx.RequestData),
+			ResponseData:      sanitizeJSONData(execCtx.ResponseData),
+			SendSnapshot:      execCtx.SendSnapshot.JSON(),
+			ErrorMessage:      execCtx.ErrorMessage,
+		})
+	}
 
 	event := execCtx.TerminalEvent
 	if event == "" {
@@ -282,19 +299,6 @@ func (e *ActionExecutor) executeFail(ctx context.Context, result *ruleengine.Eva
 		}
 	}
 	task.Status = constants.TaskStatusFailed
-
-	// 记录失败日志
-	if execCtx.ProviderAccountID > 0 {
-		e.logDAO.Create(&model.PushLog{
-			TaskID:            task.TaskID,
-			AppID:             task.AppID,
-			ProviderAccountID: execCtx.ProviderAccountID,
-			Status:            "failed",
-			RequestData:       sanitizeJSONData(execCtx.RequestData),
-			ResponseData:      sanitizeJSONData(execCtx.ResponseData),
-			ErrorMessage:      execCtx.ErrorMessage,
-		})
-	}
 
 	ruleName := "default"
 	if result.MatchedRule != nil {
@@ -360,6 +364,7 @@ func (e *ActionExecutor) executeAlert(ctx context.Context, result *ruleengine.Ev
 		Status:            "alert",
 		RequestData:       sanitizeJSONData(execCtx.RequestData),
 		ResponseData:      sanitizeJSONData(execCtx.ResponseData),
+		SendSnapshot:      execCtx.SendSnapshot.JSON(),
 		ErrorMessage:      fmt.Sprintf("alert sent: %v, level: %s, error: %s", alertSent, config.AlertLevel, execCtx.ErrorMessage),
 	})
 

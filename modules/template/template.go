@@ -5,8 +5,17 @@ package template
 
 import (
 	"cnb.cool/mliev/open/go-web/pkg/container"
+	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/modules/template/domain"
 )
+
+func PrepareContent(renderer Renderer, rawParams string, binding *model.ChannelTemplateBinding) model.MessageContent {
+	return domain.PrepareContent(renderer, rawParams, binding)
+}
+
+func SameNameParams(params map[string]string, variables []string) map[string]string {
+	return domain.SameNameParams(params, variables)
+}
 
 type (
 	Renderer = domain.Renderer

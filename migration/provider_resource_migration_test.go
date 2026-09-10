@@ -37,7 +37,7 @@ func TestProviderResourceMigrationDialectsAndSafeRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 	goose.SetBaseFS(migrationFS.FS())
-	if err = goose.Up(sqlDB, "sqlite"); err != nil {
+	if err = goose.UpTo(sqlDB, "sqlite", 20260909000001); err != nil {
 		t.Fatal(err)
 	}
 	for id, audit := range []string{"NULL", "1", "2", "3"} {

@@ -99,12 +99,13 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 		return nil
 	}
 	task.Status = constants.TaskStatusProcessing
+	snapshot := newSendSnapshot(task)
 
 	// 选择通道
 	node, err := h.selectChannel(ctx, task)
 	if err != nil {
 		h.logger.Error(fmt.Sprintf("failed to select channel task_id=%s: %v", taskID, err))
-		h.handleEarlyFailure(task, 0, err.Error())
+		h.handleEarlyFailure(task, 0, err.Error(), snapshot)
 		return err
 	}
 
@@ -113,9 +114,12 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 	if providerAccount == nil {
 		err := fmt.Errorf("provider account not found in channel node")
 		h.logger.Error(fmt.Sprintf("failed to get provider account task_id=%s: %v", taskID, err))
-		h.handleEarlyFailure(task, 0, err.Error())
+		h.handleEarlyFailure(task, 0, err.Error(), snapshot)
 		return err
 	}
+	snapshot.ProviderAccountID = providerAccount.ID
+	snapshot.ProviderName = providerAccount.AccountName
+	snapshot.ProviderCode = providerAccount.ProviderCode
 	if err := h.persistSelectedProvider(task, providerAccount.ID); err != nil {
 		h.logger.Error(fmt.Sprintf("failed to persist selected provider account task_id=%s provider_id=%d: %v", taskID, providerAccount.ID, err))
 		return err
@@ -125,7 +129,7 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 	if err != nil {
 		err = fmt.Errorf("provider is not registered: %w", err)
 		h.logger.Error(fmt.Sprintf("failed to resolve provider metadata task_id=%s: %v", taskID, err))
-		h.handleEarlyFailure(task, providerAccount.ID, err.Error())
+		h.handleEarlyFailure(task, providerAccount.ID, err.Error(), snapshot)
 		return err
 	}
 
@@ -140,10 +144,11 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 	)
 	if err != nil {
 		h.logger.Error(fmt.Sprintf("failed to resolve delivery dependencies task_id=%s provider_id=%d: %v", taskID, providerAccount.ID, err))
-		h.handleEarlyFailure(task, providerAccount.ID, err.Error())
+		h.handleEarlyFailure(task, providerAccount.ID, err.Error(), snapshot)
 		return err
 	}
 	if providerSignature != nil {
+		snapshot.SignatureValue = providerSignature.SignatureCode
 		h.logger.Info(fmt.Sprintf("signature resolved task_id=%s signature_name=%s signature_code=%s", taskID, task.Signature, providerSignature.SignatureCode))
 	}
 
@@ -156,57 +161,15 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 		attachments, err = attachmentDao.GetForSend(task.AttachmentGroupID)
 		if err != nil {
 			h.logger.Error(fmt.Sprintf("failed to load email attachments task_id=%s provider_id=%d: %v", taskID, providerAccount.ID, err))
-			h.handleEarlyFailure(task, providerAccount.ID, err.Error())
+			h.handleEarlyFailure(task, providerAccount.ID, err.Error(), snapshot)
 			return err
 		}
 	}
 
-	// 解析模板参数并进行映射转换
-	var mappedParams map[string]string
-	if task.TemplateParams != "" && node.ChannelTemplateBinding != nil {
-		// 解析任务的模板参数
-		var templateParams map[string]string
-		if err := json.Unmarshal([]byte(task.TemplateParams), &templateParams); err != nil {
-			h.logger.Warn(fmt.Sprintf("failed to parse template params task_id=%s: %v", taskID, err))
-		} else {
-			// 获取参数映射配置
-			paramMapping, err := node.ChannelTemplateBinding.GetParamMapping()
-			if err != nil {
-				h.logger.Warn(fmt.Sprintf("failed to get param mapping task_id=%s: %v", taskID, err))
-			} else {
-				if len(paramMapping) > 0 {
-					// 执行参数映射转换
-					mappedParams = h.templateHelper.MapParams(templateParams, paramMapping)
-					h.logger.Info(fmt.Sprintf("params mapped task_id=%s original=%v mapped=%v", taskID, templateParams, mappedParams))
-				} else {
-					// 空映射表示“仅同名变量自动映射”。不向供应商透传
-					// 系统模板中的额外参数，与 readiness 的子集校验保持一致。
-					providerVariables, variablesErr := node.ChannelTemplateBinding.ProviderTemplate.GetVariables()
-					if variablesErr != nil {
-						h.logger.Warn(fmt.Sprintf("failed to get provider template variables task_id=%s: %v", taskID, variablesErr))
-					} else {
-						mappedParams = sameNameTemplateParams(templateParams, providerVariables)
-					}
-				}
-			}
-		}
-	}
-
-	// 渲染供应商模板内容
-	renderedContent := ""
-	if node.ChannelTemplateBinding != nil &&
-		node.ChannelTemplateBinding.ProviderTemplate != nil &&
-		node.ChannelTemplateBinding.ProviderTemplate.TemplateContent != "" {
-		renderedContent, err = h.templateHelper.RenderSimple(
-			node.ChannelTemplateBinding.ProviderTemplate.TemplateContent,
-			mappedParams,
-		)
-		if err != nil {
-			h.logger.Warn(fmt.Sprintf("failed to render provider template task_id=%s: %v", taskID, err))
-			renderedContent = ""
-		} else {
-			h.logger.Info(fmt.Sprintf("provider template rendered task_id=%s content_length=%d", taskID, len(renderedContent)))
-		}
+	snapshot.MessageContent = template.PrepareContent(h.templateHelper, task.TemplateParams, node.ChannelTemplateBinding)
+	snapshot.CapturedAt = timeutil.FormatRFC3339(timeutil.Now())
+	if snapshot.UnavailableReason != "" {
+		h.logger.Warn(fmt.Sprintf("message content unavailable task_id=%s: %s", taskID, snapshot.UnavailableReason))
 	}
 
 	// 发送消息
@@ -215,8 +178,8 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 		ProviderAccount:        providerAccount,
 		ChannelTemplateBinding: node.ChannelTemplateBinding,
 		Signature:              providerSignature,
-		MappedParams:           mappedParams,
-		RenderedContent:        renderedContent,
+		MappedParams:           snapshot.MappedParams,
+		RenderedContent:        snapshot.Content,
 		Attachments:            attachments,
 	}
 
@@ -235,30 +198,26 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 		h.logger.Error(fmt.Sprintf("sender error task_id=%s: %v", taskID, err))
 		// 如果 Send 返回了 resp（即使有 error），使用它来记录日志
 		if resp != nil {
-			if terminalErr := h.handleSendError(task, providerAccount.ID, resp); terminalErr != nil {
+			if terminalErr := h.handleSendError(task, providerAccount.ID, resp, snapshot); terminalErr != nil {
 				h.logger.Error(fmt.Sprintf("failed to persist sender failure task_id=%s: %v", taskID, terminalErr))
 			}
 		} else {
-			h.handleEarlyFailure(task, providerAccount.ID, err.Error())
+			h.handleEarlyFailure(task, providerAccount.ID, err.Error(), snapshot)
 		}
+		return err
+	}
+
+	if resp == nil {
+		err := fmt.Errorf("sender returned no response")
+		h.handleEarlyFailure(task, providerAccount.ID, err.Error(), snapshot)
 		return err
 	}
 
 	// 处理发送结果
 	if resp.Success {
-		return h.handleSuccess(task, providerAccount.ID, resp)
+		return h.handleSuccess(task, providerAccount.ID, resp, snapshot)
 	}
-	return h.handleSendError(task, providerAccount.ID, resp)
-}
-
-func sameNameTemplateParams(templateParams map[string]string, providerVariables []string) map[string]string {
-	mapped := make(map[string]string, len(providerVariables))
-	for _, variable := range providerVariables {
-		if value, ok := templateParams[variable]; ok {
-			mapped[variable] = value
-		}
-	}
-	return mapped
+	return h.handleSendError(task, providerAccount.ID, resp, snapshot)
 }
 
 func resolveDeliveryDependencies(
@@ -328,7 +287,19 @@ func (h *MessageHandler) persistSelectedProvider(task *model.PushTask, providerA
 }
 
 // handleSuccess 处理成功
-func (h *MessageHandler) handleSuccess(task *model.PushTask, providerAccountID uint, resp *sender.SendResponse) error {
+func (h *MessageHandler) handleSuccess(task *model.PushTask, providerAccountID uint, resp *sender.SendResponse, snapshot *model.SendSnapshot) error {
+	// 记录日志（每次新增，便于观测请求链路），ProviderMsgID 保存在日志中用于回调匹配
+	h.logDao.Create(&model.PushLog{
+		TaskID:            task.TaskID,
+		AppID:             task.AppID,
+		ProviderAccountID: providerAccountID,
+		ProviderMsgID:     resp.ProviderID,
+		Status:            "success",
+		RequestData:       sanitizeJSONData(resp.RequestData),
+		ResponseData:      sanitizeJSONData(resp.ResponseData),
+		SendSnapshot:      snapshot.JSON(),
+	})
+
 	if resp.Status == constants.TaskStatusSuccess {
 		transitionResult, err := h.terminalService.Transition(context.Background(), service.TerminalTransition{
 			TaskID:     task.TaskID,
@@ -350,17 +321,6 @@ func (h *MessageHandler) handleSuccess(task *model.PushTask, providerAccountID u
 		}
 	}
 
-	// 记录日志（每次新增，便于观测请求链路），ProviderMsgID 保存在日志中用于回调匹配
-	h.logDao.Create(&model.PushLog{
-		TaskID:            task.TaskID,
-		AppID:             task.AppID,
-		ProviderAccountID: providerAccountID,
-		ProviderMsgID:     resp.ProviderID,
-		Status:            "success",
-		RequestData:       sanitizeJSONData(resp.RequestData),
-		ResponseData:      sanitizeJSONData(resp.ResponseData),
-	})
-
 	// 通知选择器成功
 	h.selector.ReportSuccess(providerAccountID)
 
@@ -369,7 +329,7 @@ func (h *MessageHandler) handleSuccess(task *model.PushTask, providerAccountID u
 }
 
 // handleSendError 处理发送错误（使用规则引擎）
-func (h *MessageHandler) handleSendError(task *model.PushTask, providerAccountID uint, resp *sender.SendResponse) error {
+func (h *MessageHandler) handleSendError(task *model.PushTask, providerAccountID uint, resp *sender.SendResponse, snapshot *model.SendSnapshot) error {
 	// 通知选择器失败
 	h.selector.ReportFailure(providerAccountID)
 
@@ -393,6 +353,7 @@ func (h *MessageHandler) handleSendError(task *model.PushTask, providerAccountID
 
 	// 构造执行上下文
 	execCtx := &service.ExecuteContext{
+		SendSnapshot:      snapshot,
 		Task:              task,
 		ProviderAccountID: providerAccountID,
 		ProviderCode:      providerCode,
@@ -415,7 +376,7 @@ func (h *MessageHandler) handleSendError(task *model.PushTask, providerAccountID
 
 // handleEarlyFailure 处理早期失败（发送前的错误，无供应商响应数据）
 // 早期失败不使用规则引擎，直接标记失败
-func (h *MessageHandler) handleEarlyFailure(task *model.PushTask, providerAccountID uint, errorMsg string) {
+func (h *MessageHandler) handleEarlyFailure(task *model.PushTask, providerAccountID uint, errorMsg string, snapshot *model.SendSnapshot) {
 	transitionResult, transitionErr := h.terminalService.Transition(context.Background(), service.TerminalTransition{
 		TaskID:       task.TaskID,
 		Status:       constants.TaskStatusFailed,
@@ -429,8 +390,11 @@ func (h *MessageHandler) handleEarlyFailure(task *model.PushTask, providerAccoun
 		task.Status = constants.TaskStatusFailed
 	}
 
-	// 记录日志（每次新增，便于观测请求链路）
-	if providerAccountID > 0 {
+	// Preparation failures are attempts too, even before a provider is selected.
+	if snapshot != nil && snapshot.UnavailableReason == "尚未完成消息准备" {
+		snapshot.UnavailableReason = "该次发送在消息准备前失败：" + errorMsg
+	}
+	if providerAccountID > 0 || snapshot != nil {
 		h.logDao.Create(&model.PushLog{
 			TaskID:            task.TaskID,
 			AppID:             task.AppID,
@@ -438,6 +402,7 @@ func (h *MessageHandler) handleEarlyFailure(task *model.PushTask, providerAccoun
 			Status:            "failed",
 			RequestData:       "{}",
 			ResponseData:      "{}",
+			SendSnapshot:      snapshot.JSON(),
 			ErrorMessage:      errorMsg,
 		})
 	}

@@ -13,6 +13,7 @@ type PushLog struct {
 	ProviderMsgID     string    `gorm:"type:varchar(100);index:idx_provider_msg_id;comment:服务商返回的消息ID" json:"provider_msg_id"`
 	RequestData       string    `gorm:"type:json;comment:请求数据" json:"request_data"`
 	ResponseData      string    `gorm:"type:json;comment:响应数据" json:"response_data"`
+	SendSnapshot      *string   `gorm:"type:json;comment:发送时内容与参数映射快照" json:"-"`
 	Status            string    `gorm:"type:varchar(20);not null;index:idx_status_created;comment:状态：success, failed" json:"status"`
 	ErrorMessage      string    `gorm:"type:text;comment:错误信息" json:"error_message"`
 	CostTime          int       `gorm:"type:int;comment:耗时（毫秒）" json:"cost_time"`

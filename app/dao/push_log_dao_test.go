@@ -16,6 +16,7 @@ func TestPushLogListFiltersProviderAccount(t *testing.T) {
 		t.Fatalf("open sqlite: %v", err)
 	}
 	if err := db.Exec(`CREATE TABLE push_logs (
+			send_snapshot TEXT,
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		task_id TEXT NOT NULL,
 		app_id TEXT NOT NULL,

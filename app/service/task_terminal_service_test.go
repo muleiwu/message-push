@@ -361,6 +361,7 @@ func newTerminalServiceTestDB(t *testing.T, withWebhookLogs bool) *gorm.DB {
 			callback_status TEXT, error_code TEXT, error_message TEXT, raw_data TEXT, created_at DATETIME
 		)`,
 		`CREATE TABLE push_logs (
+			send_snapshot TEXT,
 			id INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT NOT NULL, app_id TEXT NOT NULL,
 			provider_account_id INTEGER NOT NULL, provider_msg_id TEXT, request_data TEXT,
 			response_data TEXT, status TEXT NOT NULL, error_message TEXT, cost_time INTEGER,
