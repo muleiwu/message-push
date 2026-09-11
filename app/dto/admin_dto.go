@@ -116,6 +116,7 @@ type ProviderAccountResponse struct {
 	ProviderCode      string                 `json:"provider_code"`
 	ProviderName      string                 `json:"provider_name"`
 	ProviderType      string                 `json:"provider_type"`
+	SupportsSignature bool                   `json:"supports_signature"`
 	RequiresSignature bool                   `json:"requires_signature"`
 	Description       string                 `json:"description"`
 	Config            map[string]interface{} `json:"config"`
@@ -145,6 +146,7 @@ type AvailableProviderResponse struct {
 	SupportsSend      bool `json:"supports_send"`
 	SupportsBatchSend bool `json:"supports_batch_send"`
 	SupportsCallback  bool `json:"supports_callback"`
+	SupportsSignature bool `json:"supports_signature"`
 	RequiresSignature bool `json:"requires_signature"`
 	// 扩展信息
 	Website    string   `json:"website"`

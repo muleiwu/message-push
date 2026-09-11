@@ -239,9 +239,10 @@ func applySignatureProviderPolicy(response *dto.ProviderSignatureResponse, accou
 	response.ProviderType = account.ProviderType
 	if meta, err := registry.GetByCode(account.ProviderCode); err == nil {
 		response.RequiresSignature = meta.RequiresSignature
+		response.SupportsSignature = meta.CanUseSignature()
 	}
-	response.HistoricalOnly = account.ProviderType == constants.MessageTypeEmail && !response.RequiresSignature
-	response.ReadOnly = !response.RequiresSignature
+	response.HistoricalOnly = account.ProviderType == constants.MessageTypeEmail && !response.SupportsSignature
+	response.ReadOnly = !response.SupportsSignature
 }
 
 func ensureSignatureWritable(account *model.ProviderAccount) error {
@@ -252,8 +253,8 @@ func ensureSignatureWritable(account *model.ProviderAccount) error {
 	if err != nil {
 		return fmt.Errorf("provider is not registered: %w", err)
 	}
-	if !meta.RequiresSignature {
-		return fmt.Errorf("provider does not require signatures; historical signatures are read-only")
+	if !meta.CanUseSignature() {
+		return fmt.Errorf("provider does not support signatures; historical signatures are read-only")
 	}
 	return nil
 }

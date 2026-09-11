@@ -39,6 +39,24 @@ func TestQQCatalogUsesExistingTemplateAndReceiverContract(t *testing.T) {
 	if err != nil || detail.SignatureRequired || detail.Readiness.State != constants.ChannelReadinessReady {
 		t.Fatalf("QQ detail=%+v err=%v", detail, err)
 	}
+	if len(detail.SignatureNames) != 0 {
+		t.Fatal("unconfigured QQ channel exposes signature choices")
+	}
+	addCatalogAlias(t, db, f.channel.ID, f.account.ID, "notice")
+	detail, err = s.GetChannel(context.Background(), f.channel.ID)
+	if err != nil || detail.SignatureRequired || !reflect.DeepEqual(detail.SignatureNames, []string{"notice"}) {
+		t.Fatalf("optional QQ aliases=%+v err=%v", detail, err)
+	}
+	second, _ := addCatalogProvider(t, db, f.channel, constants.ProviderOneBot)
+	detail, err = s.GetChannel(context.Background(), f.channel.ID)
+	if err != nil || detail.SignatureRequired || len(detail.SignatureNames) != 0 {
+		t.Fatalf("unshared QQ alias=%+v err=%v", detail, err)
+	}
+	addCatalogAlias(t, db, f.channel.ID, second.ID, "notice")
+	detail, err = s.GetChannel(context.Background(), f.channel.ID)
+	if err != nil || detail.SignatureRequired || !reflect.DeepEqual(detail.SignatureNames, []string{"notice"}) {
+		t.Fatalf("shared QQ aliases=%+v err=%v", detail, err)
+	}
 }
 
 func newCatalogTestDB(t *testing.T) *gorm.DB {

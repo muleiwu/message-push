@@ -224,6 +224,29 @@ func TestSMTPTitleCanBeCreatedAndUpdated(t *testing.T) {
 	}
 }
 
+func TestOneBotSignatureIsOptionalAndWritable(t *testing.T) {
+	db := newSignatureServiceTestDB(t)
+	account := createSignatureTestAccount(t, db, "onebot", constants.ProviderOneBot, constants.MessageTypeQQ)
+	s := &AdminProviderSignatureService{signatureDAO: dao.NewProviderSignatureDAO(db), accountDAO: dao.NewProviderAccountDAOWithDB(db)}
+	created, err := s.CreateSignature(account.ID, &dto.CreateProviderSignatureRequest{SignatureCode: "木雷科技", SignatureName: "通知签名", Status: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !created.SupportsSignature || created.RequiresSignature || created.ReadOnly || created.HistoricalOnly {
+		t.Fatalf("incorrect signature policy: %+v", created)
+	}
+	if err := s.UpdateSignature(created.ID, &dto.UpdateProviderSignatureRequest{SignatureCode: "木雷服务", SignatureName: "通知签名", Status: 1}); err != nil {
+		t.Fatal(err)
+	}
+	items, err := s.GetSignatureList(account.ID, nil)
+	if err != nil || len(items) != 1 || !items[0].SupportsSignature || items[0].SignatureCode != "木雷服务" {
+		t.Fatalf("signatures=%+v err=%v", items, err)
+	}
+	if err := s.DeleteSignature(created.ID); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func newSignatureServiceTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "signature.db")), &gorm.Config{DisableForeignKeyConstraintWhenMigrating: true})
