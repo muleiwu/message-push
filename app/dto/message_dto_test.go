@@ -6,8 +6,26 @@ import (
 	"testing"
 	"time"
 
+	"cnb.cool/mliev/push/message-push/app/constants"
+
 	"github.com/go-playground/validator/v10"
 )
+
+func TestQQAdminRequestValidation(t *testing.T) {
+	validate := validator.New()
+	validate.SetTagName("binding")
+	for _, req := range []any{
+		CreateChannelRequest{Name: "QQ 通知", Type: constants.MessageTypeQQ, MessageTemplateID: 1},
+		ChannelListRequest{Type: constants.MessageTypeQQ},
+		ProviderAccountListRequest{ProviderType: constants.MessageTypeQQ},
+		CreateFailureRuleRequest{Name: "QQ 失败处理", Scene: "send_failure", ProviderCode: constants.ProviderOneBot, MessageType: constants.MessageTypeQQ, Action: "fail"},
+		UpdateFailureRuleRequest{MessageType: constants.MessageTypeQQ},
+	} {
+		if err := validate.Struct(req); err != nil {
+			t.Errorf("QQ rejected by %T: %v", req, err)
+		}
+	}
+}
 
 func TestScheduledAtAcceptsEquivalentRFC3339Offsets(t *testing.T) {
 	decode := func(value string) time.Time {

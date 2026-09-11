@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"cnb.cool/mliev/open/go-web/pkg/helper"
+	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/app/dao"
 	"cnb.cool/mliev/push/message-push/app/model"
 	"cnb.cool/mliev/push/message-push/modules/ruleengine/domain"
@@ -66,6 +67,11 @@ func (s *RuleEngineService) Evaluate(ctx context.Context, req *domain.EvaluateRe
 
 	s.logger.Info(fmt.Sprintf("no rule matched, using default action scene=%s provider=%s error_code=%s",
 		req.Scene, req.ProviderCode, req.ErrorCode))
+	// An async response may already have sent the message. Only an explicitly
+	// matching rule may opt into retrying it; the ordinary fallback must not.
+	if req.Scene == model.RuleSceneSendFailure && req.ProviderCode == constants.ProviderOneBot && req.ErrorCode == constants.ErrorCodeOneBotAsyncUnsupported {
+		return &domain.EvaluateResult{Action: model.RuleActionFail}
+	}
 	return s.getDefaultResult(req.Scene)
 }
 

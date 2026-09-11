@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"cnb.cool/mliev/open/go-web/pkg/helper"
@@ -389,6 +390,14 @@ func (s *AdminProviderAccountService) TestProviderAccount(id uint, req *dto.Test
 			return nil, fmt.Errorf("email is required for email")
 		}
 		task.Receiver = req.Email
+	case constants.MessageTypeQQ:
+		if err := appHelper.GetReceiverValidator(account.ProviderType).Validate(req.Receiver); err != nil {
+			return nil, fmt.Errorf("invalid receiver: %w", err)
+		}
+		if strings.TrimSpace(req.Message) == "" {
+			return nil, fmt.Errorf("message is required for QQ")
+		}
+		task.Receiver = strings.TrimSpace(req.Receiver)
 	}
 	if len(req.Attachments) > 0 && account.ProviderType != constants.MessageTypeEmail {
 		return nil, fmt.Errorf("email attachments are only supported for email providers")

@@ -83,6 +83,8 @@ func GetReceiverValidator(messageType string) ReceiverValidator {
 		return &SMSReceiverValidator{}
 	case constants.MessageTypeEmail:
 		return &EmailReceiverValidator{}
+	case constants.MessageTypeQQ:
+		return &QQReceiverValidator{}
 	default:
 		return &DefaultReceiverValidator{}
 	}

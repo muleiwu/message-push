@@ -450,14 +450,7 @@ func channelStepStatus(step dto.OnboardingChannelStepCounts) string {
 }
 
 func buildChannelTypeHealth(channels []*model.Channel, results map[uint]*dto.ChannelReadinessResponse) ([]*dto.OnboardingChannelTypeHealth, *blockerAccumulator) {
-	typeOrder := []string{
-		constants.MessageTypeSMS,
-		constants.MessageTypeEmail,
-		constants.MessageTypeWeChatWork,
-		constants.MessageTypeDingTalk,
-		constants.MessageTypeWebhook,
-		constants.MessageTypePush,
-	}
+	typeOrder := constants.SupportedMessageTypes()
 	healthByType := make(map[string]*dto.OnboardingChannelTypeHealth, len(typeOrder))
 	blockersByType := make(map[string]*blockerAccumulator, len(typeOrder))
 	for _, messageType := range typeOrder {
