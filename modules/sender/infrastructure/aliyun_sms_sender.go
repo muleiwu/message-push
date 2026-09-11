@@ -8,14 +8,14 @@ import (
 	"cnb.cool/mliev/push/message-push/app/constants"
 	"cnb.cool/mliev/push/message-push/internal/timeutil"
 	domain "cnb.cool/mliev/push/message-push/modules/sender/domain"
-	openapi "github.com/alibabacloud-go/darabonba-openapi/v2/client"
-	dysmsapi "github.com/alibabacloud-go/dysmsapi-20170525/v3/client"
+	dysmsapi "github.com/alibabacloud-go/dysmsapi-20170525/v5/client"
 	"github.com/alibabacloud-go/tea/tea"
 )
 
 func init() {
 	// 注册阿里云短信服务商
 	if err := domain.Register(&domain.ProviderMeta{
+		Resources:         aliyunResourceDefinitions(newAliyunClient),
 		TemplateCodec:     NativeTemplateCodec{ID: "aliyun-native-v1", Prefix: "$", AllowNamed: true},
 		Code:              constants.ProviderAliyunSMS,
 		Name:              "阿里云短信",
@@ -68,6 +68,7 @@ func init() {
 
 // AliyunSMSSender 阿里云短信发送器
 type AliyunSMSSender struct {
+	clientFactory aliyunClientFactory
 }
 
 // NewAliyunSMSSender 创建阿里云短信发送器
@@ -82,21 +83,8 @@ func (s *AliyunSMSSender) GetProviderCode() string {
 
 // Send 发送短信
 func (s *AliyunSMSSender) Send(ctx context.Context, req *domain.SendRequest) (*domain.SendResponse, error) {
-	// 1. 获取配置
-	config, err := req.ProviderAccount.GetConfig()
-	if err != nil {
-		return nil, fmt.Errorf("invalid provider config: %w", err)
-	}
-
-	accessKeyID, _ := config["access_key_id"].(string)
-	accessKeySecret, _ := config["access_key_secret"].(string)
-
-	if accessKeyID == "" || accessKeySecret == "" {
-		return nil, fmt.Errorf("missing aliyun sms config: access_key_id or access_key_secret")
-	}
-
 	// 2. 初始化客户端
-	client, err := s.createClient(accessKeyID, accessKeySecret)
+	client, err := s.accountClient(req.ProviderAccount)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create aliyun sms client: %w", err)
 	}
@@ -148,7 +136,7 @@ func (s *AliyunSMSSender) Send(ctx context.Context, req *domain.SendRequest) (*d
 	})
 
 	// 5. 发送
-	response, err := client.SendSms(sendRequest)
+	response, err := client.SendSmsWithContext(ctx, sendRequest, aliyunRuntime())
 	if err != nil {
 		return &domain.SendResponse{
 			Success:      false,
@@ -194,16 +182,6 @@ func (s *AliyunSMSSender) Send(ctx context.Context, req *domain.SendRequest) (*d
 	}, nil
 }
 
-// createClient 创建阿里云短信客户端
-func (s *AliyunSMSSender) createClient(accessKeyID, accessKeySecret string) (*dysmsapi.Client, error) {
-	config := &openapi.Config{
-		AccessKeyId:     tea.String(accessKeyID),
-		AccessKeySecret: tea.String(accessKeySecret),
-		Endpoint:        tea.String("dysmsapi.aliyuncs.com"),
-	}
-	return dysmsapi.NewClient(config)
-}
-
 // ==================== BatchSender 接口实现 ====================
 
 // SupportsBatchSend 是否支持批量发送
@@ -217,21 +195,8 @@ func (s *AliyunSMSSender) BatchSend(ctx context.Context, req *domain.BatchSendRe
 		return &domain.BatchSendResponse{Results: []*domain.SendResponse{}}, nil
 	}
 
-	// 1. 获取配置
-	config, err := req.ProviderAccount.GetConfig()
-	if err != nil {
-		return nil, fmt.Errorf("invalid provider config: %w", err)
-	}
-
-	accessKeyID, _ := config["access_key_id"].(string)
-	accessKeySecret, _ := config["access_key_secret"].(string)
-
-	if accessKeyID == "" || accessKeySecret == "" {
-		return nil, fmt.Errorf("missing aliyun sms config: access_key_id or access_key_secret")
-	}
-
 	// 2. 初始化客户端
-	client, err := s.createClient(accessKeyID, accessKeySecret)
+	client, err := s.accountClient(req.ProviderAccount)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create aliyun sms client: %w", err)
 	}
@@ -299,7 +264,7 @@ func (s *AliyunSMSSender) BatchSend(ctx context.Context, req *domain.BatchSendRe
 	})
 
 	// 5. 发送
-	response, err := client.SendBatchSms(batchRequest)
+	response, err := client.SendBatchSmsWithContext(ctx, batchRequest, aliyunRuntime())
 	if err != nil {
 		// 如果批量发送失败，返回所有任务都失败的结果
 		results := make([]*domain.SendResponse, len(req.Tasks))
@@ -382,21 +347,8 @@ func (s *AliyunSMSSender) SupportsStatusQuery() bool {
 // QueryStatus 查询短信发送状态
 // 使用阿里云 QuerySendDetails API
 func (s *AliyunSMSSender) QueryStatus(ctx context.Context, req *domain.StatusQueryRequest) (*domain.StatusQueryResponse, error) {
-	// 1. 获取配置
-	config, err := req.ProviderAccount.GetConfig()
-	if err != nil {
-		return nil, fmt.Errorf("invalid provider config: %w", err)
-	}
-
-	accessKeyID, _ := config["access_key_id"].(string)
-	accessKeySecret, _ := config["access_key_secret"].(string)
-
-	if accessKeyID == "" || accessKeySecret == "" {
-		return nil, fmt.Errorf("missing aliyun sms config: access_key_id or access_key_secret")
-	}
-
 	// 2. 初始化客户端
-	client, err := s.createClient(accessKeyID, accessKeySecret)
+	client, err := s.accountClient(req.ProviderAccount)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create aliyun sms client: %w", err)
 	}
@@ -415,7 +367,7 @@ func (s *AliyunSMSSender) QueryStatus(ctx context.Context, req *domain.StatusQue
 	}
 
 	// 4. 发送查询请求
-	response, err := client.QuerySendDetails(queryRequest)
+	response, err := client.QuerySendDetailsWithContext(ctx, queryRequest, aliyunRuntime())
 	if err != nil {
 		return nil, fmt.Errorf("failed to query send details: %w", err)
 	}

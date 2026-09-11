@@ -29,7 +29,7 @@ type ResourceDiagnostic struct {
 
 func sensitiveResourceKey(key string) bool {
 	key = strings.ToLower(strings.NewReplacer("_", "", "-", "").Replace(key))
-	for _, part := range []string{"secret", "password", "token", "authorization", "accesskey", "apikey", "appkey", "proofimage", "commissionimage"} {
+	for _, part := range []string{"secret", "password", "token", "authorization", "accesskey", "apikey", "appkey", "proofimage", "commissionimage", "moredata", "fileurl", "trafficdriving"} {
 		if strings.Contains(key, part) {
 			return true
 		}
@@ -49,7 +49,30 @@ func redactResourceError(remote *RemoteResourceError, account *model.ProviderAcc
 	}
 	for _, field := range fields {
 		if field.Sensitive && input.FieldValue(field.Name) != "" {
-			secrets = append(secrets, input.FieldValue(field.Name))
+			value := input.FieldValue(field.Name)
+			secrets = append(secrets, value)
+			// Structured material fields may be echoed one reference at a time.
+			var decoded any
+			if json.Unmarshal([]byte(value), &decoded) == nil {
+				var collect func(any)
+				collect = func(v any) {
+					switch v := v.(type) {
+					case string:
+						if v != "" {
+							secrets = append(secrets, v)
+						}
+					case []any:
+						for _, item := range v {
+							collect(item)
+						}
+					case map[string]any:
+						for _, item := range v {
+							collect(item)
+						}
+					}
+				}
+				collect(decoded)
+			}
 		}
 	}
 	// Replace longer overlapping credentials before their prefixes. Include the

@@ -30,19 +30,20 @@ type ResourceImpact struct {
 }
 
 type ResourcePreviewItem struct {
-	Remote           domain.RemoteResource  `json:"remote"`
-	Parsed           *domain.ParsedTemplate `json:"parsed,omitempty"`
-	LocalID          uint                   `json:"local_id"`
-	LocalName        string                 `json:"local_name"`
-	LocalContent     string                 `json:"local_content"`
-	LocalVariables   []string               `json:"local_variables"`
-	LocalStatus      int8                   `json:"local_status"`
-	LocalAuditStatus *int8                  `json:"local_audit_status"`
-	Deleted          bool                   `json:"deleted"`
-	Version          string                 `json:"version"`
-	Error            string                 `json:"error,omitempty"`
-	IdentityConflict bool                   `json:"identity_conflict"`
-	Impacts          []ResourceImpact       `json:"impacts"`
+	Remote           domain.RemoteResource            `json:"remote"`
+	Parsed           *domain.ParsedTemplate           `json:"parsed,omitempty"`
+	LocalID          uint                             `json:"local_id"`
+	LocalName        string                           `json:"local_name"`
+	LocalContent     string                           `json:"local_content"`
+	LocalVariables   []string                         `json:"local_variables"`
+	LocalStatus      int8                             `json:"local_status"`
+	LocalAuditStatus *int8                            `json:"local_audit_status"`
+	Deleted          bool                             `json:"deleted"`
+	Version          string                           `json:"version"`
+	Error            string                           `json:"error,omitempty"`
+	IdentityConflict bool                             `json:"identity_conflict"`
+	Impacts          []ResourceImpact                 `json:"impacts"`
+	OperationErrors  map[domain.ResourceAction]string `json:"operation_errors,omitempty"`
 	template         *model.ProviderTemplate
 	signature        *model.ProviderSignature
 }
@@ -344,6 +345,8 @@ func (s *AdminProviderResourceService) previewItem(db *gorm.DB, accountID uint, 
 			}
 		}
 	}
+	item.OperationErrors = definition.OperationErrors(resource)
+	reconcileResourceReview(item, definition)
 	// Include local identity/state and affected references in optimistic confirmation.
 	raw, _ := json.Marshal([]any{accountID, kind, resource, local, item.Impacts})
 	digest := sha256.Sum256(raw)
@@ -583,6 +586,9 @@ func (s *AdminProviderResourceService) Mutate(ctx context.Context, accountID uin
 		if before.IdentityConflict {
 			return nil, fmt.Errorf("%s", before.Error)
 		}
+		if reason := before.OperationErrors[action]; reason != "" {
+			return nil, fmt.Errorf("%s", reason)
+		}
 		if len(before.Impacts) > 0 && !req.ConfirmImpact {
 			return nil, fmt.Errorf("请确认受影响的通道后再提交")
 		}
@@ -611,17 +617,20 @@ func (s *AdminProviderResourceService) Mutate(ctx context.Context, accountID uin
 	}
 	// Persist the stop before the upstream request. An uncertain write or failed
 	// mirror save must not leave the previous configuration eligible for delivery.
+	op := definition.Operations[action]
 	if kind == domain.ResourceTemplates && before != nil && before.LocalID != 0 &&
-		(action == domain.ResourceDelete || (action == domain.ResourceUpdate && input.Content != before.template.TemplateContent)) {
+		(op.SuspendBeforeWrite || action == domain.ResourceDelete || (action == domain.ResourceUpdate && input.Content != before.template.TemplateContent)) {
 		err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 			t, err := dao.LockProviderTemplate(tx, before.LocalID)
 			if err != nil {
 				return err
 			}
-			if err := dao.ResetTemplateBindings(tx, t.ID); err != nil {
-				return err
+			if action == domain.ResourceDelete || input.Content != t.TemplateContent {
+				if err := dao.ResetTemplateBindings(tx, t.ID); err != nil {
+					return err
+				}
 			}
-			return tx.Unscoped().Model(t).Updates(map[string]any{"audit_status": 0, "synced_at": time.Now().UTC()}).Error
+			return tx.Unscoped().Model(t).Updates(resourceSuspensionUpdates(before, definition)).Error
 		})
 		if err != nil {
 			return nil, err
@@ -630,8 +639,8 @@ func (s *AdminProviderResourceService) Mutate(ctx context.Context, accountID uin
 			s.invalidate(impact.ChannelID)
 		}
 	}
-	if account.ProviderCode == "tencent_sms" && kind == domain.ResourceSignatures && before != nil && before.LocalID != 0 {
-		if err := s.db.WithContext(ctx).Model(&model.ProviderSignature{}).Where("id = ? AND provider_account_id = ?", before.LocalID, accountID).Updates(map[string]any{"audit_status": 0, "synced_at": time.Now().UTC()}).Error; err != nil {
+	if (account.ProviderCode == "tencent_sms" || op.SuspendBeforeWrite) && kind == domain.ResourceSignatures && before != nil && before.LocalID != 0 {
+		if err := s.db.WithContext(ctx).Unscoped().Model(&model.ProviderSignature{}).Where("id = ? AND provider_account_id = ?", before.LocalID, accountID).Updates(resourceSuspensionUpdates(before, definition)).Error; err != nil {
 			return nil, err
 		}
 		for _, impact := range before.Impacts {
@@ -641,6 +650,14 @@ func (s *AdminProviderResourceService) Mutate(ctx context.Context, accountID uin
 	// Writes are executed once. A transport ambiguity is surfaced to the UI.
 	response, err := definition.Execute(ctx, account, action, input)
 	if err != nil {
+		var remote *domain.RemoteResourceError
+		if before != nil && before.LocalID != 0 && definition.AuditOrderID != nil && (!errors.As(err, &remote) || !remote.Uncertain) {
+			// A definite rejection did not start a new review. Keep the mirror
+			// suspended, but permit a subsequent query/import to restore it.
+			if saveErr := s.saveResourceReviewMetadata(ctx, accountID, kind, before.LocalID, localResourceMetadata(before)); saveErr != nil {
+				return nil, fmt.Errorf("供应商操作未完成且本地审核标记恢复失败，请核对资源：%w", err)
+			}
+		}
 		return nil, err
 	}
 	if len(response) != 1 {
@@ -654,6 +671,17 @@ func (s *AdminProviderResourceService) Mutate(ctx context.Context, accountID uin
 	} else {
 		remote := domain.RemoteResource{ResourceInput: input.PublicCopy(definition.Operations[action].Fields)}
 		remote.ID = id
+		if definition.AuditOrderID != nil {
+			remote.ProviderMetadata = cloneResourceMetadata(response[0].ProviderMetadata)
+			remote.ProviderMetadata[pendingResourceReview] = map[string]any{"order_id": definition.AuditOrderID(response[0])}
+			if before != nil && before.LocalID != 0 {
+				if err := s.saveResourceReviewMetadata(ctx, accountID, kind, before.LocalID, remote.ProviderMetadata); err != nil {
+					result.PendingSync = true
+					result.Warning = "供应商已受理，本地工单保存失败，请重新查询并同步"
+					return result, nil
+				}
+			}
+		}
 		if before != nil && remote.Category == "" {
 			remote.Category = before.Remote.Category
 		}
@@ -661,7 +689,8 @@ func (s *AdminProviderResourceService) Mutate(ctx context.Context, accountID uin
 		queried, queryErr := definition.Execute(ctx, account, domain.ResourceQuery, domain.ResourceInput{ID: id})
 		if queryErr == nil && len(queried) == 1 {
 			fact := queried[0]
-			if fact.Content == input.Content {
+			matchesOrder := definition.AuditOrderID == nil || (definition.AuditOrderID(response[0]) != "" && definition.AuditOrderID(response[0]) == definition.AuditOrderID(fact))
+			if fact.Content == input.Content && matchesOrder {
 				remote.AuditStatus = fact.AuditStatus
 				remote.AuditReply = fact.AuditReply
 				remote.ProviderMetadata = fact.ProviderMetadata
