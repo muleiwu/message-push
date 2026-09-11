@@ -31,6 +31,7 @@ type ResourceField struct {
 	Required     bool              `json:"required"`
 	Options      []FieldOption     `json:"options,omitempty"`
 	Sensitive    bool              `json:"sensitive,omitempty"`
+	ReadOnly     bool              `json:"read_only,omitempty"`
 	Help         string            `json:"help,omitempty"`
 	RequiredWhen map[string]string `json:"required_when,omitempty"`
 }
@@ -113,11 +114,28 @@ type ResourceOperation struct {
 	Fields        []ResourceField
 	Handler       ResourceHandler
 	ValidateInput func(ResourceInput) error
+	// ValidateCurrent runs against freshly queried facts before suspending a mirror.
+	ValidateCurrent    func(RemoteResource) error
+	SuspendBeforeWrite bool
 }
 
 type ResourceDefinition struct {
 	Operations   map[ResourceAction]*ResourceOperation
 	MatchAliases func(string) []string // Provider-declared aliases for linking legacy local resources.
+	// AuditOrderID identifies the review created by a write, when provided by the upstream API.
+	AuditOrderID func(RemoteResource) string
+}
+
+func (d *ResourceDefinition) OperationErrors(resource RemoteResource) map[ResourceAction]string {
+	result := map[ResourceAction]string{}
+	for action, op := range d.Operations {
+		if op != nil && op.ValidateCurrent != nil {
+			if err := op.ValidateCurrent(resource); err != nil {
+				result[action] = err.Error()
+			}
+		}
+	}
+	return result
 }
 
 type ResourceCapability struct {
