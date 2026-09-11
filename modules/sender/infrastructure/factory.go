@@ -27,6 +27,7 @@ func NewFactory() *Factory {
 	factory.Register(NewDingTalkSender())
 	factory.Register(NewWeChatWorkRobotSender())
 	factory.Register(NewDingTalkRobotSender())
+	factory.Register(NewOneBotSender())
 
 	return factory
 }

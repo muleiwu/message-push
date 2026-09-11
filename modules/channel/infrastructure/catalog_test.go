@@ -27,6 +27,20 @@ type catalogFixture struct {
 	binding  *model.ChannelTemplateBinding
 }
 
+func TestQQCatalogUsesExistingTemplateAndReceiverContract(t *testing.T) {
+	db := newCatalogTestDB(t)
+	f := createCatalogFixture(t, db, constants.ProviderOneBot, constants.MessageTypeQQ)
+	s := NewCatalogService(db)
+	list, err := s.ListChannels(context.Background(), dto.PublicChannelListRequest{Type: constants.MessageTypeQQ, Page: 1, PageSize: 20})
+	if err != nil || len(list.Items) != 1 || list.Items[0].Type != constants.MessageTypeQQ {
+		t.Fatalf("QQ list=%+v err=%v", list, err)
+	}
+	detail, err := s.GetChannel(context.Background(), f.channel.ID)
+	if err != nil || detail.SignatureRequired || detail.Readiness.State != constants.ChannelReadinessReady {
+		t.Fatalf("QQ detail=%+v err=%v", detail, err)
+	}
+}
+
 func newCatalogTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db := newSelectorReadinessDB(t)

@@ -6,6 +6,7 @@ const (
 	MessageTypeEmail      = "email"       // 邮件
 	MessageTypeWeChatWork = "wechat_work" // 企业微信
 	MessageTypeDingTalk   = "dingtalk"    // 钉钉
+	MessageTypeQQ         = "qq"          // QQ 私聊和群聊
 	MessageTypeWebhook    = "webhook"     // Webhook
 	MessageTypePush       = "push"        // 推送通知
 )
@@ -15,6 +16,7 @@ var supportedMessageTypes = []string{
 	MessageTypeEmail,
 	MessageTypeWeChatWork,
 	MessageTypeDingTalk,
+	MessageTypeQQ,
 	MessageTypeWebhook,
 	MessageTypePush,
 }
@@ -33,6 +35,7 @@ const (
 	ProviderSMTP       = "smtp"        // SMTP邮件
 	ProviderWeChatWork = "wechat_work" // 企业微信（应用消息）
 	ProviderDingTalk   = "dingtalk"    // 钉钉（工作通知）
+	ProviderOneBot     = "onebot"      // OneBot 11 HTTP
 
 	ProviderWeChatWorkRobot = "wechat_work_robot" // 企业微信群机器人（webhook）
 	ProviderDingTalkRobot   = "dingtalk_robot"    // 钉钉群机器人（webhook）
@@ -51,12 +54,16 @@ func IsValidMessageType(msgType string) bool {
 // IsValidProviderCode 检查服务商代码是否有效
 func IsValidProviderCode(code string) bool {
 	switch code {
-	case ProviderAliyunSMS, ProviderTencentSMS, ProviderZrwinfoSMS, ProviderNeteaseSMS, ProviderSMTP, ProviderWeChatWork, ProviderDingTalk, ProviderWeChatWorkRobot, ProviderDingTalkRobot:
+	case ProviderAliyunSMS, ProviderTencentSMS, ProviderZrwinfoSMS, ProviderNeteaseSMS, ProviderSMTP, ProviderWeChatWork, ProviderDingTalk, ProviderWeChatWorkRobot, ProviderDingTalkRobot, ProviderOneBot:
 		return true
 	default:
 		return false
 	}
 }
+
+// ErrorCodeOneBotAsyncUnsupported means the upstream accepted the message but
+// cannot report its outcome. Default retries could send the same message again.
+const ErrorCodeOneBotAsyncUnsupported = "ONEBOT_ASYNC_UNSUPPORTED"
 
 // 回调状态常量
 const (

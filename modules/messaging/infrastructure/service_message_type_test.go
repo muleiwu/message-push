@@ -13,6 +13,7 @@ func TestMessageServiceUsesSharedMessageTypeValidation(t *testing.T) {
 		constants.MessageTypeEmail,
 		constants.MessageTypeWeChatWork,
 		constants.MessageTypeDingTalk,
+		constants.MessageTypeQQ,
 		constants.MessageTypeWebhook,
 		constants.MessageTypePush,
 	} {

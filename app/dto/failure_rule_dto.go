@@ -5,7 +5,7 @@ type CreateFailureRuleRequest struct {
 	Name         string `json:"name" binding:"required,min=2,max=100"`
 	Scene        string `json:"scene" binding:"required,oneof=send_failure callback_failure"`
 	ProviderCode string `json:"provider_code" binding:"omitempty,max=50"`
-	MessageType  string `json:"message_type" binding:"omitempty,oneof=sms email wechat_work dingtalk"`
+	MessageType  string `json:"message_type" binding:"omitempty,oneof=sms email wechat_work dingtalk qq"`
 	ErrorCode    string `json:"error_code" binding:"omitempty,max=200"`
 	ErrorKeyword string `json:"error_keyword" binding:"omitempty,max=200"`
 	Action       string `json:"action" binding:"required,oneof=retry switch_provider fail alert"`
@@ -20,7 +20,7 @@ type UpdateFailureRuleRequest struct {
 	Name         string `json:"name" binding:"omitempty,min=2,max=100"`
 	Scene        string `json:"scene" binding:"omitempty,oneof=send_failure callback_failure"`
 	ProviderCode string `json:"provider_code" binding:"omitempty,max=50"`
-	MessageType  string `json:"message_type" binding:"omitempty,oneof=sms email wechat_work dingtalk"`
+	MessageType  string `json:"message_type" binding:"omitempty,oneof=sms email wechat_work dingtalk qq"`
 	ErrorCode    string `json:"error_code" binding:"omitempty,max=200"`
 	ErrorKeyword string `json:"error_keyword" binding:"omitempty,max=200"`
 	Action       string `json:"action" binding:"omitempty,oneof=retry switch_provider fail alert"`
