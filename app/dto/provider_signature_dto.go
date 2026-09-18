@@ -47,6 +47,7 @@ type ProviderSignatureResponse struct {
 	ProviderAccountName string `json:"provider_account_name,omitempty"`
 	ProviderCode        string `json:"provider_code,omitempty"`
 	ProviderType        string `json:"provider_type,omitempty"`
+	SupportsSignature   bool   `json:"supports_signature"`
 	RequiresSignature   bool   `json:"requires_signature"`
 	HistoricalOnly      bool   `json:"historical_only"`
 	ReadOnly            bool   `json:"read_only"`

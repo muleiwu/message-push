@@ -83,6 +83,7 @@ func TestChannelEvaluatorStatesAndBindingValidation(t *testing.T) {
 		{name: "email ready", messageType: constants.MessageTypeEmail, providerCode: testProviderEmailPlain, wantState: constants.ChannelReadinessReady, wantValid: 1},
 		{name: "wechat ready", messageType: constants.MessageTypeWeChatWork, providerCode: testProviderWechatPlain, wantState: constants.ChannelReadinessReady, wantValid: 1},
 		{name: "dingtalk ready", messageType: constants.MessageTypeDingTalk, providerCode: testProviderDingTalkPlain, wantState: constants.ChannelReadinessReady, wantValid: 1},
+		{name: "QQ ready without signature", messageType: constants.MessageTypeQQ, providerCode: constants.ProviderOneBot, wantState: constants.ChannelReadinessReady, wantValid: 1},
 		{
 			name:         "disabled spare binding is ignored",
 			messageType:  constants.MessageTypeSMS,

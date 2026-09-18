@@ -2,7 +2,7 @@
 
 English · [简体中文](README.zh-CN.md)
 
-A unified, high-availability message delivery service for SMS, email, WeCom, and DingTalk. Business applications integrate with one API while the platform handles templates, asynchronous queues, provider selection, failover, receipts, and delivery analytics.
+A unified, high-availability message delivery service for SMS, email, WeCom, DingTalk, and QQ via OneBot 11. Business applications integrate with one API while the platform handles templates, asynchronous queues, provider selection, failover, receipts, and delivery analytics.
 
 **Technology stack:** Go 1.25+ · Redis Streams · MySQL/PostgreSQL · Vue · Ant Design Vue
 
@@ -14,7 +14,7 @@ Direct provider integrations are easy to start but become expensive to maintain 
 
 ## Highlights
 
-- **Multiple channels:** SMS, email, WeCom, and DingTalk.
+- **Multiple channels:** SMS, email, WeCom, DingTalk, and [QQ via OneBot 11](docs/onebot.md).
 - **Flexible delivery:** single, batch, and scheduled messages.
 - **Unified configuration:** system templates, provider accounts, provider templates, signatures, and sending channels.
 - **High availability:** priority groups, smooth weighted round-robin, provider failover, circuit state, automatic disabling, and retry policies.

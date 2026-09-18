@@ -116,6 +116,15 @@ func (s *CatalogService) GetChannel(ctx context.Context, id uint) (*dto.PublicCh
 		response.SignatureNames = append(response.SignatureNames, state.CommonSignatureAliases...)
 		response.SignatureRequired = len(response.SignatureNames) > 0
 	}
+	if state.State != constants.ChannelReadinessBlocked && state.OptionalSignatureAccountCount > 0 {
+		if !response.SignatureRequired {
+			response.SignatureNames = append(response.SignatureNames, state.OptionalSignatureAliases...)
+		} else {
+			response.SignatureNames = slices.DeleteFunc(response.SignatureNames, func(alias string) bool {
+				return !slices.Contains(state.OptionalSignatureAliases, alias)
+			})
+		}
+	}
 	return response, nil
 }
 

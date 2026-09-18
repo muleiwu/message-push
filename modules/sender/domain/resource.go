@@ -31,6 +31,7 @@ type ResourceField struct {
 	Required     bool              `json:"required"`
 	Options      []FieldOption     `json:"options,omitempty"`
 	Sensitive    bool              `json:"sensitive,omitempty"`
+	ReadOnly     bool              `json:"read_only,omitempty"`
 	Help         string            `json:"help,omitempty"`
 	RequiredWhen map[string]string `json:"required_when,omitempty"`
 }
@@ -92,10 +93,11 @@ type RemoteResource struct {
 
 // RemoteResourceError distinguishes a rejected request from an uncertain write.
 type RemoteResourceError struct {
-	Code      string `json:"code"`
-	Message   string `json:"message"`
-	Uncertain bool   `json:"uncertain"`
-	RequestID string `json:"request_id,omitempty"`
+	Code       string             `json:"code"`
+	Message    string             `json:"message"`
+	Uncertain  bool               `json:"uncertain"`
+	RequestID  string             `json:"request_id,omitempty"`
+	Diagnostic ResourceDiagnostic `json:"-"` // Sanitized server-side diagnostics, never exposed in API responses.
 }
 
 func (e *RemoteResourceError) Error() string {
@@ -112,11 +114,28 @@ type ResourceOperation struct {
 	Fields        []ResourceField
 	Handler       ResourceHandler
 	ValidateInput func(ResourceInput) error
+	// ValidateCurrent runs against freshly queried facts before suspending a mirror.
+	ValidateCurrent    func(RemoteResource) error
+	SuspendBeforeWrite bool
 }
 
 type ResourceDefinition struct {
 	Operations   map[ResourceAction]*ResourceOperation
 	MatchAliases func(string) []string // Provider-declared aliases for linking legacy local resources.
+	// AuditOrderID identifies the review created by a write, when provided by the upstream API.
+	AuditOrderID func(RemoteResource) string
+}
+
+func (d *ResourceDefinition) OperationErrors(resource RemoteResource) map[ResourceAction]string {
+	result := map[ResourceAction]string{}
+	for action, op := range d.Operations {
+		if op != nil && op.ValidateCurrent != nil {
+			if err := op.ValidateCurrent(resource); err != nil {
+				result[action] = err.Error()
+			}
+		}
+	}
+	return result
 }
 
 type ResourceCapability struct {
@@ -155,7 +174,22 @@ func (d *ResourceDefinition) Execute(ctx context.Context, account *model.Provide
 	if err := d.ValidateInput(action, input); err != nil {
 		return nil, err
 	}
-	return d.Operations[action].Handler(ctx, account, input)
+	op := d.Operations[action]
+	rows, err := op.Handler(ctx, account, input)
+	var remote *RemoteResourceError
+	if errors.As(err, &remote) {
+		copy := *remote
+		copy.Diagnostic.Operation = action
+		copy.Diagnostic.API = op.Protocol.Path
+		copy.Diagnostic.ResourceID = input.ID
+		if account != nil {
+			copy.Diagnostic.ProviderCode = account.ProviderCode
+			copy.Diagnostic.AccountID = account.ID
+		}
+		redactResourceError(&copy, account, op.Fields, input)
+		err = &copy
+	}
+	return rows, err
 }
 
 // ValidateInput performs all form/capability validation before a write can suspend bindings.

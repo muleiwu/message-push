@@ -136,14 +136,14 @@ func (h *MessageHandler) Handle(ctx context.Context, msg *queue.Message) error {
 		return err
 	}
 
-	// Resolve required signatures before touching the sender. This keeps queued
-	// tasks fail-closed when mappings are removed or disabled after acceptance.
+	// Resolve required signatures and explicitly chosen optional signatures before
+	// sending, including when their mappings changed after queue acceptance.
 	providerSignature, messageSender, err := resolveDeliveryDependencies(
 		h.signatureMappingDao,
 		h.senderResolver,
 		task,
 		providerAccount,
-		providerMeta.RequiresSignature,
+		providerMeta.RequiresSignature || (providerMeta.CanUseSignature() && strings.TrimSpace(task.Signature) != ""),
 	)
 	if err != nil {
 		h.logger.Error(fmt.Sprintf("failed to resolve delivery dependencies task_id=%s provider_id=%d: %v", taskID, providerAccount.ID, err))

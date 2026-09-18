@@ -4,13 +4,17 @@ go 1.25.7
 
 require (
 	cnb.cool/mliev/open/go-web v1.8.4
-	github.com/alibabacloud-go/darabonba-openapi/v2 v2.1.16
-	github.com/alibabacloud-go/dysmsapi-20170525/v3 v3.0.6
-	github.com/alibabacloud-go/tea v1.4.0
+	github.com/alibabacloud-go/darabonba-openapi/v2 v2.2.2
+	github.com/alibabacloud-go/dysmsapi-20170525/v5 v5.6.0
+	github.com/alibabacloud-go/tea v1.5.1
 	github.com/coreos/go-oidc/v3 v3.20.0
+	github.com/gin-gonic/gin v1.12.0
 	github.com/glebarez/sqlite v1.11.0
+	github.com/go-playground/validator/v10 v10.30.3
+	github.com/go-sql-driver/mysql v1.10.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
+	github.com/muleiwu/golog v1.1.1
 	github.com/muleiwu/gomander v1.1.0
 	github.com/muleiwu/gsr v1.1.0
 	github.com/nyaruka/phonenumbers v1.8.0
@@ -44,16 +48,14 @@ require (
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.13 // indirect
 	github.com/gin-contrib/sse v1.1.1 // indirect
-	github.com/gin-gonic/gin v1.12.0 // indirect
 	github.com/glebarez/go-sqlite v1.22.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
-	github.com/go-playground/validator/v10 v10.30.3 // indirect
-	github.com/go-sql-driver/mysql v1.10.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/goccy/go-json v0.10.6 // indirect
 	github.com/goccy/go-yaml v1.19.2 // indirect
+	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
@@ -70,7 +72,6 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/muleiwu/anyto v1.1.0 // indirect
 	github.com/muleiwu/go-cache v1.1.0 // indirect
-	github.com/muleiwu/golog v1.1.1 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
 	github.com/pelletier/go-toml/v2 v2.3.1 // indirect
