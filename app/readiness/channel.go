@@ -4,6 +4,7 @@ package readiness
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -103,8 +104,8 @@ func (e *ChannelEvaluator) GetDeliveryEligibility(channelID uint) (*DeliveryElig
 }
 
 // ValidateForSend applies the same rules as the admin readiness API and also
-// verifies that a required signature alias is valid for every selectable
-// signature-requiring provider account.
+// verifies that a requested signature is usable by every selectable account
+// that supports signatures. Optional signatures never block an unsigned send.
 func (e *ChannelEvaluator) ValidateForSend(channelID uint, signatureAlias string) error {
 	evaluations, err := e.loadAndEvaluate([]uint{channelID})
 	if err != nil {
@@ -118,15 +119,17 @@ func (e *ChannelEvaluator) ValidateForSend(channelID uint, signatureAlias string
 		return &ValidationError{Codes: append([]string(nil), evaluation.response.BlockerCodes...)}
 	}
 
-	if !evaluation.hasEligibleRequiredPath {
-		return nil
-	}
-
 	alias := strings.TrimSpace(signatureAlias)
 	if alias == "" {
-		return &ValidationError{Codes: []string{constants.ReadinessBlockerSignatureRequired}}
+		if evaluation.hasEligibleRequiredPath {
+			return &ValidationError{Codes: []string{constants.ReadinessBlockerSignatureRequired}}
+		}
+		return nil
 	}
-	if _, ok := evaluation.commonAliases[alias]; !ok {
+	if _, ok := evaluation.commonAliases[alias]; evaluation.hasEligibleRequiredPath && !ok {
+		return &ValidationError{Codes: []string{constants.ReadinessBlockerSignatureAliasNotCommon}}
+	}
+	if evaluation.response.OptionalSignatureAccountCount > 0 && !slices.Contains(evaluation.response.OptionalSignatureAliases, alias) {
 		return &ValidationError{Codes: []string{constants.ReadinessBlockerSignatureAliasNotCommon}}
 	}
 	return nil
@@ -183,9 +186,10 @@ func (e *ChannelEvaluator) loadAndEvaluate(channelIDs []uint) (map[uint]*channel
 
 func evaluateChannel(channel *model.Channel, bindings []*model.ChannelTemplateBinding, mappings []*model.ChannelSignatureMapping) *channelEvaluation {
 	response := &dto.ChannelReadinessResponse{
-		State:        constants.ChannelReadinessReady,
-		BlockerCodes: make([]string, 0),
-		Blockers:     make([]*dto.ChannelReadinessBlocker, 0),
+		State:                    constants.ChannelReadinessReady,
+		OptionalSignatureAliases: make([]string, 0),
+		BlockerCodes:             make([]string, 0),
+		Blockers:                 make([]*dto.ChannelReadinessBlocker, 0),
 	}
 
 	addChannelBlocker := func(code string) {
@@ -274,6 +278,8 @@ func evaluateChannel(channel *model.Channel, bindings []*model.ChannelTemplateBi
 		response.ValidBindingCount = 0
 		validBindingIDs = make(map[uint]struct{})
 		hasEligibleRequiredPath = false
+	} else {
+		evaluateOptionalSignatures(response, finalBindings, mappings)
 	}
 
 	return &channelEvaluation{
@@ -446,6 +452,44 @@ func validateParamMapping(systemVariables, providerVariables []string, binding *
 type signatureEvaluation struct {
 	aliasesByAccount map[uint]map[string]struct{}
 	commonAliases    map[string]struct{}
+}
+
+// Optional aliases describe signed-send choices without changing the selector's
+// candidate set or making an otherwise usable channel depend on signatures.
+func evaluateOptionalSignatures(response *dto.ChannelReadinessResponse, bindings []*model.ChannelTemplateBinding, mappings []*model.ChannelSignatureMapping) {
+	aliasesByAccount := make(map[uint]map[string]struct{})
+	for _, binding := range bindings {
+		account := binding.ProviderTemplate.ProviderAccount
+		meta, err := registry.GetByCode(account.ProviderCode)
+		if err == nil && meta.CanUseSignature() && !meta.RequiresSignature {
+			aliasesByAccount[account.ID] = make(map[string]struct{})
+		}
+	}
+	response.OptionalSignatureAccountCount = len(aliasesByAccount)
+	for _, mapping := range mappings {
+		aliases, supported := aliasesByAccount[mapping.ProviderID]
+		if !supported || mapping.Status != 1 {
+			continue
+		}
+		signature := mapping.ProviderSignature
+		alias := strings.TrimSpace(mapping.SignatureName)
+		if signature.Usable() && signature.ProviderAccountID == mapping.ProviderID && alias != "" && strings.TrimSpace(signature.SignatureCode) != "" {
+			aliases[alias] = struct{}{}
+		}
+	}
+	var commonAliases map[string]struct{}
+	for _, aliases := range aliasesByAccount {
+		if commonAliases == nil {
+			commonAliases = cloneStringSet(aliases)
+			continue
+		}
+		for alias := range commonAliases {
+			if _, ok := aliases[alias]; !ok {
+				delete(commonAliases, alias)
+			}
+		}
+	}
+	response.OptionalSignatureAliases = sortedStringSet(commonAliases)
 }
 
 func evaluateRequiredSignatures(response *dto.ChannelReadinessResponse, channelID uint, bindings []*model.ChannelTemplateBinding, mappings []*model.ChannelSignatureMapping) signatureEvaluation {

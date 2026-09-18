@@ -988,7 +988,7 @@ func (s *AdminChannelService) GetAvailableProviderSignatures(channelID uint) ([]
 		}
 		account := binding.ProviderTemplate.ProviderAccount
 		meta, metaErr := registry.GetByCode(account.ProviderCode)
-		if metaErr != nil || !meta.RequiresSignature {
+		if metaErr != nil || !meta.CanUseSignature() {
 			continue
 		}
 		if _, seen := seenAccounts[account.ID]; seen {
@@ -1001,7 +1001,7 @@ func (s *AdminChannelService) GetAvailableProviderSignatures(channelID uint) ([]
 		return []*dto.ProviderSignatureResponse{}, nil
 	}
 
-	// Only signatures belonging to currently valid, signature-requiring channel
+	// Only signatures belonging to currently valid, signature-capable channel
 	// bindings are eligible for mapping.
 	var signatures []*model.ProviderSignature
 	if err := db.Joins("JOIN provider_accounts ON provider_accounts.id = provider_signatures.provider_account_id").

@@ -19,6 +19,8 @@ type ChannelReadinessResponse struct {
 	ConfiguredSignatureAccountCount int                        `json:"configured_signature_account_count"`
 	ConfiguredSignatureAliasCount   int                        `json:"configured_signature_alias_count"`
 	CommonSignatureAliases          []string                   `json:"common_signature_aliases"`
+	OptionalSignatureAccountCount   int                        `json:"optional_signature_account_count"`
+	OptionalSignatureAliases        []string                   `json:"optional_signature_aliases"`
 	BlockerCodes                    []string                   `json:"blocker_codes"`
 	Blockers                        []*ChannelReadinessBlocker `json:"blockers"`
 }

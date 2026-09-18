@@ -88,6 +88,7 @@ func (s *AdminProviderAccountService) GetAvailableProviders(providerType string)
 			SupportsSend:      p.SupportsSend,
 			SupportsBatchSend: p.SupportsBatchSend,
 			SupportsCallback:  p.SupportsCallback,
+			SupportsSignature: p.CanUseSignature(),
 			RequiresSignature: p.RequiresSignature,
 			// 扩展信息
 			Website:    p.Website,
@@ -193,6 +194,7 @@ func (s *AdminProviderAccountService) CreateProviderAccount(c httpInterfaces.Rou
 		ProviderCode:      account.ProviderCode,
 		ProviderName:      meta.Name,
 		ProviderType:      account.ProviderType,
+		SupportsSignature: meta.CanUseSignature(),
 		RequiresSignature: meta.RequiresSignature,
 		Description:       account.Remark,
 		Config:            config,
@@ -232,9 +234,11 @@ func (s *AdminProviderAccountService) GetProviderAccountList(c httpInterfaces.Ro
 		// 从注册中心获取服务商名称
 		providerName := account.ProviderCode
 		requiresSignature := false
+		supportsSignature := false
 		if meta, err := registry.GetByCode(account.ProviderCode); err == nil {
 			providerName = meta.Name
 			requiresSignature = meta.RequiresSignature
+			supportsSignature = meta.CanUseSignature()
 		}
 
 		items = append(items, &dto.ProviderAccountResponse{
@@ -244,6 +248,7 @@ func (s *AdminProviderAccountService) GetProviderAccountList(c httpInterfaces.Ro
 			ProviderCode:      account.ProviderCode,
 			ProviderName:      providerName,
 			ProviderType:      account.ProviderType,
+			SupportsSignature: supportsSignature,
 			RequiresSignature: requiresSignature,
 			Description:       account.Remark,
 			Config:            config,
@@ -275,9 +280,11 @@ func (s *AdminProviderAccountService) GetProviderAccountByID(c httpInterfaces.Ro
 	// 从注册中心获取服务商名称
 	providerName := account.ProviderCode
 	requiresSignature := false
+	supportsSignature := false
 	if meta, err := registry.GetByCode(account.ProviderCode); err == nil {
 		providerName = meta.Name
 		requiresSignature = meta.RequiresSignature
+		supportsSignature = meta.CanUseSignature()
 	}
 
 	return &dto.ProviderAccountResponse{
@@ -287,6 +294,7 @@ func (s *AdminProviderAccountService) GetProviderAccountByID(c httpInterfaces.Ro
 		ProviderCode:      account.ProviderCode,
 		ProviderName:      providerName,
 		ProviderType:      account.ProviderType,
+		SupportsSignature: supportsSignature,
 		RequiresSignature: requiresSignature,
 		Description:       account.Remark,
 		Config:            config,

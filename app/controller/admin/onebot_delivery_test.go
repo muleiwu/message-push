@@ -124,8 +124,20 @@ func TestOneBotAccountAndQueuedDelivery(t *testing.T) {
 	defer server.Close()
 	accounts := service.NewAdminProviderAccountService()
 	account, err := accounts.CreateProviderAccount(nil, &dto.CreateProviderAccountRequest{Name: "QQ 测试账号", ProviderCode: constants.ProviderOneBot, Config: map[string]any{"base_url": server.URL, "message_format": "cqcode"}})
-	if err != nil || account.ProviderType != constants.MessageTypeQQ {
+	if err != nil || account.ProviderType != constants.MessageTypeQQ || !account.SupportsSignature || account.RequiresSignature {
 		t.Fatalf("account=%+v err=%v", account, err)
+	}
+	providers, err := accounts.GetAvailableProviders(constants.MessageTypeQQ)
+	if err != nil || len(providers) != 1 || !providers[0].SupportsSignature || providers[0].RequiresSignature {
+		t.Fatalf("providers=%+v err=%v", providers, err)
+	}
+	detail, err := accounts.GetProviderAccountByID(nil, account.ID)
+	if err != nil || !detail.SupportsSignature || detail.RequiresSignature {
+		t.Fatalf("account detail=%+v err=%v", detail, err)
+	}
+	listed, err := accounts.GetProviderAccountList(nil, &dto.ProviderAccountListRequest{ProviderType: constants.MessageTypeQQ})
+	if err != nil || len(listed.Items) != 1 || !listed.Items[0].SupportsSignature || listed.Items[0].RequiresSignature {
+		t.Fatalf("account list=%+v err=%v", listed, err)
 	}
 	for _, req := range []*dto.TestProviderRequest{{Message: "hello"}, {Receiver: "group:0", Message: "hello"}, {Receiver: "private:123", Message: " "}} {
 		if _, err := accounts.TestProviderAccount(account.ID, req); err == nil {
@@ -209,6 +221,101 @@ func TestOneBotAccountAndQueuedDelivery(t *testing.T) {
 	if calls.Load() != 4 {
 		t.Fatal("unexpected repeated send")
 	}
+	// A supplied alias must resolve before even a batch can create tasks.
+	if _, err := messages.Send(ctx, &dto.SendRequest{AppID: "qq-app", ChannelID: qqChannel.ID, Receiver: "private:123", TemplateParams: params, SignatureName: "notice"}); err == nil {
+		t.Fatal("unknown alias accepted")
+	}
+	if _, err := messages.BatchSend(ctx, &dto.BatchSendRequest{AppID: "qq-app", ChannelID: qqChannel.ID, Receivers: []string{"private:123", "group:456"}, TemplateParams: params, SignatureName: "notice"}); err == nil {
+		t.Fatal("batch with unknown alias accepted")
+	}
+	if len(producer.tasks) != 3 {
+		t.Fatal("unknown aliases created tasks")
+	}
+	signatures := service.NewAdminProviderSignatureService()
+	signature, err := signatures.CreateSignature(account.ID, &dto.CreateProviderSignatureRequest{SignatureName: "后台通知签名", SignatureCode: "木雷科技", Status: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	channels := service.NewAdminChannelService()
+	available, err := channels.GetAvailableProviderSignatures(qqChannel.ID)
+	if err != nil || len(available) != 1 || !available[0].SupportsSignature || available[0].ReadOnly {
+		t.Fatalf("available signatures=%+v err=%v", available, err)
+	}
+	mapping, err := channels.CreateChannelSignatureMapping(qqChannel.ID, &dto.CreateChannelSignatureMappingRequest{ProviderID: account.ID, ProviderSignatureID: signature.ID, SignatureName: "notice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := len(producer.tasks)
+	if _, err := messages.Send(ctx, &dto.SendRequest{AppID: "qq-app", ChannelID: qqChannel.ID, Receiver: "private:123", TemplateParams: params, SignatureName: "notice"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := messages.BatchSend(ctx, &dto.BatchSendRequest{AppID: "qq-app", ChannelID: qqChannel.ID, Receivers: []string{"private:123", "group:456"}, TemplateParams: params, SignatureName: "notice"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, task := range producer.tasks[start:] {
+		if err := handler.Handle(ctx, &queue.Message{Data: map[string]any{"task_id": task.TaskID}}); err != nil {
+			t.Fatal(err)
+		}
+		want := "【木雷科技】提醒：" + params["content"]
+		if body := <-bodies; body["message"] != want {
+			t.Fatalf("mapped signature missing: %v", body)
+		}
+		var log model.PushLog
+		if err := db.Where("task_id = ?", task.TaskID).First(&log).Error; err != nil || log.SendSnapshot == nil {
+			t.Fatalf("missing log: %+v %v", log, err)
+		}
+		var snapshot model.SendSnapshot
+		if err := json.Unmarshal([]byte(*log.SendSnapshot), &snapshot); err != nil || snapshot.SignatureAlias != "notice" || snapshot.SignatureValue != "木雷科技" {
+			t.Fatalf("signature snapshot=%+v err=%v", snapshot, err)
+		}
+		var request struct {
+			Message string `json:"message"`
+		}
+		if err := json.Unmarshal([]byte(log.RequestData), &request); err != nil || request.Message != want {
+			t.Fatalf("signature log=%s err=%v", log.RequestData, err)
+		}
+	}
+	for _, tt := range []struct {
+		name   string
+		change func() error
+	}{
+		{"mapping disabled", func() error {
+			return db.Model(&model.ChannelSignatureMapping{}).Where("id = ?", mapping.ID).Update("status", 0).Error
+		}},
+		{"mapping deleted", func() error { return db.Delete(&model.ChannelSignatureMapping{}, mapping.ID).Error }},
+		{"signature disabled", func() error {
+			return db.Model(&model.ProviderSignature{}).Where("id = ?", signature.ID).Update("status", 0).Error
+		}},
+		{"signature deleted", func() error { return db.Delete(&model.ProviderSignature{}, signature.ID).Error }},
+		{"signature empty", func() error {
+			return db.Model(&model.ProviderSignature{}).Where("id = ?", signature.ID).Update("signature_code", " ").Error
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := db.Unscoped().Model(&model.ChannelSignatureMapping{}).Where("id = ?", mapping.ID).Updates(map[string]any{"status": 1, "deleted_at": nil}).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := db.Unscoped().Model(&model.ProviderSignature{}).Where("id = ?", signature.ID).Updates(map[string]any{"status": 1, "deleted_at": nil, "signature_code": "木雷科技"}).Error; err != nil {
+				t.Fatal(err)
+			}
+			queued, err := messages.Send(ctx, &dto.SendRequest{AppID: "qq-app", ChannelID: qqChannel.ID, Receiver: "group:456", TemplateParams: params, SignatureName: "notice"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := tt.change(); err != nil {
+				t.Fatal(err)
+			}
+			before := calls.Load()
+			if err := handler.Handle(ctx, &queue.Message{Data: map[string]any{"task_id": queued.TaskID}}); err == nil {
+				t.Fatal("invalid mapping did not stop the queued send")
+			}
+			var task model.PushTask
+			if err := db.Where("task_id = ?", queued.TaskID).First(&task).Error; err != nil || task.Status != constants.TaskStatusFailed || calls.Load() != before {
+				t.Fatalf("invalid signature task=%+v calls=%d err=%v", task, calls.Load(), err)
+			}
+		})
+	}
+	// Optional mappings can be invalid and an unsigned message is still accepted.
 	async.Store(true)
 	accepted, err := messages.Send(ctx, &dto.SendRequest{AppID: "qq-app", ChannelID: qqChannel.ID, Receiver: "group:456", TemplateParams: params})
 	if err != nil {

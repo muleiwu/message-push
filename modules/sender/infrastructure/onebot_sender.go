@@ -53,11 +53,12 @@ func init() {
 				},
 			},
 		},
-		SupportsSend: true,
-		Website:      "https://onebot.dev/",
-		DocsUrl:      "https://github.com/botuniverse/onebot-11/blob/master/api/public.md",
-		SortOrder:    50,
-		Tags:         []string{"QQ", "即时通讯", "机器人"},
+		SupportsSend:      true,
+		SupportsSignature: true,
+		Website:           "https://onebot.dev/",
+		DocsUrl:           "https://github.com/botuniverse/onebot-11/blob/master/api/public.md",
+		SortOrder:         50,
+		Tags:              []string{"QQ", "即时通讯", "机器人"},
 	})
 }
 
@@ -135,7 +136,22 @@ func (s *OneBotSender) Send(ctx context.Context, req *domain.SendRequest) (*doma
 			return fail("ONEBOT_INVALID_CONFIG", "message_format 必须为 text 或 cqcode")
 		}
 	}
-	payload := oneBotMessage{MessageType: target.MessageType, Message: req.RenderedContent, AutoEscape: format == "text"}
+	content := req.RenderedContent
+	if strings.TrimSpace(req.Task.Signature) != "" {
+		if req.Signature == nil || strings.TrimSpace(req.Signature.SignatureCode) == "" {
+			return fail("ONEBOT_INVALID_SIGNATURE", "所选签名别名没有可用的签名映射")
+		}
+		prefix := strings.TrimSpace(req.Signature.SignatureCode)
+		if !strings.HasPrefix(prefix, "【") || !strings.HasSuffix(prefix, "】") {
+			prefix = "【" + prefix + "】"
+		}
+		if format == "cqcode" {
+			// The signature is literal text, even when the body contains CQ codes.
+			prefix = strings.NewReplacer("&", "&amp;", "[", "&#91;", "]", "&#93;").Replace(prefix)
+		}
+		content = prefix + content
+	}
+	payload := oneBotMessage{MessageType: target.MessageType, Message: content, AutoEscape: format == "text"}
 	if target.MessageType == "private" {
 		payload.UserID = target.ID
 	} else {

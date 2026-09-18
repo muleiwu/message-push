@@ -21,6 +21,7 @@ type ProviderMeta struct {
 	SupportsCallback    bool `json:"supports_callback"`     // 是否支持回调
 	SupportsStatusQuery bool `json:"supports_status_query"` // 是否支持单条状态查询（阿里云、腾讯云）
 	SupportsStatusPull  bool `json:"supports_status_pull"`  // 是否支持批量状态拉取（掌榕网）
+	SupportsSignature   bool `json:"supports_signature"`    // 是否支持签名/标题映射，包括可选签名
 	RequiresSignature   bool `json:"requires_signature"`    // 是否必须配置签名/标题映射资源后才能发送
 
 	// 扩展信息
@@ -33,6 +34,12 @@ type ProviderMeta struct {
 	Tags       []string `json:"tags"`        // 标签列表
 	Regions    []string `json:"regions"`     // 支持区域
 	Deprecated bool     `json:"deprecated"`  // 是否已弃用
+}
+
+// CanUseSignature keeps existing required-signature providers compatible even
+// when their metadata does not explicitly declare the optional capability.
+func (m *ProviderMeta) CanUseSignature() bool {
+	return m != nil && (m.SupportsSignature || m.RequiresSignature)
 }
 
 // ProviderRegistry 服务商注册表
@@ -89,6 +96,7 @@ func (r *ProviderRegistry) Register(meta *ProviderMeta) error {
 		return fmt.Errorf("provider with code %s already registered", meta.Code)
 	}
 
+	meta.SupportsSignature = meta.CanUseSignature()
 	r.providers[meta.Code] = meta
 	return nil
 }
