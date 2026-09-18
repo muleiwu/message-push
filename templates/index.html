@@ -1,378 +1,377 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="木雷消息服务，基于 Go + Gin 的企业级多渠道消息服务。支持短信、邮件、企业微信和钉钉，内置规则引擎、流量控制与实时监控。">
+    <meta name="theme-color" content="#F7F8F9">
     <title>木雷消息服务 - Mulei Message Service</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
-        rel="stylesheet">
+    <link rel="preload" href="/image/home/hero-background.png" as="image" fetchpriority="high">
     <style>
         :root {
-            --primary: #4f46e5;
-            --primary-dark: #4338ca;
-            --secondary: #10b981;
-            --text-main: #111827;
-            --text-muted: #6b7280;
-            --bg-body: #f9fafb;
-            --bg-card: #ffffff;
-            --border-color: #e5e7eb;
+            color-scheme: light;
+            --page-background: #f7f8f9;
+            --surface: #fff;
+            --text: #000;
+            --text-secondary: #666;
+            --card-text: rgb(0 0 0 / 80%);
+            --brand-blue: #3b66f4;
+            --brand-purple: #795ce2;
+            --content-width: 1400px;
+            --display-font: "Alibaba Sans", "PingFang SC", "Microsoft YaHei", sans-serif;
         }
 
-        * {
-            box-sizing: border-box;
-        }
-
+        * { box-sizing: border-box; }
         body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--bg-body);
-            color: var(--text-main);
             margin: 0;
-            line-height: 1.6;
+            background: var(--page-background);
+            color: var(--text);
+            font-family: var(--display-font);
+            -webkit-font-smoothing: antialiased;
         }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 0 2rem;
+        h1, h2, h3, p { margin: 0; }
+        a { color: inherit; text-decoration: none; }
+        img { display: block; max-width: 100%; }
+        a:focus-visible { outline: 3px solid var(--brand-blue); outline-offset: 5px; }
+        .container { width: min(var(--content-width), calc(100% - 64px)); margin-inline: auto; }
+        .skip-link {
+            position: absolute;
+            top: 8px;
+            left: 16px;
+            z-index: 10;
+            padding: 10px 16px;
+            border-radius: 4px;
+            background: var(--surface);
+            transform: translateY(-150%);
         }
+        .skip-link:focus { transform: translateY(0); }
 
-        /* Header */
-        header {
-            background-color: var(--bg-card);
-            border-bottom: 1px solid var(--border-color);
-            padding: 1.5rem 0;
-            position: sticky;
-            top: 0;
-            z-index: 100;
+        /* MasterGo 56:8765: 1920 × 2282, with a 1400px content column. */
+        .masthead {
+            min-height: 487px;
+            background: url("/image/home/hero-background.png") center top / max(1920px, 100%) 100% no-repeat;
         }
-
+        .site-header { background: rgb(255 255 255 / 20%); }
         .nav-wrapper {
             display: flex;
+            height: 64px;
+            align-items: center;
             justify-content: space-between;
-            align-items: center;
+            gap: 32px;
         }
-
-        .logo {
-            font-size: 1.5rem;
-            font-weight: 800;
-            color: var(--primary);
-            text-decoration: none;
+        .logo { flex: 0 0 auto; align-self: flex-start; margin-top: 13px; }
+        .logo img { width: 201px; height: 50px; }
+        .nav-links {
             display: flex;
+            height: 100%;
             align-items: center;
-            gap: 0.5rem;
+            gap: 60px;
+            white-space: nowrap;
+            font-size: 18px;
+            line-height: 28px;
         }
-
-        .nav-links a {
-            color: var(--text-main);
-            text-decoration: none;
-            margin-left: 2rem;
-            font-weight: 500;
-            transition: color 0.2s;
+        .nav-links a { transition: color 160ms ease, background-color 160ms ease; }
+        .nav-links a:hover, .nav-links .is-active { color: #005aff; }
+        .nav-links .is-active { font-weight: 600; }
+        .nav-links .nav-btn {
+            display: inline-flex;
+            height: 64px;
+            min-width: 140px;
+            align-items: center;
+            justify-content: center;
+            padding-inline: 16px;
+            background: var(--brand-blue);
+            color: #fff;
+            font-size: 20px;
         }
-
-        .nav-links a:hover {
-            color: var(--primary);
-        }
-
-        .nav-btn {
-            background-color: var(--primary);
-            color: white !important;
-            padding: 0.5rem 1.25rem;
-            border-radius: 0.5rem;
-            transition: background-color 0.2s;
-        }
-
-        .nav-btn:hover {
-            background-color: var(--primary-dark);
-        }
-
-        /* Hero Section */
-        .hero {
-            padding: 6rem 0;
-            text-align: center;
-        }
-
+        .nav-links .nav-btn:hover { background: #2855e4; }
+        .hero { padding-top: 87px; padding-bottom: 68px; text-align: center; }
         .hero h1 {
-            font-size: 3.5rem;
-            font-weight: 900;
-            margin-bottom: 1.5rem;
-            background: linear-gradient(to right, var(--primary), var(--secondary));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            line-height: 1.2;
-        }
-
-        .hero p {
-            font-size: 1.25rem;
-            color: var(--text-muted);
-            max-width: 700px;
-            margin: 0 auto 2.5rem;
-        }
-
-        .cta-group {
             display: flex;
             justify-content: center;
-            gap: 1rem;
+            gap: 8px;
+            font-size: 56px;
+            font-weight: 700;
+            line-height: 87px;
+            letter-spacing: .06em;
         }
-
+        .hero h1 span { white-space: nowrap; }
+        .hero .accent {
+            background: linear-gradient(90deg, var(--brand-blue), var(--brand-purple));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: var(--brand-blue);
+        }
+        .hero-description {
+            max-width: 1108px;
+            margin: 29px auto 0;
+            color: var(--text-secondary);
+            font-size: 24px;
+            line-height: 37px;
+            letter-spacing: .06em;
+            overflow-wrap: break-word;
+        }
+        .cta-group { display: flex; justify-content: center; gap: 24px; margin-top: 32px; }
         .btn {
-            display: inline-block;
-            padding: 0.875rem 2rem;
-            border-radius: 0.5rem;
-            font-weight: 600;
-            text-decoration: none;
-            transition: all 0.2s;
-        }
-
-        .btn-primary {
-            background-color: var(--primary);
-            color: white;
-            box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);
-        }
-
-        .btn-primary:hover {
-            background-color: var(--primary-dark);
-            transform: translateY(-1px);
-        }
-
-        .btn-outline {
-            background-color: white;
-            color: var(--text-main);
-            border: 1px solid var(--border-color);
-        }
-
-        .btn-outline:hover {
-            border-color: var(--text-muted);
-            background-color: #f3f4f6;
-        }
-
-        /* Features Grid */
-        .features {
-            padding: 4rem 0;
-        }
-
-        .section-title {
-            text-align: center;
-            margin-bottom: 3rem;
-        }
-
-        .section-title h2 {
-            font-size: 2.25rem;
-            font-weight: 800;
-            margin-bottom: 0.5rem;
-        }
-
-        .section-title p {
-            color: var(--text-muted);
-        }
-
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 2rem;
-        }
-
-        .card {
-            background: var(--bg-card);
-            padding: 2rem;
-            border-radius: 1rem;
-            border: 1px solid var(--border-color);
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-        }
-
-        .icon {
-            width: 48px;
-            height: 48px;
-            background-color: #e0e7ff;
-            color: var(--primary);
-            border-radius: 0.75rem;
-            display: flex;
+            display: inline-flex;
+            min-width: 148px;
+            min-height: 46px;
             align-items: center;
             justify-content: center;
-            margin-bottom: 1.5rem;
-            font-size: 1.5rem;
+            padding: 9px 24px;
+            border-radius: 4px;
+            font-size: 18px;
+            line-height: 28px;
+            transition: box-shadow 160ms ease, background-color 160ms ease;
         }
+        .btn-primary { background: linear-gradient(90deg, var(--brand-blue), #7059e5); color: #fff; }
+        .btn-primary:hover { box-shadow: 0 4px 14px rgb(59 102 244 / 24%); }
+        .btn-secondary { background: var(--surface); }
+        .btn-secondary:hover { background: #edf2ff; }
 
-        .card h3 {
-            font-size: 1.25rem;
-            margin-bottom: 0.75rem;
-            font-weight: 700;
+        .features { padding-top: 106px; scroll-margin-top: 24px; }
+        .section-title { text-align: center; }
+        .section-title h2 {
+            font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+            font-size: 38.4px;
+            font-weight: 600;
+            line-height: 45px;
         }
-
-        .card p {
-            color: var(--text-muted);
-            font-size: 0.95rem;
-            margin: 0;
+        .section-title p {
+            margin-top: 12px;
+            color: var(--text-secondary);
+            font-size: 24px;
+            line-height: 37px;
+            letter-spacing: .06em;
         }
-
-        /* Tech Stack */
-        .tech-stack {
-            background-color: white;
-            padding: 4rem 0;
-            border-top: 1px solid var(--border-color);
-            border-bottom: 1px solid var(--border-color);
-            text-align: center;
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 32px 28px;
+            margin-top: 40px;
         }
+        .feature-card {
+            min-height: 214px;
+            padding: 24px 24px 35px;
+            border-radius: 8px;
+            background: var(--surface);
+            color: var(--card-text);
+            box-shadow: 0 4px 10px rgb(217 221 228 / 29.61%);
+            font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+        }
+        .feature-icon { width: 56px; height: 56px; }
+        .feature-card h3 { margin-top: 20px; font-size: 18px; font-weight: 700; line-height: 24px; }
+        .feature-card p { margin-top: 11px; font-size: 14px; line-height: 22px; text-align: justify; overflow-wrap: break-word; }
 
+        .tech-stack { padding-top: 140px; padding-bottom: 255px; scroll-margin-top: 24px; }
+        .tech-band {
+            display: flex;
+            min-height: 200px;
+            align-items: center;
+            margin-top: 40px;
+            padding-block: 40px;
+            background: url("/image/home/tech-background.png") center / cover no-repeat;
+        }
         .tech-badges {
             display: flex;
-            justify-content: center;
-            gap: 1.5rem;
             flex-wrap: wrap;
-            margin-top: 2rem;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            padding: 0;
+            list-style: none;
         }
-
         .badge {
-            background-color: #f3f4f6;
-            padding: 0.5rem 1rem;
-            border-radius: 2rem;
-            font-weight: 600;
-            color: #4b5563;
-            font-size: 0.875rem;
+            display: flex;
+            min-height: 46px;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 24px;
+            border: 1px solid #c1d5ea;
+            border-radius: 30px;
+            background: var(--surface);
+            color: #333;
+            font-size: 14px;
+            line-height: 24px;
+            white-space: nowrap;
         }
-
-        /* Footer */
-        footer {
-            padding: 3rem 0;
+        .site-footer {
+            display: flex;
+            min-height: 120px;
+            align-items: center;
+            padding-block: 32px;
+            background: #151719;
+            color: #fff;
             text-align: center;
-            color: var(--text-muted);
-            font-size: 0.875rem;
+            font-size: 16px;
+            line-height: 24px;
         }
 
-        @media (max-width: 768px) {
-            .hero h1 {
-                font-size: 2.5rem;
-            }
-
-            .nav-links {
-                display: none;
-            }
+        @media (max-width: 1200px) {
+            .nav-links { gap: 32px; }
+            .hero h1 { font-size: 48px; }
+            .hero-description { max-width: 960px; font-size: 21px; line-height: 34px; }
+            .tech-badges { justify-content: center; }
+        }
+        @media (max-width: 900px) {
+            .nav-links { gap: 24px; font-size: 16px; }
+            .nav-links .nav-btn { min-width: 120px; font-size: 16px; }
+            .hero { padding-top: 72px; padding-bottom: 64px; }
+            .hero h1 { font-size: 40px; line-height: 64px; letter-spacing: .02em; }
+            .hero-description { font-size: 18px; line-height: 30px; }
+            .feature-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+            .features { padding-top: 64px; }
+            .tech-stack { padding-top: 88px; padding-bottom: 112px; }
+            .section-title h2 { font-size: 32px; line-height: 42px; }
+            .section-title p { font-size: 19px; line-height: 30px; }
+        }
+        @media (max-width: 640px) {
+            .container { width: calc(100% - 40px); }
+            .nav-wrapper { height: auto; flex-direction: column; gap: 12px; padding-top: 12px; }
+            .logo { align-self: center; margin-top: 0; }
+            .logo img { width: 181px; height: auto; }
+            .nav-links { width: 100%; height: 44px; justify-content: space-between; gap: 12px; font-size: 14px; }
+            .nav-links .nav-btn { min-width: 104px; height: 44px; padding-inline: 10px; font-size: 14px; }
+            .hero { padding-top: 48px; padding-bottom: 64px; }
+            .hero h1 { flex-wrap: wrap; gap: 0 8px; font-size: 34px; line-height: 50px; }
+            .hero-description { margin-top: 22px; font-size: 16px; line-height: 28px; letter-spacing: .02em; }
+            .cta-group { gap: 16px; margin-top: 28px; }
+            .btn { min-width: 0; padding-inline: 24px; font-size: 16px; }
+            .features { padding-top: 56px; }
+            .section-title h2 { font-size: 30px; line-height: 40px; }
+            .section-title p { font-size: 16px; line-height: 26px; letter-spacing: .02em; }
+            .feature-grid { grid-template-columns: minmax(0, 1fr); gap: 20px; margin-top: 32px; }
+            .feature-card { padding-bottom: 28px; }
+            .tech-stack { padding-top: 72px; padding-bottom: 72px; }
+            .tech-band { margin-top: 32px; }
+            .tech-badges { gap: 12px; }
+            .badge { min-height: 40px; padding: 7px 16px; font-size: 13px; }
+            .site-footer { min-height: 104px; font-size: 12px; line-height: 22px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            a { transition: none !important; }
         }
     </style>
 </head>
-
 <body>
-    <header>
-        <div class="container nav-wrapper">
-            <a href="/" class="logo">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                </svg>
-                木雷消息服务
-            </a>
-            <nav class="nav-links">
-                <a href="#features">特性</a>
-                <a href="#architecture">架构</a>
-                <a href="https://github.com/muleiwu/message-push" target="_blank">GitHub</a>
-                <a href="/admin" class="nav-btn">进入控制台</a>
-            </nav>
-        </div>
-    </header>
+    <a class="skip-link" href="#features">跳至核心特性</a>
+    <div class="masthead">
+        <header class="site-header">
+            <div class="container nav-wrapper">
+                <a href="/" class="logo" aria-label="木雷消息服务首页">
+                    <img src="/image/home/logo.png" alt="木雷消息服务" width="201" height="50">
+                </a>
+                <nav class="nav-links" aria-label="主导航">
+                    <a href="#features" class="is-active">特性</a>
+                    <a href="#architecture">架构</a>
+                    <a href="https://github.com/muleiwu/message-push" target="_blank" rel="noopener noreferrer">GitHub</a>
+                    <a href="/admin" class="nav-btn">进入控制台</a>
+                </nav>
+            </div>
+        </header>
+        <section class="hero container" aria-labelledby="hero-title">
+            <h1 id="hero-title"><span>木雷企业级</span><span class="accent">信息服务平台</span></h1>
+            <p class="hero-description">基于Go+Gin构建的高性能消息服务。支持短信(阿里云/腾讯云/助通)、邮件、企业微信、钉钉等多渠道分发。内置规则引擎、流量控制与实时监控，助力企业构建稳定可靠的消息触达能力。</p>
+            <div class="cta-group">
+                <a href="/admin" class="btn btn-primary">立即开始</a>
+                <a href="https://github.com/muleiwu/message-push" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">查看源码</a>
+            </div>
+        </section>
+    </div>
 
     <main>
-        <section class="hero">
-            <div class="container">
-                <h1>木雷企业级消息服务平台</h1>
-                <p>基于 Go + Gin 构建的高性能消息服务。支持短信（阿里云/腾讯云/助通）、邮件、企业微信、钉钉等多渠道分发。内置规则引擎、流量控制与实时监控，助力企业构建稳定可靠的消息触达能力。</p>
-                <div class="cta-group">
-                    <a href="/admin" class="btn btn-primary">立即开始</a>
-                    <a href="https://github.com/muleiwu/message-push" target="_blank"
-                        class="btn btn-outline">查看源码</a>
-                </div>
+        <section id="features" class="features container" aria-labelledby="features-title">
+            <div class="section-title">
+                <h2 id="features-title">核心特性</h2>
+                <p>为生产环境打造的完备功能集</p>
+            </div>
+            <div class="feature-grid">
+                <article class="feature-card">
+                    <img class="feature-icon" src="/image/home/performance.png" alt="" width="56" height="56" loading="lazy" decoding="async">
+                    <h3>高性能架构</h3>
+                    <p>基于 Go 1.23+ 开发，采用 Gin 框架，内置连接池与协程池，轻松应对高并发场景。</p>
+                </article>
+                <article class="feature-card">
+                    <img class="feature-icon" src="/image/home/channels.png" alt="" width="56" height="56" loading="lazy" decoding="async">
+                    <h3>多渠道支持</h3>
+                    <p>统一接口适配阿里云/腾讯云/助通 SMS、邮件、企业微信、钉钉等多种渠道，支持权重配置与智能路由。</p>
+                </article>
+                <article class="feature-card">
+                    <img class="feature-icon" src="/image/home/rules.png" alt="" width="56" height="56" loading="lazy" decoding="async">
+                    <h3>规则引擎</h3>
+                    <p>内置智能规则引擎，支持失败重试、自动切换渠道、熔断降级等策略，确保消息高可靠送达。</p>
+                </article>
+                <article class="feature-card">
+                    <img class="feature-icon" src="/image/home/reliability.png" alt="" width="56" height="56" loading="lazy" decoding="async">
+                    <h3>稳定性保障</h3>
+                    <p>内置熔断降级、重试机制、QPS 限流与每日配额控制，保障系统稳健运行。</p>
+                </article>
+                <article class="feature-card">
+                    <img class="feature-icon" src="/image/home/callbacks.png" alt="" width="56" height="56" loading="lazy" decoding="async">
+                    <h3>回调处理</h3>
+                    <p>支持供应商状态回调处理与 Webhook 通知，实时掌握消息投递状态。</p>
+                </article>
+                <article class="feature-card">
+                    <img class="feature-icon" src="/image/home/observability.png" alt="" width="56" height="56" loading="lazy" decoding="async">
+                    <h3>可观测性</h3>
+                    <p>集成 Zap 结构化日志，提供详细的请求追踪 (TraceID) 与健康检查端点。</p>
+                </article>
+                <article class="feature-card">
+                    <img class="feature-icon" src="/image/home/security.png" alt="" width="56" height="56" loading="lazy" decoding="async">
+                    <h3>安全可靠</h3>
+                    <p>支持 AppSecret 签名验证、防重放攻击，确保 API 调用的安全性。</p>
+                </article>
+                <article class="feature-card">
+                    <img class="feature-icon" src="/image/home/console.png" alt="" width="56" height="56" loading="lazy" decoding="async">
+                    <h3>管理后台</h3>
+                    <p>提供基于 Vue.js + Ant Design 的可视化管理后台，方便进行配置管理与数据监控。</p>
+                </article>
+                <article class="feature-card">
+                    <img class="feature-icon" src="/image/home/deployment.png" alt="" width="56" height="56" loading="lazy" decoding="async">
+                    <h3>开箱即用</h3>
+                    <p>提供 Docker 镜像与 K8s 部署配置，支持一键初始化与数据库迁移。</p>
+                </article>
             </div>
         </section>
 
-        <section id="features" class="features">
-            <div class="container">
-                <div class="section-title">
-                    <h2>核心特性</h2>
-                    <p>为生产环境打造的完备功能集</p>
-                </div>
-                <div class="grid">
-                    <div class="card">
-                        <div class="icon">🚀</div>
-                        <h3>高性能架构</h3>
-                        <p>基于 Go 1.23+ 开发，采用 Gin 框架，内置连接池与协程池，轻松应对高并发场景。</p>
-                    </div>
-                    <div class="card">
-                        <div class="icon">📡</div>
-                        <h3>多渠道支持</h3>
-                        <p>统一接口适配阿里云/腾讯云/助通 SMS、邮件、企业微信、钉钉等多种渠道，支持权重配置与智能路由。</p>
-                    </div>
-                    <div class="card">
-                        <div class="icon">⚙️</div>
-                        <h3>规则引擎</h3>
-                        <p>内置智能规则引擎，支持失败重试、自动切换渠道、熔断降级等策略，确保消息高可靠送达。</p>
-                    </div>
-                    <div class="card">
-                        <div class="icon">🛡️</div>
-                        <h3>稳定性保障</h3>
-                        <p>内置熔断降级、重试机制、QPS 限流与每日配额控制，保障系统稳健运行。</p>
-                    </div>
-                    <div class="card">
-                        <div class="icon">🔄</div>
-                        <h3>回调处理</h3>
-                        <p>支持供应商状态回调处理与 Webhook 通知，实时掌握消息投递状态。</p>
-                    </div>
-                    <div class="card">
-                        <div class="icon">📊</div>
-                        <h3>可观测性</h3>
-                        <p>集成 Zap 结构化日志，提供详细的请求追踪 (TraceID) 与健康检查端点。</p>
-                    </div>
-                    <div class="card">
-                        <div class="icon">🔐</div>
-                        <h3>安全可靠</h3>
-                        <p>支持 AppSecret 签名验证、防重放攻击，确保 API 调用的安全性。</p>
-                    </div>
-                    <div class="card">
-                        <div class="icon">🖥️</div>
-                        <h3>管理后台</h3>
-                        <p>提供基于 Vue.js + Ant Design 的可视化管理后台，方便进行配置管理与数据监控。</p>
-                    </div>
-                    <div class="card">
-                        <div class="icon">📦</div>
-                        <h3>开箱即用</h3>
-                        <p>提供 Docker 镜像与 K8s 部署配置，支持一键初始化与数据库迁移。</p>
-                    </div>
-                </div>
+        <section id="architecture" class="tech-stack" aria-labelledby="technology-title">
+            <div class="section-title container">
+                <h2 id="technology-title">技术栈</h2>
+                <p>采用主流成熟的开源技术构建</p>
             </div>
-        </section>
-
-        <section id="architecture" class="tech-stack">
-            <div class="container">
-                <div class="section-title">
-                    <h2>技术栈</h2>
-                    <p>采用主流成熟的开源技术构建</p>
-                </div>
-                <div class="tech-badges">
-                    <span class="badge">Go 1.23+</span>
-                    <span class="badge">Gin Web Framework</span>
-                    <span class="badge">GORM</span>
-                    <span class="badge">Redis</span>
-                    <span class="badge">MySQL / PostgreSQL</span>
-                    <span class="badge">Viper</span>
-                    <span class="badge">Zap Logger</span>
-                    <span class="badge">Vue.js + Ant Design</span>
-                    <span class="badge">Docker</span>
-                </div>
+            <div class="tech-band">
+                <ul class="tech-badges container" aria-label="技术栈">
+                    <li class="badge">Go 1.23+</li>
+                    <li class="badge">Gin Web Framework</li>
+                    <li class="badge">GORM</li>
+                    <li class="badge">Redis</li>
+                    <li class="badge">Viper</li>
+                    <li class="badge">Docker</li>
+                    <li class="badge">MySQL / PostgreSQL</li>
+                    <li class="badge">Vue.js + Ant Design</li>
+                    <li class="badge">Zap Logger</li>
+                </ul>
             </div>
         </section>
     </main>
 
-    <footer>
-        <div class="container">
-            <p>&copy; 2025 Mulei Message Service / 木雷消息服务. All rights reserved.</p>
-        </div>
+    <footer class="site-footer">
+        <p class="container">&copy; 2025 Mulei Message Service / 木雷消息服务. All rights reserved.</p>
     </footer>
+    <script>
+        const sectionLinks = document.querySelectorAll('.nav-links a[href^="#"]');
+        function updateActiveSection() {
+            const currentSection = window.location.hash || '#features';
+            sectionLinks.forEach((link) => {
+                const active = link.getAttribute('href') === currentSection;
+                link.classList.toggle('is-active', active);
+                if (active) link.setAttribute('aria-current', 'location');
+                else link.removeAttribute('aria-current');
+            });
+        }
+        window.addEventListener('hashchange', updateActiveSection);
+        updateActiveSection();
+    </script>
 </body>
-
 </html>
