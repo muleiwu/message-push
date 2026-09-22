@@ -30,6 +30,9 @@ func TestResetDemoCreatesValidDeterministicDataset(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if sqlDB, dbErr := db.DB(); dbErr == nil {
+		t.Cleanup(func() { _ = sqlDB.Close() })
+	}
 	var admin model.AdminUser
 	if err := db.Where("username = ?", "demo-admin").First(&admin).Error; err != nil {
 		t.Fatal(err)

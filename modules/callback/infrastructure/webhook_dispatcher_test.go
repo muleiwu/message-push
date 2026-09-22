@@ -176,6 +176,9 @@ func newWebhookDispatcherTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
+	if sqlDB, dbErr := db.DB(); dbErr == nil {
+		t.Cleanup(func() { _ = sqlDB.Close() })
+	}
 	if err := db.Exec(`CREATE TABLE webhook_logs (
 		id INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT, app_id TEXT NOT NULL,
 		webhook_config_id INTEGER, webhook_url TEXT NOT NULL, event TEXT NOT NULL,

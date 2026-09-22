@@ -253,6 +253,9 @@ func newSignatureServiceTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if sqlDB, dbErr := db.DB(); dbErr == nil {
+		t.Cleanup(func() { _ = sqlDB.Close() })
+	}
 	for _, statement := range []string{
 		`CREATE TABLE provider_accounts (id INTEGER PRIMARY KEY AUTOINCREMENT, account_code TEXT NOT NULL UNIQUE, account_name TEXT NOT NULL, provider_code TEXT NOT NULL, provider_type TEXT NOT NULL, config TEXT, status INTEGER, remark TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE provider_signatures (provider_metadata TEXT, remote_id TEXT DEFAULT '', audit_status INTEGER, audit_reply TEXT, remote_deleted INTEGER NOT NULL DEFAULT 0, synced_at DATETIME, remote_description TEXT, id INTEGER PRIMARY KEY AUTOINCREMENT, provider_account_id INTEGER NOT NULL, signature_code TEXT NOT NULL, signature_name TEXT NOT NULL, status INTEGER, remark TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,

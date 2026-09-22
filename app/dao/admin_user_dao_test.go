@@ -14,6 +14,9 @@ func TestBindOidcSubUsesConditionalUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
+	if sqlDB, dbErr := db.DB(); dbErr == nil {
+		t.Cleanup(func() { _ = sqlDB.Close() })
+	}
 	if err := db.AutoMigrate(&model.AdminUser{}); err != nil {
 		t.Fatalf("migrate admin user: %v", err)
 	}
@@ -57,6 +60,9 @@ func TestAdminUserEmailExistsExcludesCurrentAndIncludesSoftDeleted(t *testing.T)
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
+	if sqlDB, dbErr := db.DB(); dbErr == nil {
+		t.Cleanup(func() { _ = sqlDB.Close() })
+	}
 	if err := db.AutoMigrate(&model.AdminUser{}); err != nil {
 		t.Fatalf("migrate admin user: %v", err)
 	}
@@ -91,6 +97,9 @@ func TestAdminUserUpdatePreservesConcurrentIdentityFieldsAndWritesDisabledStatus
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "admin-user-update.db")), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
+	}
+	if sqlDB, dbErr := db.DB(); dbErr == nil {
+		t.Cleanup(func() { _ = sqlDB.Close() })
 	}
 	if err := db.AutoMigrate(&model.AdminUser{}); err != nil {
 		t.Fatalf("migrate admin user: %v", err)

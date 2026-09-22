@@ -3,9 +3,8 @@ package queue
 import (
 	"context"
 	"io"
-	"os"
+	"net"
 	"os/exec"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -18,21 +17,19 @@ func TestPushDelayedOnceDoesNotReplayConsumedEffect(t *testing.T) {
 	if err != nil {
 		t.Skip("redis-server unavailable; isolated Lua integration test requires it")
 	}
-	dir, err := os.MkdirTemp("", "sms-redis-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-	// A relative socket keeps macOS's Unix-socket path under its length limit.
-	command := exec.Command(binary, "--port", "0", "--unixsocket", "redis.sock", "--save", "", "--appendonly", "no")
-	command.Dir, command.Stdout, command.Stderr = dir, io.Discard, io.Discard
+	// Loopback TCP keeps the isolated server portable: Windows builds of
+	// redis-server reject --unixsocket, which the original Unix-socket setup
+	// relied on.
+	addr := freeLoopbackAddr(t)
+	command := exec.Command(binary, "--port", addr[1], "--bind", addr[0], "--save", "", "--appendonly", "no")
+	command.Stdout, command.Stderr = io.Discard, io.Discard
 	if err := command.Start(); err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = command.Process.Kill(); _ = command.Wait() }()
-	client := redis.NewClient(&redis.Options{Network: "unix", Addr: filepath.Join(dir, "redis.sock"), MaxRetries: 0})
+	client := redis.NewClient(&redis.Options{Network: "tcp", Addr: addr[0] + ":" + addr[1], MaxRetries: 0})
 	defer client.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	for client.Ping(ctx).Err() != nil {
 		if ctx.Err() != nil {
@@ -66,3 +63,20 @@ func TestPushDelayedOnceDoesNotReplayConsumedEffect(t *testing.T) {
 		t.Fatal("new event was suppressed")
 	}
 }
+
+// freeLoopbackAddr reserves an unused loopback TCP port for the duration of the
+// test binary and returns the host and port to hand to redis-server.
+func freeLoopbackAddr(t *testing.T) [2]string {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("reserve loopback port: %v", err)
+	}
+	defer listener.Close()
+	host, port, err := net.SplitHostPort(listener.Addr().String())
+	if err != nil {
+		t.Fatalf("split loopback addr: %v", err)
+	}
+	return [2]string{host, port}
+}
+

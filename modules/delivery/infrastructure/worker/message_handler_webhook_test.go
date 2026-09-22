@@ -21,6 +21,9 @@ func TestHandleEarlyFailureCreatesTerminalWebhookOutbox(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
+	if sqlDB, dbErr := db.DB(); dbErr == nil {
+		t.Cleanup(func() { _ = sqlDB.Close() })
+	}
 	for _, statement := range []string{
 		`CREATE TABLE applications (id INTEGER PRIMARY KEY AUTOINCREMENT, app_id TEXT NOT NULL UNIQUE, webhook_url TEXT)`,
 		`CREATE TABLE push_tasks (
@@ -157,6 +160,9 @@ func newWorkerWebhookTestDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "worker-webhook.db")), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
+	}
+	if sqlDB, dbErr := db.DB(); dbErr == nil {
+		t.Cleanup(func() { _ = sqlDB.Close() })
 	}
 	for _, statement := range workerWebhookTestSchema {
 		if err := db.Exec(statement).Error; err != nil {
