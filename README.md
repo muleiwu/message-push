@@ -33,6 +33,8 @@ Business application
   → Failure policy, receipt, Webhook, and delivery logs
 ```
 
+![Mulei Message Service architecture](docs/message-push-system.en.png)
+
 ## Local Demo
 
 The local demo provides a complete SQLite database with deterministic fake data. It is intended for exploring the admin console and documentation screenshots without contacting real SMS, email, or bot services.
