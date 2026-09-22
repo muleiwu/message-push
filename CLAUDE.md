@@ -40,6 +40,8 @@ make deps                        # Tidy and download dependencies
 go test ./modules/delivery/... -run TestFunctionName -v  # Run a single test
 ```
 
+Tests use the stdlib `testing` package only (no testify). Service/DAO tests typically seed an in-memory SQLite DB (`glebarez/sqlite`) with raw SQL `INSERT`s instead of mocks.
+
 ### Docker
 ```bash
 make docker-build    # Build Docker image
@@ -51,7 +53,7 @@ make docker-down     # Stop containers
 
 ### Service Bootstrap Flow
 
-`main.go` embeds `templates/` and `static/`, forces `time.Local = time.UTC`, and calls go-web `cmd.Start(cmd.WithApp(config.App{}))`. `config.App` implements the framework's AppProvider with two chains:
+`main.go` embeds `templates/` and `static/`, forces `time.Local = time.UTC`, and wraps go-web startup (`cmd.Start(cmd.WithApp(config.App{}))`) in `gomander.Run` (process supervisor from github.com/muleiwu/gomander). `config.App` implements the framework's AppProvider with two chains:
 
 1. **Assembly Phase** (`config/app.go` → `Assemblies()`) — DI container wiring via `interfaces.AssemblyInterface`:
    - Framework infrastructure: env → config (from `config.Config.Get()` → `config/autoload/*`) → logger → database (`internal/database`) → redis → cache
@@ -98,6 +100,7 @@ Current modules: `sender`, `channel`, `ruleengine`, `delivery` (queue/worker/sch
 - `migration/` — goose bootstrap runner + migration contract tests
 - `migrations/` — dialect-specific SQL files (embedded)
 - `cmd/demo/` — local demo DB seeder/reset tool
+- `docs/` — `docs/channels/` (per-provider integration docs + capability matrix, one dir per sender), `docs/archify/` (generated architecture diagrams), `docs/timezone-audit.md`, provider-native-templates / provider-resource-management guides
 - `admin-webui/` — git submodule (Vben Admin + Ant Design Vue)
 - `templates/`, `static/` — embedded email templates and web static assets (landing page, admin UI, install pages)
 
@@ -178,6 +181,7 @@ All routes defined in `config/autoload/router.go`.
 1. Create sender in `modules/sender/infrastructure/{provider}_sender.go`: implement `domain.Sender`; optionally `BatchSender`, `CallbackHandler`, `StatusQuerier`, `StatusPuller`
 2. Register in `modules/sender/infrastructure/factory.go`: add to `NewFactory()`
 3. Add provider code constant / config field definitions in `modules/sender/domain/` (`config_field.go`) and `app/model/` as needed
+4. Document it in `docs/channels/{provider}/README.md` (see `docs/channels/README.md` for the capability matrix and existing provider codes like `aliyun_sms`, `dingtalk_robot`, `onebot`)
 
 ## Configuration
 
@@ -193,3 +197,5 @@ YAML config files in `config/autoload/` are Go initializers that return Viper co
 - Worker pool uses Redis Streams consumer groups (`push:stream`); failed messages go to the dead letter stream `push:stream:dead_letter`
 - Admin UI is a Vue.js app in `admin-webui/` (git submodule, Vben Admin + Ant Design Vue)
 - Demo assets are ensured by `scripts/ensure-demo-assets.sh`; other scripts in `scripts/` cover API signing (apifox), doc publishing, and manual verification
+- `AGENTS.md` mirrors this file for Codex — keep the two in sync when changing guidance
+- CI is `.cnb.yml` (cnb.cool pipeline: multi-arch builds amd64/arm/loong64 + image push) — there is no GitHub Actions workflow
