@@ -82,4 +82,4 @@ The [channel catalog integration guide](docs/public-channel-catalog.md) explains
 
 ## License
 
-Copyright © 2025 Hefei Muleiwu (Mliev) Information Technology Co., Ltd. See [LICENSE](LICENSE) for permitted use and restrictions.
+Copyright © 2025-2026 Hefei Muleiwu (Mliev) Information Technology Co., Ltd. See [LICENSE](LICENSE) for permitted use and restrictions.
