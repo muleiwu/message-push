@@ -6,7 +6,7 @@ A unified, high-availability message delivery service for SMS, email, WeCom, Din
 
 **Technology stack:** Go 1.25+ · Redis Streams · MySQL/PostgreSQL · Vue · Ant Design Vue
 
-![Mulei Message Service send-readiness dashboard](https://static.1ms.run/mdoc/uploads/2026/07/23/b813c058-4008-45a0-9561-9281272fcc28.png)
+![Mulei Message Service architecture](docs/archify/en/message-push-system.en.png)
 
 ## Why Mulei Message Service?
 
@@ -33,7 +33,7 @@ Business application
   → Failure policy, receipt, Webhook, and delivery logs
 ```
 
-![Mulei Message Service architecture](docs/archify/en/message-push-system.en.png)
+![Mulei Message Service send-readiness dashboard](https://static.1ms.run/mdoc/uploads/2026/07/23/b813c058-4008-45a0-9561-9281272fcc28.png)
 
 ## Local Demo
 

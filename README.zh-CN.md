@@ -6,7 +6,7 @@
 
 **技术栈：** Go 1.25+ · Redis Streams · MySQL/PostgreSQL · Vue · Ant Design Vue
 
-![木雷消息服务发送准备台](https://static.1ms.run/mdoc/uploads/2026/07/23/b813c058-4008-45a0-9561-9281272fcc28.png)
+![木雷消息服务系统架构](docs/archify/zh-CN/message-push-system.png)
 
 ## 为什么使用木雷消息服务？
 
@@ -33,7 +33,7 @@
   → 失败策略、回执、Webhook 与投递日志
 ```
 
-![木雷消息服务系统架构](docs/archify/zh-CN/message-push-system.png)
+![木雷消息服务发送准备台](https://static.1ms.run/mdoc/uploads/2026/07/23/b813c058-4008-45a0-9561-9281272fcc28.png)
 
 ## 本机演示
 
