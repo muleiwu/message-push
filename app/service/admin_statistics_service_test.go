@@ -19,6 +19,9 @@ func newAdminStatisticsTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
+	if sqlDB, dbErr := db.DB(); dbErr == nil {
+		t.Cleanup(func() { _ = sqlDB.Close() })
+	}
 	for _, statement := range []string{
 		`CREATE TABLE applications (id INTEGER PRIMARY KEY AUTOINCREMENT, app_id TEXT NOT NULL, app_secret TEXT NOT NULL, app_name TEXT NOT NULL, status INTEGER NOT NULL, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE channels (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, type TEXT NOT NULL, message_template_id INTEGER NOT NULL DEFAULT 0, status INTEGER NOT NULL, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
@@ -480,6 +483,7 @@ func TestAdminStatisticsPropagatesDatabaseErrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get sql database: %v", err)
 	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
 	if err := sqlDB.Close(); err != nil {
 		t.Fatalf("close sql database: %v", err)
 	}

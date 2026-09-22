@@ -331,6 +331,9 @@ func newTerminalServiceTestDB(t *testing.T, withWebhookLogs bool) *gorm.DB {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
+	if sqlDB, dbErr := db.DB(); dbErr == nil {
+		t.Cleanup(func() { _ = sqlDB.Close() })
+	}
 	statements := []string{
 		`CREATE TABLE applications (
 			id INTEGER PRIMARY KEY AUTOINCREMENT, app_id TEXT NOT NULL UNIQUE, app_secret TEXT NOT NULL,
