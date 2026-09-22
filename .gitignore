@@ -8,3 +8,6 @@ config.yaml
 /.playwright-cli/
 /.pnpm-store/
 __pycache__/
+
+# archify visual-check 浏览器验证证据（可随时重新生成）
+docs/archify/**/*.visual-check.*

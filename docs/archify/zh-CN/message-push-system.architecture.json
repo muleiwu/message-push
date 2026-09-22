@@ -1,0 +1,849 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "木雷消息推送服务：系统架构",
+    "locale": "zh-CN",
+    "output": "message-push-system.html",
+    "quality_profile": "standard",
+    "viewBox": [
+      1880,
+      700
+    ],
+    "views": [
+      {
+        "id": "api-entry",
+        "label": "API 与安全入口",
+        "focus": [
+          "biz-app",
+          "biz-form",
+          "security-gate",
+          "http-api",
+          "admin-console"
+        ],
+        "note": "业务调用走 HMAC 签名，管理后台走 JWT 或 OIDC；入口同时执行限流、配额与防重放控制。"
+      },
+      {
+        "id": "async-pipeline",
+        "label": "异步投递主链",
+        "focus": [
+          "http-api",
+          "messaging",
+          "queue-producer",
+          "redis",
+          "worker-pool"
+        ],
+        "note": "任务先持久化，再进入 Redis Streams 或定时 ZSet；消费者组以幂等入队提供至少一次投递。"
+      },
+      {
+        "id": "provider-dispatch",
+        "label": "通道选择与发送",
+        "focus": [
+          "worker-pool",
+          "message-handler",
+          "sms-providers",
+          "smtp-provider",
+          "wecom-provider",
+          "dingtalk-provider",
+          "onebot-provider"
+        ],
+        "note": "发送前综合优先级分组、平滑权重、熔断状态与 5 分钟供应商记忆选择通道。"
+      },
+      {
+        "id": "receipts-and-rules",
+        "label": "回执、规则与回调",
+        "focus": [
+          "callback-handler",
+          "rule-engine",
+          "relational-db",
+          "biz-callback",
+          "provider-polling"
+        ],
+        "note": "回执更新任务状态；失败规则重试、切换服务商或告警；结果经 Webhook 与轮询回传业务。"
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "biz-app",
+      "type": "external",
+      "label": "业务应用",
+      "sublabel": "服务端应用",
+      "tag": "X-App-Key · X-Timestamp · X-Signature",
+      "pos": [
+        40,
+        80
+      ],
+      "size": [
+        180,
+        76
+      ]
+    },
+    {
+      "id": "biz-form",
+      "type": "external",
+      "label": "渠道目录与表单",
+      "sublabel": "消息表单",
+      "tag": "通道 · 模板 · 签名",
+      "pos": [
+        40,
+        300
+      ],
+      "size": [
+        180,
+        76
+      ]
+    },
+    {
+      "id": "biz-callback",
+      "type": "external",
+      "label": "业务回调端点",
+      "sublabel": "Webhook 接收",
+      "tag": "X-Webhook-Signature · Timestamp",
+      "pos": [
+        40,
+        520
+      ],
+      "size": [
+        180,
+        76
+      ]
+    },
+    {
+      "id": "admin-console",
+      "type": "frontend",
+      "label": "管理后台",
+      "sublabel": "Vue · Vben Admin",
+      "tag": "安装引导 · 配置管理",
+      "pos": [
+        256,
+        40
+      ],
+      "size": [
+        160,
+        76
+      ]
+    },
+    {
+      "id": "template-mod",
+      "type": "backend",
+      "label": "模板模块",
+      "sublabel": "系统 · 供应商原生",
+      "pos": [
+        452,
+        40
+      ],
+      "size": [
+        150,
+        76
+      ]
+    },
+    {
+      "id": "readiness",
+      "type": "backend",
+      "label": "发送就绪检查",
+      "sublabel": "② 通道 · 模板 · 账号",
+      "pos": [
+        638,
+        40
+      ],
+      "size": [
+        170,
+        76
+      ]
+    },
+    {
+      "id": "scheduler",
+      "type": "backend",
+      "label": "调度器",
+      "sublabel": "到期: ZSet → Stream",
+      "tag": "超时与回收扫描",
+      "pos": [
+        844,
+        40
+      ],
+      "size": [
+        160,
+        76
+      ]
+    },
+    {
+      "id": "provider-polling",
+      "type": "backend",
+      "label": "供应商轮询",
+      "sublabel": "定时状态拉取",
+      "pos": [
+        1040,
+        40
+      ],
+      "size": [
+        160,
+        76
+      ]
+    },
+    {
+      "id": "security-gate",
+      "type": "security",
+      "label": "认证与流量控制",
+      "sublabel": "HMAC · JWT · 限流",
+      "tag": "③④ 防重放 · 请求体限制",
+      "pos": [
+        256,
+        200
+      ],
+      "size": [
+        150,
+        76
+      ]
+    },
+    {
+      "id": "http-api",
+      "type": "backend",
+      "label": "Go API 与任务服务",
+      "sublabel": "v1 · admin · callback",
+      "pos": [
+        446,
+        200
+      ],
+      "size": [
+        150,
+        76
+      ]
+    },
+    {
+      "id": "messaging",
+      "type": "backend",
+      "label": "消息服务",
+      "sublabel": "⑤ 渲染 ⑥ 校验 ⑦ 建任务",
+      "pos": [
+        636,
+        200
+      ],
+      "size": [
+        170,
+        76
+      ]
+    },
+    {
+      "id": "queue-producer",
+      "type": "backend",
+      "label": "入队生产者",
+      "sublabel": "⑧ 幂等入队",
+      "pos": [
+        846,
+        200
+      ],
+      "size": [
+        130,
+        76
+      ]
+    },
+    {
+      "id": "redis",
+      "type": "messagebus",
+      "label": "Redis",
+      "sublabel": "Streams · ZSet · 缓存",
+      "tag": "⑳ 死信流 push:stream:dead_letter",
+      "pos": [
+        1016,
+        200
+      ],
+      "size": [
+        150,
+        90
+      ]
+    },
+    {
+      "id": "worker-pool",
+      "type": "backend",
+      "label": "Worker 池",
+      "sublabel": "⑨⑩ 消费 · ACK",
+      "tag": "10 个 Worker",
+      "pos": [
+        1206,
+        200
+      ],
+      "size": [
+        150,
+        76
+      ]
+    },
+    {
+      "id": "message-handler",
+      "type": "backend",
+      "label": "消息处理器",
+      "sublabel": "⑪ 选路 ⑫ 发送",
+      "tag": "优先级 · 权重 · 熔断 · 5 分钟记忆",
+      "pos": [
+        1156,
+        380
+      ],
+      "size": [
+        200,
+        90
+      ]
+    },
+    {
+      "id": "rule-engine",
+      "type": "backend",
+      "label": "规则引擎",
+      "sublabel": "㉓ 匹配 ㉔ 动作",
+      "tag": "重试 · 换通道 · 失败 · 告警",
+      "pos": [
+        916,
+        380
+      ],
+      "size": [
+        170,
+        76
+      ]
+    },
+    {
+      "id": "callback-handler",
+      "type": "backend",
+      "label": "回执处理器",
+      "sublabel": "㉒ 回执 · /api/callback/:id",
+      "pos": [
+        700,
+        560
+      ],
+      "size": [
+        200,
+        76
+      ]
+    },
+    {
+      "id": "relational-db",
+      "type": "database",
+      "label": "关系型数据库",
+      "sublabel": "MySQL · PostgreSQL · SQLite",
+      "tag": "任务 · 配置 · 日志 · 规则",
+      "pos": [
+        1060,
+        560
+      ],
+      "size": [
+        190,
+        76
+      ]
+    },
+    {
+      "id": "sms-providers",
+      "type": "external",
+      "label": "短信服务商",
+      "sublabel": "⑬⑭ 四家短信商",
+      "tag": "阿里云 · 腾讯 · 掌榕网 · 网易云信",
+      "pos": [
+        1434,
+        70
+      ],
+      "size": [
+        170,
+        90
+      ]
+    },
+    {
+      "id": "smtp-provider",
+      "type": "external",
+      "label": "邮件 SMTP",
+      "sublabel": "发送 · 退信 DSN",
+      "pos": [
+        1434,
+        200
+      ],
+      "size": [
+        170,
+        76
+      ]
+    },
+    {
+      "id": "wecom-provider",
+      "type": "external",
+      "label": "企业微信",
+      "sublabel": "应用消息 · 群机器人",
+      "pos": [
+        1434,
+        330
+      ],
+      "size": [
+        170,
+        76
+      ]
+    },
+    {
+      "id": "dingtalk-provider",
+      "type": "external",
+      "label": "钉钉",
+      "sublabel": "工作通知 · 群机器人",
+      "pos": [
+        1434,
+        450
+      ],
+      "size": [
+        170,
+        76
+      ]
+    },
+    {
+      "id": "onebot-provider",
+      "type": "external",
+      "label": "QQ · OneBot 11",
+      "sublabel": "私聊 · 群聊",
+      "pos": [
+        1434,
+        580
+      ],
+      "size": [
+        170,
+        76
+      ]
+    },
+    {
+      "id": "rec-mobile",
+      "type": "external",
+      "label": "手机",
+      "sublabel": "⑮ 短信接收",
+      "pos": [
+        1674,
+        70
+      ],
+      "size": [
+        160,
+        90
+      ]
+    },
+    {
+      "id": "rec-mailbox",
+      "type": "external",
+      "label": "邮箱",
+      "sublabel": "⑰ 接收",
+      "tag": "⑱ 回执 / 退信",
+      "pos": [
+        1674,
+        200
+      ],
+      "size": [
+        160,
+        90
+      ]
+    },
+    {
+      "id": "rec-wecom",
+      "type": "external",
+      "label": "企微成员",
+      "sublabel": "⑲ 应用与机器人",
+      "pos": [
+        1674,
+        330
+      ],
+      "size": [
+        160,
+        76
+      ]
+    },
+    {
+      "id": "rec-dingtalk",
+      "type": "external",
+      "label": "钉钉用户",
+      "sublabel": "⑲ 通知与机器人",
+      "pos": [
+        1674,
+        450
+      ],
+      "size": [
+        160,
+        76
+      ]
+    },
+    {
+      "id": "rec-qq",
+      "type": "external",
+      "label": "QQ 用户",
+      "sublabel": "⑲ 私聊与群聊",
+      "pos": [
+        1674,
+        580
+      ],
+      "size": [
+        160,
+        76
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "业务应用",
+      "wraps": [
+        "biz-app",
+        "biz-form",
+        "biz-callback"
+      ],
+      "pad": 28
+    },
+    {
+      "kind": "region",
+      "label": "木雷消息服务（Go）",
+      "wraps": [
+        "security-gate",
+        "http-api",
+        "admin-console",
+        "template-mod",
+        "readiness",
+        "scheduler",
+        "provider-polling",
+        "messaging",
+        "queue-producer",
+        "redis",
+        "worker-pool",
+        "message-handler",
+        "rule-engine",
+        "callback-handler",
+        "relational-db"
+      ],
+      "pad": 28
+    },
+    {
+      "kind": "security-group",
+      "label": "安全边界",
+      "wraps": [
+        "security-gate",
+        "http-api"
+      ],
+      "pad": 16
+    },
+    {
+      "kind": "region",
+      "label": "消息服务商",
+      "wraps": [
+        "sms-providers",
+        "smtp-provider",
+        "wecom-provider",
+        "dingtalk-provider",
+        "onebot-provider"
+      ],
+      "pad": 24
+    },
+    {
+      "kind": "region",
+      "label": "接收人",
+      "wraps": [
+        "rec-mobile",
+        "rec-mailbox",
+        "rec-wecom",
+        "rec-dingtalk",
+        "rec-qq"
+      ],
+      "pad": 24
+    }
+  ],
+  "connections": [
+    {
+      "id": "client-request",
+      "from": "biz-app",
+      "to": "security-gate",
+      "label": "① POST /api/v1/messages",
+      "variant": "security",
+      "labelAt": [
+        140,
+        200
+      ]
+    },
+    {
+      "id": "catalog-fetch",
+      "from": "biz-form",
+      "to": "security-gate",
+      "label": "② GET /api/v1/channels",
+      "labelDx": 50,
+      "labelDy": 20
+    },
+    {
+      "id": "gate-to-api",
+      "from": "security-gate",
+      "to": "http-api",
+      "label": "③④ 限流 · 配额 · 防重放",
+      "variant": "security",
+      "labelAt": [
+        512,
+        292
+      ]
+    },
+    {
+      "id": "admin-to-api",
+      "from": "admin-console",
+      "to": "http-api",
+      "label": "JWT · OIDC",
+      "variant": "security",
+      "fromSide": "right",
+      "toSide": "top",
+      "labelDy": 25
+    },
+    {
+      "id": "api-to-messaging",
+      "from": "http-api",
+      "to": "messaging"
+    },
+    {
+      "id": "api-to-template",
+      "from": "http-api",
+      "to": "template-mod",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "messaging-to-producer",
+      "from": "messaging",
+      "to": "queue-producer"
+    },
+    {
+      "id": "producer-to-redis",
+      "from": "queue-producer",
+      "to": "redis",
+      "label": "⑧ XADD / ZADD",
+      "variant": "emphasis",
+      "labelDy": -60
+    },
+    {
+      "id": "scheduler-to-redis",
+      "from": "scheduler",
+      "to": "redis",
+      "label": "到期 → Stream",
+      "variant": "dashed"
+    },
+    {
+      "id": "redis-to-workers",
+      "from": "redis",
+      "to": "worker-pool",
+      "label": "⑨⑩ 消费 · ACK",
+      "variant": "emphasis",
+      "labelDy": 79
+    },
+    {
+      "id": "workers-to-handler",
+      "from": "worker-pool",
+      "to": "message-handler",
+      "label": "⑩ 处理",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "handler-to-sms",
+      "from": "message-handler",
+      "to": "sms-providers",
+      "label": "⑫ HTTPS",
+      "variant": "emphasis"
+    },
+    {
+      "id": "handler-to-smtp",
+      "from": "message-handler",
+      "to": "smtp-provider",
+      "label": "⑫ SMTP",
+      "variant": "emphasis"
+    },
+    {
+      "id": "handler-to-wecom",
+      "from": "message-handler",
+      "to": "wecom-provider",
+      "label": "⑫ HTTPS",
+      "variant": "emphasis"
+    },
+    {
+      "id": "handler-to-dingtalk",
+      "from": "message-handler",
+      "to": "dingtalk-provider",
+      "label": "⑫ HTTPS",
+      "variant": "emphasis"
+    },
+    {
+      "id": "handler-to-onebot",
+      "from": "message-handler",
+      "to": "onebot-provider",
+      "label": "⑫ HTTP",
+      "variant": "emphasis"
+    },
+    {
+      "id": "sms-to-mobile",
+      "from": "sms-providers",
+      "to": "rec-mobile",
+      "label": "⑮ 送达"
+    },
+    {
+      "id": "smtp-to-mailbox",
+      "from": "smtp-provider",
+      "to": "rec-mailbox",
+      "label": "⑰ 送达"
+    },
+    {
+      "id": "wecom-to-rec",
+      "from": "wecom-provider",
+      "to": "rec-wecom",
+      "label": "⑲ 送达"
+    },
+    {
+      "id": "dingtalk-to-rec",
+      "from": "dingtalk-provider",
+      "to": "rec-dingtalk",
+      "label": "⑲ 送达"
+    },
+    {
+      "id": "onebot-to-rec",
+      "from": "onebot-provider",
+      "to": "rec-qq",
+      "label": "⑲ 送达"
+    },
+    {
+      "id": "bounce-back",
+      "from": "rec-mailbox",
+      "to": "callback-handler",
+      "label": "⑱ 回执 / 退信",
+      "variant": "dashed",
+      "fromSide": "left",
+      "toSide": "top",
+      "via": [
+        [
+          1620,
+          245
+        ],
+        [
+          1620,
+          300
+        ],
+        [
+          800,
+          300
+        ]
+      ],
+      "labelSegment": 2,
+      "labelDy": 20
+    },
+    {
+      "id": "status-callback",
+      "from": "sms-providers",
+      "to": "callback-handler",
+      "label": "㉑ POST /api/callback/:id",
+      "variant": "dashed",
+      "fromSide": "left",
+      "toSide": "left",
+      "via": [
+        [
+          1370,
+          115
+        ],
+        [
+          1370,
+          30
+        ],
+        [
+          616,
+          30
+        ],
+        [
+          616,
+          598
+        ]
+      ],
+      "labelSegment": 3
+    },
+    {
+      "id": "receipts-to-db",
+      "from": "callback-handler",
+      "to": "relational-db",
+      "label": "㉒ 回执日志 ㉕ 任务状态",
+      "labelDy": -54
+    },
+    {
+      "id": "failure-to-rules",
+      "from": "message-handler",
+      "to": "rule-engine",
+      "label": "㉓ 失败匹配",
+      "variant": "dashed",
+      "labelDy": 68
+    },
+    {
+      "id": "rules-to-handler",
+      "from": "rule-engine",
+      "to": "message-handler",
+      "label": "㉔ 重试 · 换通道 · 告警",
+      "variant": "dashed",
+      "labelDy": -55
+    },
+    {
+      "id": "webhook-out",
+      "from": "callback-handler",
+      "to": "biz-callback",
+      "label": "㉖ Webhook 回调",
+      "variant": "security"
+    },
+    {
+      "id": "poll-providers",
+      "from": "provider-polling",
+      "to": "sms-providers",
+      "label": "㉖ 轮询状态",
+      "variant": "dashed"
+    },
+    {
+      "id": "api-to-db",
+      "from": "http-api",
+      "to": "relational-db",
+      "label": "GORM · 任务与配置",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "via": [
+        [
+          521,
+          490
+        ],
+        [
+          1155,
+          490
+        ]
+      ]
+    },
+    {
+      "id": "workers-to-db",
+      "from": "worker-pool",
+      "to": "relational-db",
+      "label": "CAS 状态 · 发送日志",
+      "fromSide": "right",
+      "toSide": "right",
+      "via": [
+        [
+          1400,
+          238
+        ],
+        [
+          1400,
+          598
+        ]
+      ],
+      "labelSegment": 2
+    }
+  ],
+  "cards": [
+    {
+      "dot": "rose",
+      "title": "安全入口",
+      "items": [
+        "业务 API 使用 HMAC-SHA256 加时间戳与 nonce 验签",
+        "管理 API 使用 Bearer JWT，可选 OIDC 单点登录；入口叠加限流、配额与请求体限制"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "异步可靠性",
+      "items": [
+        "Redis Streams 消费组提供至少一次投递，CAS 更新避免重复处理",
+        "定时 ZSet、回收扫描与死信流覆盖延迟、崩溃与永久失败场景"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "多通道高可用",
+      "items": [
+        "按优先级与平滑权重选择通道，结合熔断状态与 5 分钟供应商记忆",
+        "失败规则支持重试、切换服务商、终止与告警"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,849 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Mulei Message Service: System Architecture",
+    "locale": "en",
+    "output": "message-push-system.en.html",
+    "quality_profile": "standard",
+    "viewBox": [
+      1880,
+      700
+    ],
+    "views": [
+      {
+        "id": "api-entry",
+        "label": "API & security entry",
+        "focus": [
+          "biz-app",
+          "biz-form",
+          "security-gate",
+          "http-api",
+          "admin-console"
+        ],
+        "note": "Public calls sign with HMAC; the admin console uses JWT or OIDC. The gate enforces rate limits, quotas, and replay protection."
+      },
+      {
+        "id": "async-pipeline",
+        "label": "Async delivery pipeline",
+        "focus": [
+          "http-api",
+          "messaging",
+          "queue-producer",
+          "redis",
+          "worker-pool"
+        ],
+        "note": "Tasks persist first, then enter Redis Streams or the scheduled ZSet; a consumer group delivers at-least-once with idempotent enqueue."
+      },
+      {
+        "id": "provider-dispatch",
+        "label": "Channel selection & dispatch",
+        "focus": [
+          "worker-pool",
+          "message-handler",
+          "sms-providers",
+          "smtp-provider",
+          "wecom-provider",
+          "dingtalk-provider",
+          "onebot-provider"
+        ],
+        "note": "Selection weighs priority groups, smooth weights, circuit state, and 5-minute provider memory before dispatching."
+      },
+      {
+        "id": "receipts-and-rules",
+        "label": "Receipts, rules & webhooks",
+        "focus": [
+          "callback-handler",
+          "rule-engine",
+          "relational-db",
+          "biz-callback",
+          "provider-polling"
+        ],
+        "note": "Receipts update task state; failure rules retry, switch providers, or alert; outcomes reach the business via webhook and polling."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "biz-app",
+      "type": "external",
+      "label": "Business application",
+      "sublabel": "server-side apps",
+      "tag": "X-App-Key · X-Timestamp · X-Signature",
+      "pos": [
+        40,
+        80
+      ],
+      "size": [
+        180,
+        76
+      ]
+    },
+    {
+      "id": "biz-form",
+      "type": "external",
+      "label": "Channel catalog · form",
+      "sublabel": "message composer",
+      "tag": "channel · template · signature",
+      "pos": [
+        40,
+        300
+      ],
+      "size": [
+        180,
+        76
+      ]
+    },
+    {
+      "id": "biz-callback",
+      "type": "external",
+      "label": "Business callback endpoint",
+      "sublabel": "webhook receiver",
+      "tag": "X-Webhook-Signature · Timestamp",
+      "pos": [
+        40,
+        520
+      ],
+      "size": [
+        180,
+        76
+      ]
+    },
+    {
+      "id": "admin-console",
+      "type": "frontend",
+      "label": "Admin console",
+      "sublabel": "Vue · Vben Admin",
+      "tag": "install bootstrap · config",
+      "pos": [
+        256,
+        40
+      ],
+      "size": [
+        160,
+        76
+      ]
+    },
+    {
+      "id": "template-mod",
+      "type": "backend",
+      "label": "Template module",
+      "sublabel": "system · provider-native",
+      "pos": [
+        452,
+        40
+      ],
+      "size": [
+        150,
+        76
+      ]
+    },
+    {
+      "id": "readiness",
+      "type": "backend",
+      "label": "Readiness checks",
+      "sublabel": "② channel · template · account",
+      "pos": [
+        638,
+        40
+      ],
+      "size": [
+        170,
+        76
+      ]
+    },
+    {
+      "id": "scheduler",
+      "type": "backend",
+      "label": "Scheduler",
+      "sublabel": "due: ZSet → Stream",
+      "tag": "timeout & reclaim scan",
+      "pos": [
+        844,
+        40
+      ],
+      "size": [
+        160,
+        76
+      ]
+    },
+    {
+      "id": "provider-polling",
+      "type": "backend",
+      "label": "Provider polling",
+      "sublabel": "scheduled status pull",
+      "pos": [
+        1040,
+        40
+      ],
+      "size": [
+        160,
+        76
+      ]
+    },
+    {
+      "id": "security-gate",
+      "type": "security",
+      "label": "Auth & traffic control",
+      "sublabel": "HMAC · JWT · rate limit",
+      "tag": "③④ anti-replay · body cap",
+      "pos": [
+        256,
+        200
+      ],
+      "size": [
+        150,
+        76
+      ]
+    },
+    {
+      "id": "http-api",
+      "type": "backend",
+      "label": "Go API & task service",
+      "sublabel": "v1 · admin · callback",
+      "pos": [
+        446,
+        200
+      ],
+      "size": [
+        150,
+        76
+      ]
+    },
+    {
+      "id": "messaging",
+      "type": "backend",
+      "label": "messaging service",
+      "sublabel": "⑤ render ⑥ validate ⑦ PushTask",
+      "pos": [
+        636,
+        200
+      ],
+      "size": [
+        170,
+        76
+      ]
+    },
+    {
+      "id": "queue-producer",
+      "type": "backend",
+      "label": "Queue producer",
+      "sublabel": "⑧ idempotent enqueue",
+      "pos": [
+        846,
+        200
+      ],
+      "size": [
+        130,
+        76
+      ]
+    },
+    {
+      "id": "redis",
+      "type": "messagebus",
+      "label": "Redis",
+      "sublabel": "Streams · ZSet · cache",
+      "tag": "⑳ dead-letter push:stream:dead_letter",
+      "pos": [
+        1016,
+        200
+      ],
+      "size": [
+        150,
+        90
+      ]
+    },
+    {
+      "id": "worker-pool",
+      "type": "backend",
+      "label": "Worker pool",
+      "sublabel": "⑨⑩ consume · ACK",
+      "tag": "10 workers",
+      "pos": [
+        1206,
+        200
+      ],
+      "size": [
+        150,
+        76
+      ]
+    },
+    {
+      "id": "message-handler",
+      "type": "backend",
+      "label": "Message handler",
+      "sublabel": "⑪ select ⑫ dispatch",
+      "tag": "priority · weights · circuit · 5-min memory",
+      "pos": [
+        1156,
+        380
+      ],
+      "size": [
+        200,
+        90
+      ]
+    },
+    {
+      "id": "rule-engine",
+      "type": "backend",
+      "label": "Rule engine",
+      "sublabel": "㉓ match ㉔ act",
+      "tag": "retry · switch · fail · alert",
+      "pos": [
+        916,
+        380
+      ],
+      "size": [
+        170,
+        76
+      ]
+    },
+    {
+      "id": "callback-handler",
+      "type": "backend",
+      "label": "Callback handler",
+      "sublabel": "㉒ receipts · /api/callback/:id",
+      "pos": [
+        700,
+        560
+      ],
+      "size": [
+        200,
+        76
+      ]
+    },
+    {
+      "id": "relational-db",
+      "type": "database",
+      "label": "Relational database",
+      "sublabel": "MySQL · PostgreSQL · SQLite",
+      "tag": "tasks · config · logs · rules",
+      "pos": [
+        1060,
+        560
+      ],
+      "size": [
+        190,
+        76
+      ]
+    },
+    {
+      "id": "sms-providers",
+      "type": "external",
+      "label": "SMS providers",
+      "sublabel": "⑬⑭ four SMS vendors",
+      "tag": "Aliyun · Tencent · Zrwinfo · Netease",
+      "pos": [
+        1434,
+        70
+      ],
+      "size": [
+        170,
+        90
+      ]
+    },
+    {
+      "id": "smtp-provider",
+      "type": "external",
+      "label": "Email SMTP",
+      "sublabel": "submission · bounce DSN",
+      "pos": [
+        1434,
+        200
+      ],
+      "size": [
+        170,
+        76
+      ]
+    },
+    {
+      "id": "wecom-provider",
+      "type": "external",
+      "label": "WeCom",
+      "sublabel": "app message · group robot",
+      "pos": [
+        1434,
+        330
+      ],
+      "size": [
+        170,
+        76
+      ]
+    },
+    {
+      "id": "dingtalk-provider",
+      "type": "external",
+      "label": "DingTalk",
+      "sublabel": "work notice · group robot",
+      "pos": [
+        1434,
+        450
+      ],
+      "size": [
+        170,
+        76
+      ]
+    },
+    {
+      "id": "onebot-provider",
+      "type": "external",
+      "label": "QQ · OneBot 11",
+      "sublabel": "private · group",
+      "pos": [
+        1434,
+        580
+      ],
+      "size": [
+        170,
+        76
+      ]
+    },
+    {
+      "id": "rec-mobile",
+      "type": "external",
+      "label": "Mobile phones",
+      "sublabel": "⑮ SMS receive",
+      "pos": [
+        1674,
+        70
+      ],
+      "size": [
+        160,
+        90
+      ]
+    },
+    {
+      "id": "rec-mailbox",
+      "type": "external",
+      "label": "Mailboxes",
+      "sublabel": "⑰ receive",
+      "tag": "⑱ receipts / bounce",
+      "pos": [
+        1674,
+        200
+      ],
+      "size": [
+        160,
+        90
+      ]
+    },
+    {
+      "id": "rec-wecom",
+      "type": "external",
+      "label": "WeCom members",
+      "sublabel": "⑲ app & robot",
+      "pos": [
+        1674,
+        330
+      ],
+      "size": [
+        160,
+        76
+      ]
+    },
+    {
+      "id": "rec-dingtalk",
+      "type": "external",
+      "label": "DingTalk users",
+      "sublabel": "⑲ notice & robot",
+      "pos": [
+        1674,
+        450
+      ],
+      "size": [
+        160,
+        76
+      ]
+    },
+    {
+      "id": "rec-qq",
+      "type": "external",
+      "label": "QQ users",
+      "sublabel": "⑲ private & group",
+      "pos": [
+        1674,
+        580
+      ],
+      "size": [
+        160,
+        76
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Business applications",
+      "wraps": [
+        "biz-app",
+        "biz-form",
+        "biz-callback"
+      ],
+      "pad": 28
+    },
+    {
+      "kind": "region",
+      "label": "Mulei Message Service (Go)",
+      "wraps": [
+        "security-gate",
+        "http-api",
+        "admin-console",
+        "template-mod",
+        "readiness",
+        "scheduler",
+        "provider-polling",
+        "messaging",
+        "queue-producer",
+        "redis",
+        "worker-pool",
+        "message-handler",
+        "rule-engine",
+        "callback-handler",
+        "relational-db"
+      ],
+      "pad": 28
+    },
+    {
+      "kind": "security-group",
+      "label": "Security boundary",
+      "wraps": [
+        "security-gate",
+        "http-api"
+      ],
+      "pad": 16
+    },
+    {
+      "kind": "region",
+      "label": "Providers",
+      "wraps": [
+        "sms-providers",
+        "smtp-provider",
+        "wecom-provider",
+        "dingtalk-provider",
+        "onebot-provider"
+      ],
+      "pad": 24
+    },
+    {
+      "kind": "region",
+      "label": "Recipients",
+      "wraps": [
+        "rec-mobile",
+        "rec-mailbox",
+        "rec-wecom",
+        "rec-dingtalk",
+        "rec-qq"
+      ],
+      "pad": 24
+    }
+  ],
+  "connections": [
+    {
+      "id": "client-request",
+      "from": "biz-app",
+      "to": "security-gate",
+      "label": "① POST /api/v1/messages",
+      "variant": "security",
+      "labelAt": [
+        140,
+        200
+      ]
+    },
+    {
+      "id": "catalog-fetch",
+      "from": "biz-form",
+      "to": "security-gate",
+      "label": "② GET /api/v1/channels",
+      "labelDx": 50,
+      "labelDy": 20
+    },
+    {
+      "id": "gate-to-api",
+      "from": "security-gate",
+      "to": "http-api",
+      "label": "③④ rate limit · quota · replay guard",
+      "variant": "security",
+      "labelAt": [
+        512,
+        292
+      ]
+    },
+    {
+      "id": "admin-to-api",
+      "from": "admin-console",
+      "to": "http-api",
+      "label": "JWT · OIDC",
+      "variant": "security",
+      "fromSide": "right",
+      "toSide": "top",
+      "labelDy": 25
+    },
+    {
+      "id": "api-to-messaging",
+      "from": "http-api",
+      "to": "messaging"
+    },
+    {
+      "id": "api-to-template",
+      "from": "http-api",
+      "to": "template-mod",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "messaging-to-producer",
+      "from": "messaging",
+      "to": "queue-producer"
+    },
+    {
+      "id": "producer-to-redis",
+      "from": "queue-producer",
+      "to": "redis",
+      "label": "⑧ XADD / ZADD",
+      "variant": "emphasis",
+      "labelDy": -60
+    },
+    {
+      "id": "scheduler-to-redis",
+      "from": "scheduler",
+      "to": "redis",
+      "label": "due → Stream",
+      "variant": "dashed"
+    },
+    {
+      "id": "redis-to-workers",
+      "from": "redis",
+      "to": "worker-pool",
+      "label": "⑨⑩ consume · ACK",
+      "variant": "emphasis",
+      "labelDy": 79
+    },
+    {
+      "id": "workers-to-handler",
+      "from": "worker-pool",
+      "to": "message-handler",
+      "label": "⑩ handle",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "handler-to-sms",
+      "from": "message-handler",
+      "to": "sms-providers",
+      "label": "⑫ HTTPS",
+      "variant": "emphasis"
+    },
+    {
+      "id": "handler-to-smtp",
+      "from": "message-handler",
+      "to": "smtp-provider",
+      "label": "⑫ SMTP",
+      "variant": "emphasis"
+    },
+    {
+      "id": "handler-to-wecom",
+      "from": "message-handler",
+      "to": "wecom-provider",
+      "label": "⑫ HTTPS",
+      "variant": "emphasis"
+    },
+    {
+      "id": "handler-to-dingtalk",
+      "from": "message-handler",
+      "to": "dingtalk-provider",
+      "label": "⑫ HTTPS",
+      "variant": "emphasis"
+    },
+    {
+      "id": "handler-to-onebot",
+      "from": "message-handler",
+      "to": "onebot-provider",
+      "label": "⑫ HTTP",
+      "variant": "emphasis"
+    },
+    {
+      "id": "sms-to-mobile",
+      "from": "sms-providers",
+      "to": "rec-mobile",
+      "label": "⑮ deliver"
+    },
+    {
+      "id": "smtp-to-mailbox",
+      "from": "smtp-provider",
+      "to": "rec-mailbox",
+      "label": "⑰ deliver"
+    },
+    {
+      "id": "wecom-to-rec",
+      "from": "wecom-provider",
+      "to": "rec-wecom",
+      "label": "⑲ deliver"
+    },
+    {
+      "id": "dingtalk-to-rec",
+      "from": "dingtalk-provider",
+      "to": "rec-dingtalk",
+      "label": "⑲ deliver"
+    },
+    {
+      "id": "onebot-to-rec",
+      "from": "onebot-provider",
+      "to": "rec-qq",
+      "label": "⑲ deliver"
+    },
+    {
+      "id": "bounce-back",
+      "from": "rec-mailbox",
+      "to": "callback-handler",
+      "label": "⑱ receipt / bounce",
+      "variant": "dashed",
+      "fromSide": "left",
+      "toSide": "top",
+      "via": [
+        [
+          1620,
+          245
+        ],
+        [
+          1620,
+          300
+        ],
+        [
+          800,
+          300
+        ]
+      ],
+      "labelSegment": 2,
+      "labelDy": 20
+    },
+    {
+      "id": "status-callback",
+      "from": "sms-providers",
+      "to": "callback-handler",
+      "label": "㉑ POST /api/callback/:id",
+      "variant": "dashed",
+      "fromSide": "left",
+      "toSide": "left",
+      "via": [
+        [
+          1370,
+          115
+        ],
+        [
+          1370,
+          30
+        ],
+        [
+          616,
+          30
+        ],
+        [
+          616,
+          598
+        ]
+      ],
+      "labelSegment": 3
+    },
+    {
+      "id": "receipts-to-db",
+      "from": "callback-handler",
+      "to": "relational-db",
+      "label": "㉒ receipt logs ㉕ task status",
+      "labelDy": -54
+    },
+    {
+      "id": "failure-to-rules",
+      "from": "message-handler",
+      "to": "rule-engine",
+      "label": "㉓ on failure · match",
+      "variant": "dashed",
+      "labelDy": 68
+    },
+    {
+      "id": "rules-to-handler",
+      "from": "rule-engine",
+      "to": "message-handler",
+      "label": "㉔ retry · switch · alert",
+      "variant": "dashed",
+      "labelDy": -55
+    },
+    {
+      "id": "webhook-out",
+      "from": "callback-handler",
+      "to": "biz-callback",
+      "label": "㉖ webhook POST",
+      "variant": "security"
+    },
+    {
+      "id": "poll-providers",
+      "from": "provider-polling",
+      "to": "sms-providers",
+      "label": "㉖ poll status",
+      "variant": "dashed"
+    },
+    {
+      "id": "api-to-db",
+      "from": "http-api",
+      "to": "relational-db",
+      "label": "GORM · tasks & config",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "via": [
+        [
+          521,
+          490
+        ],
+        [
+          1155,
+          490
+        ]
+      ]
+    },
+    {
+      "id": "workers-to-db",
+      "from": "worker-pool",
+      "to": "relational-db",
+      "label": "CAS status · send logs",
+      "fromSide": "right",
+      "toSide": "right",
+      "via": [
+        [
+          1400,
+          238
+        ],
+        [
+          1400,
+          598
+        ]
+      ],
+      "labelSegment": 2
+    }
+  ],
+  "cards": [
+    {
+      "dot": "rose",
+      "title": "Security entry",
+      "items": [
+        "Public API signs requests with HMAC-SHA256 plus timestamp and nonce",
+        "Admin API uses Bearer JWT with optional OIDC SSO; the gate adds rate limits, quotas, and body-size caps"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Async reliability",
+      "items": [
+        "Redis Streams consumer groups deliver at-least-once; CAS updates prevent duplicate processing",
+        "Scheduled ZSet, reclaimer, and dead-letter stream cover delay, crash, and permanent-failure paths"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Multi-channel HA",
+      "items": [
+        "Channel selection by priority and smooth weight with circuit state and 5-minute provider memory",
+        "Failure rules support retry, provider switching, terminal failure, and alerts"
+      ]
+    }
+  ]
+}

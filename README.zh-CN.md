@@ -33,7 +33,7 @@
   → 失败策略、回执、Webhook 与投递日志
 ```
 
-![木雷消息服务系统架构](docs/message-push-system.png)
+![木雷消息服务系统架构](docs/archify/zh-CN/message-push-system.png)
 
 ## 本机演示
 

@@ -33,7 +33,7 @@ Business application
   → Failure policy, receipt, Webhook, and delivery logs
 ```
 
-![Mulei Message Service architecture](docs/message-push-system.en.png)
+![Mulei Message Service architecture](docs/archify/en/message-push-system.en.png)
 
 ## Local Demo
 
