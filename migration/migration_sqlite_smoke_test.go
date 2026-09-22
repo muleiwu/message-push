@@ -24,6 +24,7 @@ func TestSQLiteMigrationsSmoke(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get sql.DB: %v", err)
 	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
 	if err := goose.SetDialect("sqlite3"); err != nil {
 		t.Fatalf("set goose dialect: %v", err)
 	}
@@ -175,6 +176,7 @@ func TestSQLiteAdminEmailMigrationRejectsNormalizedDuplicates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get sql.DB: %v", err)
 	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
 	if err := goose.SetDialect("sqlite3"); err != nil {
 		t.Fatalf("set goose dialect: %v", err)
 	}

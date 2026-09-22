@@ -17,6 +17,9 @@ func TestCreateWithAttachmentsPersistsSharedGroupAndVerifiesContent(t *testing.T
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
+	if sqlDB, dbErr := db.DB(); dbErr == nil {
+		t.Cleanup(func() { _ = sqlDB.Close() })
+	}
 	if err := db.Exec(`CREATE TABLE push_tasks (
 		id INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT NOT NULL UNIQUE, app_id TEXT NOT NULL,
 		channel_id INTEGER NOT NULL, provider_account_id INTEGER, message_type TEXT NOT NULL, receiver TEXT NOT NULL,
@@ -88,6 +91,9 @@ func TestGetForSendFailsClosedForMissingOrCorruptAttachment(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "corrupt.db")), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
+	}
+	if sqlDB, dbErr := db.DB(); dbErr == nil {
+		t.Cleanup(func() { _ = sqlDB.Close() })
 	}
 	if err := db.AutoMigrate(&model.EmailAttachment{}); err != nil {
 		t.Fatalf("migrate test schema: %v", err)

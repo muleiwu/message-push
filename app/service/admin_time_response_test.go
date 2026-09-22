@@ -15,6 +15,9 @@ func TestAdminLogAndCallbackResponsesUseRFC3339UTC(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
+	if sqlDB, dbErr := db.DB(); dbErr == nil {
+		t.Cleanup(func() { _ = sqlDB.Close() })
+	}
 	for _, statement := range []string{
 		`CREATE TABLE applications (id INTEGER PRIMARY KEY, app_id TEXT, app_secret TEXT, app_name TEXT, status INTEGER, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE provider_accounts (id INTEGER PRIMARY KEY, account_code TEXT, account_name TEXT, provider_code TEXT, provider_type TEXT, config TEXT, status INTEGER, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
